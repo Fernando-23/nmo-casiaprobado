@@ -11,7 +11,9 @@ import (
 
 func main() {
 
-	url := fmt.Sprintf("http://%s:%d/", "127.0.0.1", 8002)
+	fmt.Printf("Iniciando Kernel...")
+	config_kernel = iniciarConfiguracionKernel("config.json")
+	url := fmt.Sprintf("http://%s:%d/", config_kernel.Ip_kernel, config_kernel.Puerto_Memoria)
 
 	//Conexion con Memoria
 	req, err := http.NewRequest("GET", url, nil)
@@ -26,10 +28,12 @@ func main() {
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
 
 	slog.Debug("Iniciando Servidor de KERNEL")
-	socket_kernel := http.ListenAndServe(":8001", mux)
+
+	url_socket := fmt.Sprintf(":%d", config_kernel.Puerto_Kernel)
+	socket_kernel := http.ListenAndServe(url_socket, mux)
 	if socket_kernel != nil {
 		panic("Error al iniciar el servidor")
 	}
 
-	cliente.EnviarMensaje("127.0.0.1", 8002, "Hola soy modulo Kernel")
+	cliente.EnviarMensaje(config_kernel.Ip_memoria, config_kernel.Puerto_Memoria, "Hola soy modulo Kernel")
 }

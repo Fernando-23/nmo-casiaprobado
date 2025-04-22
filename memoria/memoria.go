@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -10,13 +11,14 @@ import (
 func main() {
 
 	//var configuracion *Config = cliente.iniciarConfiguracion("config.json")
-
+	config_memo = iniciarConfiguracionMemo("config.json")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/paquetes", servidor.RecibirPaquetes)
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
+	url := fmt.Sprintf(":%d", config_memo.Puerto_mem)
 
 	slog.Debug("Iniciando servidor")
-	err := http.ListenAndServe(":8002", mux)
+	err := http.ListenAndServe(url, mux)
 	if err != nil {
 		panic("Error al iniciar el servidor")
 	}
