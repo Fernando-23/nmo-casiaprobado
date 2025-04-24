@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 )
 
 type ConfigCPU struct {
@@ -35,4 +38,61 @@ func iniciarConfiguracionIO(filePath string) *ConfigCPU {
 	jsonParser.Decode(&configuracion)
 
 	return configuracion
+}
+
+func fetch(PC *int, PID *int) string {
+
+	instruccion := memoria.enviarInstruccion(*PID, *PC)
+
+	return instruccion
+}
+
+func decode(instruccion string) (string, []string) {
+	l_instruccion := strings.Split(instruccion, " ")
+	cod_op := l_instruccion[0]
+	operacion := l_instruccion[1:]
+
+	return cod_op, operacion
+}
+
+func execute(cod_op string, operacion []string, PC *int) {
+
+	switch cod_op {
+	case "NOOP":
+	//consume el tiempo de ciclo de instruccion
+	case "WRITE":
+		direccion := operacion[0]
+		datos := operacion[1]
+
+		memoria.escribirDatos(direccion, datos)
+
+	case "READ":
+		direccion := operacion[0]
+		tamanio := operacion[1]
+
+		memoria.leerDatos(direccion, tamanio)
+		slog.info
+
+	case "GOTO":
+		valor, _ := strconv.Atoi(operacion[0])
+		*PC = valor
+
+	//case "IO": enviar todo el paquete de IO o separado??
+
+	default:
+		fmt.Println("Error, ingrese una instruccion valida")
+	}
+
+	if cod_op != "GOTO" {
+		*PC++
+	}
+
+}
+
+func checkInterrupt(PC *int, PID *int) bool {
+	var interrupcion bool = kernel.hayInterrupcion()
+	if interrupcion {
+		kernel.recibirInterrupcion(PC, PID)
+	}
+	return interrupcion
 }
