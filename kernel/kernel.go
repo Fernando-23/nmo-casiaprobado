@@ -36,7 +36,14 @@ func main() {
 
 	//Iniciar servidor
 	mux := http.NewServeMux()
+
+	//Process Id para incrementar con creacion de cada proceso
 	pid := 0
+
+	//Listas de estados
+	var l_new []*PCB
+	var l_ready []*PCB
+	var l_block []*PCB
 
 	mux.HandleFunc("/paquetes", servidor.RecibirPaquetes)
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)

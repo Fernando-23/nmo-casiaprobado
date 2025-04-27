@@ -22,18 +22,16 @@ type ConfigKernel struct {
 
 const cantEstados int = 6
 
-type Pcb struct {
+type PCB struct {
 	Pid int
 	Pc  int
 	Me  [cantEstados]int     //Metricas de Estado
 	Mt  [cantEstados]float64 //Metricas de Tiempo
-
+	tamanio int //revisar a futuro
 }
 
 var config_kernel *ConfigKernel
-var cola_new []*Pcb
-var cola_ready []*Pcb
-var cola_block []*Pcb
+
 
 // var cola_susp_block []
 // var cola_susp_ready []
@@ -63,23 +61,60 @@ func detenerKernel() {
 	fmt.Println("Empezando con la planificacion")
 
 }
-func iniciarPlanificadorLP(tamanio string, pid *int) {
+func iniciarPlanificadorLP(tamanio int, pid *int) {
 
-	ingresarColaNew(pid)
+	planificador()
 
 }
 
-func ingresarColaNew(pid *int) {
-	pcb := new(Pcb)
+func crearPcb(pid *int, tamanio int) pcb PCB{
+	pcb := new(PCB)
 	pcb.Pid = *pid
+	pcb.tamanio = tamanio
+	incrementarPid(pid)
+    //pcb.Pc = 0
+	return pcb
+}
+
+
+
+func incrementarPid(pid *int){
 	*pid++
-	pcb.Pc = 0
+}
+
+func FIFO(l_estado *PCB, pcb PCB){//FIFO
+	l_estado = append(l_estado, pcb)
+}
+
+
+
+func planiCortoPlazo(l_ready *PCB, )
+
+func planiLargoPlazo(l_new *PCB, l_ready *PCB, pcb PCB, algoritmoPlani string){//fijarte si podes hacer que entre a la cola de new y que prg dsp por el sig
+	if/*hayespacio == true*/{
+		if /*algoritmoPlani == "PMCP" || l_new == nil*/{
+			pcb.Me[0]++ //lo podrias gacer en otra funcion y remplazar el 0 por una constante mas descriptiva
+			//si entra anew sacar de new e insertar en ready bajo algoritmo 
+			//meter a ready con algritmo correcto
+		}
+	}
+	FIFO(l_new,PCB)
+}
+
+
+
+
+
+/*func ingresarColaNew(pid *int) {
+	crearPcb(*pid)
+	
 	//inicio := time.Now()
 	cola_new = append(cola_new, pcb)
 
-}
+}*/ //obsolteta aparentemente
 
-func modificarEstado(pcb *Pcb, pos int) {
+
+func modificarEstado(pcb *PCB, pos int) {
 
 	pcb.Me[pos]++
 
