@@ -58,9 +58,14 @@ func main() {
 
 	cliente.EnviarMensaje(config_kernel.Ip_memoria, config_kernel.Puerto_Memoria, "Hola soy modulo Kernel")
 
+	//2d0 proc
+	//enviamos msg a memoria funcion (tamanio pid)
+
 	// Detener kERNEL para esperar las conexiones de CPU y despues iniciar la PLANIFICACION
 
 	detenerKernel()
+
+	//estados := [cantEstados]string{"NEW", "READY", "EXECUTE", "BLOCK", "BLOCK-SUSPENDED", "BLOCK-READY", "EXIT"}
 
 	iniciarPlanificadorLP(args[2], &pid)
 

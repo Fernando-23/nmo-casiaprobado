@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 )
 
 type ConfigKernel struct {
@@ -20,14 +21,15 @@ type ConfigKernel struct {
 	Ip_kernel               string  `json:"ip_kernel"`
 }
 
-const cantEstados int = 6
+const cantEstados int = 7
 
 type PCB struct {
 	Pid int
 	Pc  int
 	Me  [cantEstados]int     //Metricas de Estado
-	Mt  [cantEstados]float64 //Metricas de Tiempo
+	Mt  [cantEstados]time.Time //Metricas de Tiempo
 	tamanio int //revisar a futuro
+	contador time.Time//revisar a futuro
 }
 
 var config_kernel *ConfigKernel
@@ -67,7 +69,7 @@ func iniciarPlanificadorLP(tamanio int, pid *int) {
 
 }
 
-func crearPcb(pid *int, tamanio int) pcb PCB{
+func crearPcb(pid *int, tamanio int) PCB {
 	pcb := new(PCB)
 	pcb.Pid = *pid
 	pcb.tamanio = tamanio
@@ -76,7 +78,7 @@ func crearPcb(pid *int, tamanio int) pcb PCB{
 	return pcb
 }
 
-
+//
 
 func incrementarPid(pid *int){
 	*pid++
@@ -87,10 +89,36 @@ func FIFO(l_estado *PCB, pcb PCB){//FIFO
 }
 
 
+func cambiarMetricasEstado(pPcb *PCB, posEstado int){
+	pPcb.Me[posEstado]++//ver si puede quedar mas lindo
+}
 
-func planiCortoPlazo(l_ready *PCB, )
+func cambiarMetricasTiempo(pPcb *PCB, posEstado int){
+	tiempoAcutal := time.Now()
+	pPcb.Mt[posEstado] += tiempoAcutal.Sub(pPcb.contador)
+}
 
-func planiLargoPlazo(l_new *PCB, l_ready *PCB, pcb PCB, algoritmoPlani string){//fijarte si podes hacer que entre a la cola de new y que prg dsp por el sig
+func planiCortoPlazo(l_ready *PCB){
+
+}
+
+//agregarACola(){
+//
+//}
+
+	func iniciarProceso(l_new *PCB){
+		pcb := crearPcb()
+		pcb.contador = time.Now()
+		const PosEstado int = 0 // estado NEW
+		cambiarMetricasEstado(&pcb, PosEstado)
+		FIFO(l_new*PCB) //meter en la cola new no hay planificacion para meter en la cola new
+	}
+
+
+func planiLargoPlazo(l_new *PCB, l_ready *PCB, algoritmoPlani string){//fijarte si podes hacer que entre a la cola de new y que prg dsp por el sig
+	 
+	iniciarProceso(l_new)
+	cambiarMetricasEstado(PosEstado)
 	if/*hayespacio == true*/{
 		if /*algoritmoPlani == "PMCP" || l_new == nil*/{
 			pcb.Me[0]++ //lo podrias gacer en otra funcion y remplazar el 0 por una constante mas descriptiva
