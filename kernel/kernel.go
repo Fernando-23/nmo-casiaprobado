@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	cliente "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Cliente"
@@ -14,6 +15,9 @@ import (
 func main() {
 
 	args := os.Args
+
+	archivoPseudo := args[1]
+	tamanio, _ := strconv.Atoi(args[2])
 
 	fmt.Println("archivo de pseudocodigo ", args[1])
 	fmt.Println("tamaño de proceso", args[2])
@@ -44,7 +48,6 @@ func main() {
 	var l_new []*PCB
 	var l_ready []*PCB
 	var l_block []*PCB
-
 	mux.HandleFunc("/paquetes", servidor.RecibirPaquetes)
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
 
@@ -67,6 +70,8 @@ func main() {
 
 	//estados := [cantEstados]string{"NEW", "READY", "EXECUTE", "BLOCK", "BLOCK-SUSPENDED", "BLOCK-READY", "EXIT"}
 
-	iniciarPlanificadorLP(args[2], &pid)
+	planiLargoPlazo(&pid, tamanio, archivoPseudo, l_new, l_ready)
+
+	//sort.Sort(PorTamanio(l_new))
 
 }
