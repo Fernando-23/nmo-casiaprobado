@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -22,6 +24,25 @@ type ConfigCPU struct {
 	Reemplazo_Cache string `json:"cache_replacement"`
 	Delay_Cache     int    `json:"cache_delay"`
 	Log_level       string `json:"log_level"`
+}
+
+type PidRequest struct {
+	pid string `json:"pid"`
+}
+
+type WriteRequest struct {
+	direccion int    `json:"direccion"`
+	datos     string `json:"datos"`
+}
+
+type ReadRequest struct {
+	direccion int `json:"direccion"`
+	tamanio   int `json:"tamanio"`
+}
+
+type datosCicloResponse struct {
+	pid int
+	pc  int
 }
 
 var config_CPU *ConfigCPU
@@ -61,16 +82,16 @@ func execute(cod_op string, operacion []string, PC *int) {
 	case "NOOP":
 	//consume el tiempo de ciclo de instruccion
 	case "WRITE":
-		direccion := operacion[0]
+		direccion, _ := strconv.Atoi(operacion[0])
 		datos := operacion[1]
 
-		memoria.escribirDatos(direccion, datos)
+		requestWRITE(direccion, datos, config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
 
 	case "READ":
-		direccion := operacion[0]
-		tamanio := operacion[1]
+		direccion, _ := strconv.Atoi(operacion[0])
+		tamanio, _ := strconv.Atoi(operacion[1])
 
-		memoria.leerDatos(direccion, tamanio)
+		requestREAD(direccion, tamanio, config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
 		slog.info
 
 	case "GOTO":
@@ -96,3 +117,99 @@ func checkInterrupt(PC *int, PID *int) bool {
 	}
 	return interrupcion
 }
+
+// type PidRequest struct {
+// 		pid string `json:"pid"`
+// }
+
+func pedirDatosCiclo(ip string, puerto int) (int, int, error) {
+	peticion := PidRequest{pid: "pid"}
+
+	url := fmt.Sprintf("http://%s:%d/", ip, puerto)
+	body, err := json.Marshal(peticion)
+	if err != nil {
+		log.Printf("Error codificando mensaje: %s", err.Error())
+		return -1, -1, err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("Error pidiendo datos de ciclo de inst. a ip:%s puerto:%d", ip, puerto)
+		return -1, -1, err
+	}
+
+	var response datosCicloResponse
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		log.Printf("Error decodificando mensaje: %s", err.Error())
+		return -1, -1, err
+	}
+
+	return response.pid, response.pc, nil
+}
+
+func requestWRITE(direccion int, datos string, ip string, puerto int) (string, error) {
+	peticion_WRITE := WriteRequest{
+		direccion: direccion,
+		datos:     datos,
+	}
+
+	url := fmt.Sprintf("http://%s:%d/", ip, puerto)
+	body, err := json.Marshal(peticion_WRITE)
+	if err != nil {
+		log.Printf("Error codificando mensaje: %s", err.Error())
+		return "", err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("Error enviando peticion WRITE")
+		return "", err
+	}
+
+	log.Printf("Se esta intentando escribir %s en la direccion %d", datos, direccion)
+
+	var response string
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		log.Printf("Error decodificando mensaje: %s", err.Error())
+		return "", err
+	}
+
+	return response, nil
+}
+
+func requestREAD(direccion int, tamanio int, ip string, puerto int) (string, error) {
+	peticion_READ := ReadRequest{
+		direccion: direccion,
+		tamanio:   tamanio,
+	}
+	url := fmt.Sprintf("http://%s:%d/", ip, puerto)
+	body, err := json.Marshal(peticion_READ)
+	if err != nil {
+		log.Printf("Error codificando mensaje: %s", err.Error())
+		return "", err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("Error enviando peticion WRITE")
+		return "", err
+	}
+
+	log.Printf("Se esta intentando leer en la direccion %d", direccion)
+
+	var response string
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		log.Printf("Error decodificando mensaje: %s", err.Error())
+		return "", err
+	}
+
+	return response, nil
+}
+
+// func prepararDatosCicloQueryPath(ip string, puerto int, pid int){
+// 	url := fmt.Sprintf("http://%s:%d/%d", ip, puerto,pid)
+
+// }
