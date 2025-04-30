@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -26,10 +27,6 @@ type ConfigCPU struct {
 	Log_level       string `json:"log_level"`
 }
 
-type PidRequest struct {
-	pid string `json:"pid"`
-}
-
 type WriteRequest struct {
 	direccion int    `json:"direccion"`
 	datos     string `json:"datos"`
@@ -38,11 +35,6 @@ type WriteRequest struct {
 type ReadRequest struct {
 	direccion int `json:"direccion"`
 	tamanio   int `json:"tamanio"`
-}
-
-type datosCicloResponse struct {
-	pid int
-	pc  int
 }
 
 var config_CPU *ConfigCPU
@@ -61,9 +53,32 @@ func iniciarConfiguracionIO(filePath string) *ConfigCPU {
 	return configuracion
 }
 
-func fetch(PC *int, PID *int) string {
+func fetch(PID *int, PC *int) string {
 
-	instruccion := memoria.enviarInstruccion(*PID, *PC)
+	peticion := datosCiclo{
+		Pid: *PID,
+		Pc:  *PC,
+	}
+
+	url := fmt.Sprintf("http://%s:%d/", config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
+	body, err := json.Marshal(peticion)
+	if err != nil {
+		log.Printf("Error codificando mensaje: %s", err.Error())
+		return ""
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("No se obtuvo algo valido de memoria durante la operacion fetch")
+		return ""
+	}
+
+	var instruccion string
+	err = json.NewDecoder(resp.Body).Decode(&instruccion)
+	if err != nil {
+		log.Printf("Error decodificando mensaje: %s", err.Error())
+		return ""
+	}
 
 	return instruccion
 }
@@ -76,140 +91,62 @@ func decode(instruccion string) (string, []string) {
 	return cod_op, operacion
 }
 
-func execute(cod_op string, operacion []string, PC *int) {
+func execute(cod_op string, operacion []string, PC *int, pid int) {
 
+	pid_string := strconv.Itoa(pid)
 	switch cod_op {
+
 	case "NOOP":
-	//consume el tiempo de ciclo de instruccion
+		//consume el tiempo de ciclo de instruccion
+		slog.Info("PID: %d - Ejecutando: %s", pid_string, cod_op)
+
 	case "WRITE":
 		direccion, _ := strconv.Atoi(operacion[0])
 		datos := operacion[1]
 
+		slog.Info("## PID: %s - Ejecutando: %s - %s - %s", pid_string, cod_op, operacion[0], datos)
+
 		requestWRITE(direccion, datos, config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
+
+		slog.Info("PID: " + pid_string + " - Acción: ESCRIBIR - Dirección Física: " + operacion[0] + " - Valor: " + datos)
 
 	case "READ":
 		direccion, _ := strconv.Atoi(operacion[0])
 		tamanio, _ := strconv.Atoi(operacion[1])
 
-		requestREAD(direccion, tamanio, config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
-		slog.info
+		slog.Info("## PID: %s - Ejecutando: %s - %s - %s", pid_string, cod_op, operacion[0], operacion[1])
+
+		//Gestionar mejor el error :p
+		valor_leido, _ := requestREAD(direccion, tamanio, config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
+		slog.Info("PID: " + pid_string + " - Acción: LEER - Dirección Física: " + operacion[0] + " - Valor: " + valor_leido)
 
 	case "GOTO":
+		slog.Info("PID: %s - Ejecutando: %s", pid_string, cod_op)
+
 		valor, _ := strconv.Atoi(operacion[0])
 		*PC = valor
 
-	//case "IO": enviar todo el paquete de IO o separado??
+	//Syscall
+	case "IO":
+		mensaje_io := "IO " + operacion[0]
+		enviarSyscall(mensaje_io)
+	case "INIT_PROC":
+		mensaje_init_proc := "INIT_PROC " + operacion[0] + " " + operacion[1]
+		enviarSyscall(mensaje_init_proc)
+
+	case "DUMP_MEMORY":
+		enviarSyscall("DUMP_MEMORY")
+
+	case "EXIT":
+		enviarSyscall("EXIT")
 
 	default:
 		fmt.Println("Error, ingrese una instruccion valida")
 	}
 
+	//Incrementar PC
 	if cod_op != "GOTO" {
 		*PC++
 	}
 
 }
-
-func checkInterrupt(PC *int, PID *int) bool {
-	var interrupcion bool = kernel.hayInterrupcion()
-	if interrupcion {
-		kernel.recibirInterrupcion(PC, PID)
-	}
-	return interrupcion
-}
-
-// type PidRequest struct {
-// 		pid string `json:"pid"`
-// }
-
-func pedirDatosCiclo(ip string, puerto int) (int, int, error) {
-	peticion := PidRequest{pid: "pid"}
-
-	url := fmt.Sprintf("http://%s:%d/", ip, puerto)
-	body, err := json.Marshal(peticion)
-	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
-		return -1, -1, err
-	}
-
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		log.Printf("Error pidiendo datos de ciclo de inst. a ip:%s puerto:%d", ip, puerto)
-		return -1, -1, err
-	}
-
-	var response datosCicloResponse
-	err = json.NewDecoder(resp.Body).Decode(&response)
-	if err != nil {
-		log.Printf("Error decodificando mensaje: %s", err.Error())
-		return -1, -1, err
-	}
-
-	return response.pid, response.pc, nil
-}
-
-func requestWRITE(direccion int, datos string, ip string, puerto int) (string, error) {
-	peticion_WRITE := WriteRequest{
-		direccion: direccion,
-		datos:     datos,
-	}
-
-	url := fmt.Sprintf("http://%s:%d/", ip, puerto)
-	body, err := json.Marshal(peticion_WRITE)
-	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
-		return "", err
-	}
-
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		log.Printf("Error enviando peticion WRITE")
-		return "", err
-	}
-
-	log.Printf("Se esta intentando escribir %s en la direccion %d", datos, direccion)
-
-	var response string
-	err = json.NewDecoder(resp.Body).Decode(&response)
-	if err != nil {
-		log.Printf("Error decodificando mensaje: %s", err.Error())
-		return "", err
-	}
-
-	return response, nil
-}
-
-func requestREAD(direccion int, tamanio int, ip string, puerto int) (string, error) {
-	peticion_READ := ReadRequest{
-		direccion: direccion,
-		tamanio:   tamanio,
-	}
-	url := fmt.Sprintf("http://%s:%d/", ip, puerto)
-	body, err := json.Marshal(peticion_READ)
-	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
-		return "", err
-	}
-
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		log.Printf("Error enviando peticion WRITE")
-		return "", err
-	}
-
-	log.Printf("Se esta intentando leer en la direccion %d", direccion)
-
-	var response string
-	err = json.NewDecoder(resp.Body).Decode(&response)
-	if err != nil {
-		log.Printf("Error decodificando mensaje: %s", err.Error())
-		return "", err
-	}
-
-	return response, nil
-}
-
-// func prepararDatosCicloQueryPath(ip string, puerto int, pid int){
-// 	url := fmt.Sprintf("http://%s:%d/%d", ip, puerto,pid)
-
-// }
