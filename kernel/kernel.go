@@ -23,7 +23,7 @@ func main() {
 	fmt.Println("tamaño de proceso", args[2])
 
 	fmt.Printf("Iniciando Kernel...")
-
+	cliente.ConfigurarLogger("kernel")
 	config_kernel = iniciarConfiguracionKernel("config.json")
 	url := fmt.Sprintf("http://%s:%d/", config_kernel.Ip_kernel, config_kernel.Puerto_Memoria)
 
@@ -48,6 +48,9 @@ func main() {
 	var l_new []*PCB
 	var l_ready []*PCB
 	var l_block []*PCB
+	var cpus []CaballosDeFuerza
+	
+
 	mux.HandleFunc("/paquetes", servidor.RecibirPaquetes)
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
 
@@ -70,7 +73,7 @@ func main() {
 
 	//estados := [cantEstados]string{"NEW", "READY", "EXECUTE", "BLOCK", "BLOCK-SUSPENDED", "BLOCK-READY", "EXIT"}
 
-	planiLargoPlazo(&pid, tamanio, archivoPseudo, l_new, l_ready)
+	planiLargoPlazo(&pid, tamanio, archivoPseudo, &l_new, &l_ready)
 
 	//sort.Sort(PorTamanio(l_new))
 
