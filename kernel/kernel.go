@@ -23,7 +23,7 @@ func main() {
 	fmt.Println("tamaño de proceso", args[2])
 
 	fmt.Printf("Iniciando Kernel...")
-	cliente.ConfigurarLogger("kernel")
+	cliente.ConfigurarLogger()
 	config_kernel = iniciarConfiguracionKernel("config.json")
 	url := fmt.Sprintf("http://%s:%d/", config_kernel.Ip_kernel, config_kernel.Puerto_Memoria)
 
@@ -47,12 +47,17 @@ func main() {
 	//Listas de estados
 	var l_new []*PCB
 	var l_ready []*PCB
-	var l_block []*PCB
-	var cpus []CaballosDeFuerza
-	
 
+	mux.HandleFunc("/syscall", recibirSyscallCPU)
+	mux.HandleFunc("/nuevaCPU", conectarNuevaCPU)
 	mux.HandleFunc("/paquetes", servidor.RecibirPaquetes)
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
+
+	// Objetivos a hacer
+	// mux.HandleFunc("/registrar_cpu", conectarNuevaCPU)  --Hecho
+	// mux.HandleFunc("/registrar_io", conectarNuevaIO)    --Hecho
+	// mux.HandleFunc("/syscall",gestionarSyscallCPU)      Hay que hacer
+	// mux.HandleFunc("/gestionar_io",gestionarIO)		   Hay que hacer
 
 	slog.Debug("Iniciando Servidor de KERNEL")
 
