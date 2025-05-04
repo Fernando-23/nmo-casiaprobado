@@ -49,6 +49,12 @@ func crearPcb(pid *int, tamanio int) *PCB {
 	pcb := new(PCB)
 	pcb.Pid = *pid
 	pcb.tamanio = tamanio
+	if config_kernel.Algoritmo_Plani == ""{
+		crearSJF(pcb)
+	} else{
+		pcb.SJF = nil 
+	}
+
 	incrementarPid(pid)
 	//pcb.Pc = 0
 	return pcb
@@ -68,9 +74,13 @@ func cambiarMetricasEstado(pPcb *PCB, posEstado int) {
 	pPcb.Me[posEstado]++ //ver si puede quedar mas lindo
 }
 
-func cambiarMetricasTiempo(pPcb *PCB, posEstado int) {
+func duracionEnEstado(pPcb *PCB, posEstado int) time.Duration{
 	tiempoActual := time.Now()
-	(pPcb).Mt[posEstado] = tiempoActual.Sub(pPcb.contador)
+	return tiempoActual.Sub(pPcb.contador)
+}
+func cambiarMetricasTiempo(pPcb *PCB, posEstado int) {
+	pPcb.Mt[posEstado] += duracionEnEstado(pPcb, posEstado)
+	
 }
 
 func cambiarDeEstado(l_est_origen *[]*PCB, l_est_destino *[]*PCB, indice int, estado int) {
@@ -104,6 +114,24 @@ func cambiarDeEstado(l_est_origen *[]*PCB, l_est_destino *[]*PCB, indice int, es
 //agregarACola(){
 //
 //}
+
+func crearSJF(pcb *PCB){
+	sjf := new(SJF)
+	sjf.Estimado_anterior = config_kernel.Estimacion_Inicial
+	sjf.Real_anterior = 0 //no ejecuto valor igual a 0
+	pcb.SJF = sjf
+}
+
+func actualizarEstimacionSJF(pcb *PCB, tiempoEnExecute time.Duration) { 
+	if pcb == nil || pcb.SJF == nil {
+		return
+	}
+	realAnterior := float64(tiempoEnExecute)
+	alpha := config_kernel.Alfa
+	sjf := pcb.SJF
+
+	sjf.Estimado_anterior = alpha * realAnterior + (1 - alpha) * sjf.Estimado_anterior
+}
 
 func iniciarProceso(pid *int, tamanio int, l_new *[]*PCB) {
 	pcb := crearPcb(pid, tamanio)
@@ -140,38 +168,40 @@ func AsignarCPU(pid int) int {
 		if cpu.Esta_libre {
 			cpu.Pid = pid
 			cpu.Esta_libre = false
-			cpuLibres[id] = cpu
-			return id
+			return id // La primera CPU que esta libre
 		}
 	}
-	return -1
+	return -1 // No hay CPU libre
 }
 
-func planiCortoPlazo(l_ready *[]*PCB, idCPU int) {
+func planiCortoPlazo(l_ready *[]*PCB) {
 	
 	if len(*l_ready) == 0 {
 		fmt.Println("No hay procesos en READY")
 		return
 	}
 	// Ordenar la cola READY por estimación o FIFO
-	indice := 0 //fifo
-	pcb := &l_ready[indice]
+	if config_kernel.Algoritmo_Plani == SJF {
+		sort.Sort(PorSJF(*l_ready)) //SJF distinto de nil
+	}
 
+	//Tomamos el primer PCB tras el sort si era SJF y sino FIFO
+	pcb := (*l_ready)[0]
 
-	// Cambiar de estado: READY → EXECUTE
-	//mutex
-	//defer
-	cpu_pos := AsignarCPU(pcb.Pid)
-	if cpu_pos != -1{
-		cambiarDeEstado(&l_ready,&l_execute, indice, EstadoReady)
 		
-		fmt.Println("Proceso a execute")
+	// intentamos asignarle cpu
+	idCPU := AsignarCPU(pcb.Pid)
+	if idCPU != -1{ //hay cpu libre
+		cambiarDeEstado(&l_ready,&l_execute, indice, EstadoReady)
+		cpusLibres[idCPU].Esta_libre = false
+		
+		fmt.Printf("Proceso %d a Execute en CPU %d\n", pcb.Pid, idCPU)
 	}
 	
 	fmt.Println("No hay ninguna CPU disponible")
 	// Marcar el CPU como ocupado
 	
-	cpusLibres[idCPU].Esta_libre = false
+	
 
 }
 
@@ -332,7 +362,7 @@ func gestionarSyscalls(syscall []string, pid int, url string) {
 func agregarAColaBlocked(nombre_io string,io IO){
 	pcb := _execute
 	
-	cambiarDeEstado(,,,"")
+	cambiarDeEstado(,"")
 }
 
 func manejarIO(nombre_io string, pid int, duracion int) error {
@@ -345,7 +375,8 @@ func manejarIO(nombre_io string, pid int, duracion int) error {
 		return fmt.Errorf("la IO %s no está registrada", nombre_io)
 	}
 
-	if !io_seleccionada. {
+
+	if !io_seleccionada {
 
 	}
 
