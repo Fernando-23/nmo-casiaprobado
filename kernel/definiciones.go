@@ -40,6 +40,7 @@ type CPU struct {
 	ID         int
 	Url        string
 	Pid        int
+	Pc         int
 	Esta_libre bool
 }
 
@@ -60,9 +61,12 @@ var (
 	IOs               = make(map[string]*IO)
 	l_block           = make(map[string][]*PCB)
 	l_execute         []*PCB
+	l_new             []*PCB
+	l_ready           []*PCB
 	ioMutex           sync.RWMutex
 	mutex_cpus_libres sync.Mutex
 	mutex_ios         sync.Mutex
+	pid               int
 )
 
 // PROCESO MAS CHICO PRIMERO
@@ -104,4 +108,9 @@ const (
 	EstadoBlockSuspended
 	EstadoBlockReady
 	EstadoExit
+)
+const (
+	IdCPU = iota
+	PC
+	CodOp
 )

@@ -41,17 +41,11 @@ func main() {
 	//Iniciar servidor
 	mux := http.NewServeMux()
 
-	//Process Id para incrementar con creacion de cada proceso
-	pid := 0
-
-	//Listas de estados
-	var l_new []*PCB
-	var l_ready []*PCB
-
 	mux.HandleFunc("cpu/nuevaCPU", conectarNuevaCPU)
-	mux.HandleFunc("cpu/dispatch", handleDispatch)
 	mux.HandleFunc("cpu/syscall", recibirSyscallCPU)
 	mux.HandleFunc("cpu/interrupt", interruptHandler)
+	mux.HandleFunc("io/nuevaIO", conectarNuevaIO) // cambiar en io lo que envia
+	mux.HandleFunc("io/bloquearPorIo", manejarIO)
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
 
 	// Objetivos a hacer
