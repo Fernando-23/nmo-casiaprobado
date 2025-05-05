@@ -419,6 +419,25 @@ func manejarIO(nombre_io string, pid int, duracion int) error {
 
 }
 
+func recibirRespuestaIO(w http.ResponseWriter, r *http.Request) {
+	var respuesta string
+	if err := json.NewDecoder(r.Body).Decode(&respuesta); err != nil {
+		fmt.Errorf("Error recibiendo la solicitud:%w", err)
+		return
+	}
+
+	data := strings.Split(respuesta, " ")
+	cod_op := data[0]    // cod_op
+	nombre_io := data[1] // nombre_io
+	switch cod_op {
+	case "FIN_IO":
+
+	case "DESCONEXION":
+
+	}
+
+}
+
 func conectarNuevaCPU(w http.ResponseWriter, r *http.Request) { // Handshake
 	var cpu_string string
 	if err := json.NewDecoder(r.Body).Decode(&cpu_string); err != nil {

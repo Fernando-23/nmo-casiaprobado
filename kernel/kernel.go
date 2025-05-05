@@ -43,9 +43,8 @@ func main() {
 
 	mux.HandleFunc("cpu/nuevaCPU", conectarNuevaCPU)
 	mux.HandleFunc("cpu/syscall", recibirSyscallCPU)
-	mux.HandleFunc("cpu/interrupt", interruptHandler)
 	mux.HandleFunc("io/nuevaIO", conectarNuevaIO) // cambiar en io lo que envia
-	mux.HandleFunc("io/bloquearPorIo", manejarIO)
+	mux.HandleFunc("io/recibirRespuesta", recibirRespuestaIO)
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
 
 	// Objetivos a hacer

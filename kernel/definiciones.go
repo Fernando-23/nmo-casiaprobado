@@ -44,22 +44,22 @@ type CPU struct {
 	Esta_libre bool
 }
 
-type IO struct {
-	Urls           []string
-	CantInstancias int
+type IOs struct {
+	IOs *IO
 }
 
-// Ver si volarlo
-// type HandshakeRequest struct {
-// 	NombreCPU string
-// 	PuertoCPU int
-// 	IpCPU     string
-// }
+type IO struct {
+	Url        string
+	Pid        int
+	Esta_libre bool
+}
 
 var (
 	cpuLibres         = make(map[int]*CPU)
-	IOs               = make(map[string]*IO)
-	l_block           = make(map[string][]*PCB)
+	ios               = make(map[string]*IOs)
+	l_block           []*PCB
+	l_susp_block      []*PCB
+	l_susp_ready      []*PCB
 	l_execute         []*PCB
 	l_new             []*PCB
 	l_ready           []*PCB
