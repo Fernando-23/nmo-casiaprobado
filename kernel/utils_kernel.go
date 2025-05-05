@@ -72,6 +72,7 @@ func FIFO(l_estado *[]*PCB, pcb *PCB) { //FIFO
 
 func cambiarMetricasEstado(pPcb *PCB, posEstado int) {
 	pPcb.Me[posEstado]++ //ver si puede quedar mas lindo
+	 pPcb.contador = time.Now() 
 }
 
 func duracionEnEstado(pPcb *PCB, posEstado int) time.Duration{
@@ -196,6 +197,7 @@ func planiCortoPlazo(l_ready *[]*PCB) {
 		cpusLibres[idCPU].Esta_libre = false
 		
 		fmt.Printf("Proceso %d a Execute en CPU %d\n", pcb.Pid, idCPU)
+		return
 	}
 	
 	fmt.Println("No hay ninguna CPU disponible")
@@ -204,6 +206,15 @@ func planiCortoPlazo(l_ready *[]*PCB) {
 	
 
 }
+
+// post /dispach hola soy kernel aca tenes el pid y pc (no el tid) /interrupt sali chvom /syscalll ahola soy cpu termine
+// /cpu 
+
+
+func handleDispatch(w http.ResponseWriter, r *http.Request){
+	
+}
+
 
 func enviarProcessExe(cpu CPU, proceso *PCB) (string, error) {
 	//ENVIAR PROCESO A CPU
@@ -463,6 +474,7 @@ func conectarNuevaIO(w http.ResponseWriter, r *http.Request) { // Handshake
 	}
 
 }
+
 
 
 

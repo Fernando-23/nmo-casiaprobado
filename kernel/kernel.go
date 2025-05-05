@@ -48,9 +48,10 @@ func main() {
 	var l_new []*PCB
 	var l_ready []*PCB
 
-	mux.HandleFunc("/syscall", recibirSyscallCPU)
-	mux.HandleFunc("/nuevaCPU", conectarNuevaCPU)
-	mux.HandleFunc("/paquetes", servidor.RecibirPaquetes)
+	mux.HandleFunc("cpu/nuevaCPU", conectarNuevaCPU)
+	mux.HandleFunc("cpu/dispatch", handleDispatch)
+	mux.HandleFunc("cpu/syscall", recibirSyscallCPU)
+	mux.HandleFunc("cpu/interrupt", interruptHandler)
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
 
 	// Objetivos a hacer
