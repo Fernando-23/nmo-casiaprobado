@@ -43,11 +43,10 @@ type CPU struct {
 	Pc         int
 	Esta_libre bool
 }
-
-type IOs struct {
-	IOs *IO
+type IOS struct {
+	io                 []*IO
+	procEsperandoPorIO []int
 }
-
 type IO struct {
 	Url        string
 	Pid        int
@@ -56,7 +55,7 @@ type IO struct {
 
 var (
 	cpuLibres         = make(map[int]*CPU)
-	ios               = make(map[string]*IOs)
+	ios               = make(map[string]*IOS)
 	l_block           []*PCB
 	l_susp_block      []*PCB
 	l_susp_ready      []*PCB

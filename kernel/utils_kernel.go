@@ -85,7 +85,7 @@ func cambiarMetricasTiempo(pPcb *PCB, posEstado int) {
 
 }
 
-func cambiarDeEst10ado(l_est_origen *[]*PCB, l_est_destino *[]*PCB, indice int, estado int) {
+func cambiarDeEstado(l_est_origen *[]*PCB, l_est_destino *[]*PCB, indice int, estado int) {
 
 	if indice < 0 || indice >= len(*l_est_origen) {
 		fmt.Println("Índice fuera de rango")
@@ -389,34 +389,63 @@ func gestionarSyscalls(syscall []string) {
 func agregarAColaBlocked(nombre_io string, io IO) {
 }
 
-func manejarIO(nombre_io string, pid int, duracion int) error {
+func buscarIOLibre(nombre string) *IO {
 
-	// Validacion de si existe  IO
 	ioMutex.RLock()
-	//io_seleccionada, ok := IOs[nombre_io]
-	ioMutex.RUnlock()
-	//if !ok {
-	//	return fmt.Errorf("la IO %s no está registrada", nombre_io)
-	//}
+	defer ioMutex.RUnlock()
 
-	/*if !io_seleccionada {
+	if iosDispo, ok := ios[nombre]; ok {
+		for _, instancia := range iosDispo.io {
+			if instancia.Esta_libre {
+				return instancia
+			}
+		}
+	}
 
-	}*/
-
-	//agregarACola(blocked)
-	//datos_a_enviar := fmt.Sprintf("%d %d", pid, duracion)
-	//fullURL := fmt.Sprintf("%s/io_request", io_seleccionada.Url)                     // Cambiar el formato en io en un futuro
-	//respuesta, _ := utils.EnviarSolicitudHTTPString("POST", fullURL, datos_a_enviar) // La respuesta es el pid
-	//pid_aux := strconv.Itoa(pid)
-
-	//if respuesta != pid_aux {
-	//	return nil //momentaneo
-	//	}
-
-	//sacarDeBlockAReady(pid)
-	//return nil
 	return nil
 
+}
+
+func buscarPorPid(lista *[]*PCB, pid int) int {
+	for pos, pcb := range *lista {
+		if pcb.Pid == pid {
+			return pos
+		}
+	}
+	return -1
+}
+
+func manejarIO(nombre_io string, pid int, duracion int) {
+
+	io, existeIO := ios[nombre_io]
+	if !existeIO {
+		return // mandar a exit falta!!
+	}
+	pos := buscarPorPid(&l_ready, pid)
+	cambiarDeEstado(&l_execute, &l_block, pos, EstadoBlock)
+
+	IO_Seleccionada := buscarIOLibre(nombre_io)
+
+	if IO_Seleccionada == nil { //no hay io libre
+		io.procEsperandoPorIO = append(io.procEsperandoPorIO, pid)
+	}
+
+	IO_Seleccionada.Pid = pid
+	//enviar a io
+	IO_Seleccionada.Esta_libre = false
+
+	enviarProcesoAIO(IO_Seleccionada, duracion)
+
+	return
+
+}
+
+func enviarProcesoAIO(io_seleccionada *IO, duracion int) {
+
+	fullURL := fmt.Sprintf("%sio/tarea", io_seleccionada.Url)
+
+	datos := fmt.Sprintf("%d %d", io_seleccionada.Pid, duracion)
+	utils.EnviarSolicitudHTTPString("POST", fullURL, datos)
 }
 
 func recibirRespuestaIO(w http.ResponseWriter, r *http.Request) {
@@ -427,16 +456,22 @@ func recibirRespuestaIO(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := strings.Split(respuesta, " ")
+
 	cod_op := data[0]    // cod_op
 	nombre_io := data[1] // nombre_io
+	pid_io, _ := strconv.Atoi(data[2])
+
 	switch cod_op {
 	case "FIN_IO":
+		pos := buscarPorPid(&l_block, pid_io)
+		cambiarDeEstado(&l_block, &l_ready, pos, EstadoReady)
 
 	case "DESCONEXION":
-
 	}
 
 }
+
+// func sacarProcesoIO()
 
 func conectarNuevaCPU(w http.ResponseWriter, r *http.Request) { // Handshake
 	var cpu_string string
@@ -495,19 +530,24 @@ func conectarNuevaIO(w http.ResponseWriter, r *http.Request) { // Handshake
 	mutex_ios.Lock()
 
 	defer mutex_ios.Unlock()
+
+	nuevaIO := &IO{
+		Url:        url,
+		Pid:        -1,
+		Esta_libre: true,
+	}
 	// Si no existe una io con ese nombre, lo agrego nuevito
 
-	if _, ok := IOs[nombre_io]; !ok {
+	if _, ok := ios[nombre_io]; !ok {
 		// Agrego y sincronizo el nuevo dispositivo io
 
-		IOs[nombre_io] = &IO{
-			Urls:           []string{url},
-			CantInstancias: 1,
+		ios[nombre_io] = &IOS{
+			io:                 []*IO{nuevaIO},
+			procEsperandoPorIO: []int{},
 		}
 	} else {
 		// Sino, actualizo los valores en esa posicion
-		IOs[nombre_io].CantInstancias++
-		IOs[nombre_io].Urls = append(IOs[nombre_io].Urls, url)
+		ios[nombre_io].io = append(ios[nombre_io].io, nuevaIO)
 	}
 
 }
