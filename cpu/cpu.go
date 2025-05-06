@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strconv"
 
@@ -11,41 +12,57 @@ import (
 
 func main() {
 	fmt.Println("Iniciando CPU...")
+	// Preparacion incial
 	config_CPU = iniciarConfiguracionIO("config.json")
 	args := os.Args
-	nombre_cpu := args[1]
+	id_cpu = args[1]
+	pid_ejecutando = new(int)
+	pid_ejecutando = new(int)
+
+	url_cpu = fmt.Sprintf("http://%s:%d", config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
+	url_kernel = fmt.Sprintf("http://%s:%d", config_CPU.Ip_Kernel, config_CPU.Puerto_Kernel)
+	url_memo = fmt.Sprintf("http://%s:%d", config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
+	nombre_logger := fmt.Sprintf("cpu %s", id_cpu)
+	cliente.ConfigurarLogger(nombre_logger)
 
 	cliente.EnviarMensaje(config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria, "Conexion hecha con modulo CPU")
-	handshakeKernel(nombre_cpu)
+
+	// Conexion con Kernel
+	fmt.Println("Iniciando handshake con kernel")
+	//time.Sleep(2000 * time.Nanosecond) //mas que nada para probar
+	registrarCpu()
 
 	var instruccion string
 
-	cliente.ConfigurarLogger("cpu")
+	hay_interrupcion = false
+	mux := http.NewServeMux()
+	mux.HandleFunc("/cpu/dispatch", esperarDatosKernel)
+	mux.HandleFunc("/cpu/interrupt", recibirInterrupt)
 
-	var interrupcion bool = true
-
+	http.ListenAndServe(id_cpu, mux)
 	// Ciclo de instruccion
-	var datos_ciclo datosCiclo
-	datos_ciclo, err := pedirDatosCiclo()
-	for err != nil {
-		datos_ciclo, err = pedirDatosCiclo()
-	}
 
-	pid_log := strconv.Itoa(datos_ciclo.Pid)
-	pc_log := strconv.Itoa(datos_ciclo.Pc)
+	for {
 
-	for !interrupcion {
+		pid_log := strconv.Itoa(*pid_ejecutando)
+		pc_log := strconv.Itoa(*pc_ejecutando)
+		for !hay_interrupcion {
 
-		instruccion = fetch(&datos_ciclo.Pc, &datos_ciclo.Pid)
-		slog.Info("## PID: %s - FETCH - Program Counter: %s", pid_log, pc_log)
-		// chequeamos si recibimos algo valido de memo
-		for instruccion == "" {
-			instruccion = fetch(&datos_ciclo.Pc, &datos_ciclo.Pid)
+			instruccion = fetch()
+			slog.Info("## PID: %s - FETCH - Program Counter: %s", pid_log, pc_log)
+
+			if instruccion == "" {
+				fmt.Printf("No hay una instruccion valida asociado a este Program Counter.")
+				break
+			}
+
+			cod_op, operacion := decode(instruccion)
+			execute(cod_op, operacion)
+
 		}
 
-		cod_op, operacion := decode(instruccion)
-		execute(cod_op, operacion, &datos_ciclo.Pc, datos_ciclo.Pid)
-		//interrupcion = checkInterrupt(&datos_ciclo.Pc, &datos_ciclo.Pid)
+		actualizarContexto()
+		hay_interrupcion = false
 
 	}
 

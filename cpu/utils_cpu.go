@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,6 +9,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
 type ConfigCPU struct {
@@ -27,17 +28,16 @@ type ConfigCPU struct {
 	Log_level       string `json:"log_level"`
 }
 
-type WriteRequest struct {
-	direccion int    `json:"direccion"`
-	datos     string `json:"datos"`
-}
-
-type ReadRequest struct {
-	direccion int `json:"direccion"`
-	tamanio   int `json:"tamanio"`
-}
-
-var config_CPU *ConfigCPU
+var (
+	config_CPU       *ConfigCPU
+	url_cpu          string
+	url_kernel       string
+	url_memo         string
+	hay_interrupcion bool
+	id_cpu           string
+	pid_ejecutando   *int
+	pc_ejecutando    *int
+)
 
 func iniciarConfiguracionIO(filePath string) *ConfigCPU {
 	var configuracion *ConfigCPU
@@ -53,32 +53,12 @@ func iniciarConfiguracionIO(filePath string) *ConfigCPU {
 	return configuracion
 }
 
-func fetch(PID *int, PC *int) string {
+func fetch() string {
 
-	peticion := datosCiclo{
-		Pid: *PID,
-		Pc:  *PC,
-	}
+	peticion := fmt.Sprintf("%d ", &pc_ejecutando)
+	fullUrl := fmt.Sprintf("http://%s/memoria/fetch", url_memo)
 
-	url := fmt.Sprintf("http://%s:%d/", config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
-	body, err := json.Marshal(peticion)
-	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
-		return ""
-	}
-
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		log.Printf("No se obtuvo algo valido de memoria durante la operacion fetch")
-		return ""
-	}
-
-	var instruccion string
-	err = json.NewDecoder(resp.Body).Decode(&instruccion)
-	if err != nil {
-		log.Printf("Error decodificando mensaje: %s", err.Error())
-		return ""
-	}
+	instruccion, _ := utils.EnviarSolicitudHTTP("POST", fullUrl, peticion)
 
 	return instruccion
 }
@@ -91,9 +71,9 @@ func decode(instruccion string) (string, []string) {
 	return cod_op, operacion
 }
 
-func execute(cod_op string, operacion []string, PC *int, pid int) {
+func execute(cod_op string, operacion []string) {
 
-	pid_string := strconv.Itoa(pid)
+	pid_string := strconv.Itoa(*pid_ejecutando)
 	switch cod_op {
 
 	case "NOOP":
@@ -106,7 +86,8 @@ func execute(cod_op string, operacion []string, PC *int, pid int) {
 
 		slog.Info("## PID: %s - Ejecutando: %s - %s - %s", pid_string, cod_op, operacion[0], datos)
 
-		requestWRITE(direccion, datos, config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
+		respuesta, _ := requestWRITE(direccion, datos)
+		fmt.Println(respuesta)
 
 		slog.Info("PID: " + pid_string + " - Acción: ESCRIBIR - Dirección Física: " + operacion[0] + " - Valor: " + datos)
 
@@ -117,36 +98,62 @@ func execute(cod_op string, operacion []string, PC *int, pid int) {
 		slog.Info("## PID: %s - Ejecutando: %s - %s - %s", pid_string, cod_op, operacion[0], operacion[1])
 
 		//Gestionar mejor el error :p
-		valor_leido, _ := requestREAD(direccion, tamanio, config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
+		valor_leido, _ := requestREAD(direccion, tamanio)
 		slog.Info("PID: " + pid_string + " - Acción: LEER - Dirección Física: " + operacion[0] + " - Valor: " + valor_leido)
 
 	case "GOTO":
 		slog.Info("PID: %s - Ejecutando: %s", pid_string, cod_op)
 
-		valor, _ := strconv.Atoi(operacion[0])
-		*PC = valor
+		nuevo_pc, _ := strconv.Atoi(operacion[0])
+		*pc_ejecutando = nuevo_pc
 
-	//Syscall
+	// Syscalls
 	case "IO":
-		mensaje_io := "IO " + operacion[0]
-		enviarSyscall(mensaje_io)
+		// ID_CPU PC IO TECLADO 20000
+
+		mensaje_io := fmt.Sprintf("%s %d IO %s %s", id_cpu, *pc_ejecutando, operacion[0], operacion[1])
+		enviarSyscall("IO", mensaje_io)
+		hay_interrupcion = true
 	case "INIT_PROC":
-		mensaje_init_proc := "INIT_PROC " + operacion[0] + " " + operacion[1]
-		enviarSyscall(mensaje_init_proc)
+		// ID_CPU PC INIT_PROC proceso1 256
+
+		mensaje_init_proc := fmt.Sprintf("%s %d INIT_PROC %s %s", id_cpu, *pc_ejecutando, operacion[0], operacion[1])
+		enviarSyscall("INIT_PROC", mensaje_init_proc)
+		hay_interrupcion = true
 
 	case "DUMP_MEMORY":
-		enviarSyscall("DUMP_MEMORY")
+		// ID_CPU PC DUMP_MEMORY
+
+		mensaje_dump := fmt.Sprintf("%s %d DUMP_MEMORY", id_cpu, *pc_ejecutando)
+		enviarSyscall("DUMP_MEMORY", mensaje_dump)
+		hay_interrupcion = true
 
 	case "EXIT":
-		enviarSyscall("EXIT")
+		// ID_CPU PC DUMP_MEMORY
+
+		mensaje_exit := fmt.Sprintf("%s %d EXIT", id_cpu, *pc_ejecutando)
+		enviarSyscall("EXIT", mensaje_exit)
+		hay_interrupcion = true
 
 	default:
 		fmt.Println("Error, ingrese una instruccion valida")
 	}
 
-	//Incrementar PC
+	// Incrementar PC
 	if cod_op != "GOTO" {
-		*PC++
+		*pc_ejecutando++
 	}
+
+}
+
+func recibirInterrupt(w http.ResponseWriter, r *http.Request) {
+	var respuesta bool
+
+	if err := json.NewDecoder(r.Body).Decode(&respuesta); err != nil {
+		fmt.Println("error decodificando la respuesta: ", err) //revisar porque no podemos usar Errorf
+		return
+	}
+
+	hay_interrupcion = respuesta
 
 }
