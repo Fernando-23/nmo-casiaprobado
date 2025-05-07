@@ -21,14 +21,15 @@ type ConfigKernel struct {
 const cantEstados int = 7
 
 type PCB struct {
-	Pid      int
-	Pc       int
-	Me       [cantEstados]int           //Metricas de Estado
-	Mt       [cantEstados]time.Duration //Metricas de Tiempo
-	tamanio  int                        //revisar a futuro
-	contador time.Time                  //revisar a futuro
-	estado   int
-	SJF      *SJF //Estimaciones para planificacion SJF
+	Pid         int
+	Pc          int
+	Me          [cantEstados]int           //Metricas de Estado
+	Mt          [cantEstados]time.Duration //Metricas de Tiempo
+	Tamanio     int                        //revisar a futuro
+	Arch_pseudo string
+	contador    time.Time //revisar a futuro
+	estado      int
+	SJF         *SJF //Estimaciones para planificacion SJF
 }
 
 type SJF struct {
@@ -53,22 +54,22 @@ type IO struct {
 	Esta_libre bool
 }
 
+type Kernel struct {
+	procesoPorEstado map[int][]*PCB
+	cpusLibres       map[int]*CPU
+	ios              map[string]*IOS
+	ConfigKernel     *ConfigKernel
+	pidActual        int
+}
+
 var (
-	cpuLibres         = make(map[int]*CPU)
-	ios               = make(map[string]*IOS)
-	l_block           []*PCB
-	l_susp_block      []*PCB
-	l_susp_ready      []*PCB
-	l_execute         []*PCB
-	l_new             []*PCB
-	l_ready           []*PCB
 	ioMutex           sync.RWMutex
 	mutex_cpus_libres sync.Mutex
 	mutex_ios         sync.Mutex
-	pid               int
 )
 
 // PROCESO MAS CHICO PRIMERO
+
 type PorTamanio []*PCB
 
 // Metodos para usar sort(ordenamiento ascendente por tamanio)
@@ -76,7 +77,7 @@ func (pcb PorTamanio) Swap(i, j int) { pcb[i], pcb[j] = pcb[j], pcb[i] }
 
 func (pcb PorTamanio) Len() int { return len(pcb) }
 
-func (pcb PorTamanio) Less(i, j int) bool { return pcb[i].tamanio < pcb[j].tamanio }
+func (pcb PorTamanio) Less(i, j int) bool { return pcb[i].Tamanio < pcb[j].Tamanio }
 
 // SJF
 type PorSJF []*PCB
@@ -91,13 +92,13 @@ func (pcb PorSJF) Less(i, j int) bool {
 }
 
 // var estados = []string{"NEW", "READY", "EXECUTE", "BLOCK", "BLOCK-SUSPENDED", "BLOCK-READY", "EXIT"}
-var config_kernel *ConfigKernel
+//var config_kernel *ConfigKernel
 
-type solicitudIniciarProceso struct {
+/*type solicitudIniciarProceso struct {
 	Pid           int    `json:"pid"`
 	ArchivoPseudo string `json:"archivoPseudo"`
 	Tamanio       int    `json:"tamanio"`
-}
+}*/
 
 const (
 	EstadoNew = iota

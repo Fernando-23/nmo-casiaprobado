@@ -2,10 +2,8 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -17,23 +15,21 @@ import (
 	utils "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-// var cola_susp_block []
-// var cola_susp_ready []
-
 // array de arrays que contenga a todas las colas
 
-func iniciarConfiguracionKernel(filePath string) *ConfigKernel {
-	var configuracion *ConfigKernel
-	configFile, err := os.Open(filePath)
+func IniciarConfiguracion[T any](ruta string, estructuraDeConfig *T) error {
+	configFile, err := os.Open(ruta)
 	if err != nil {
-		log.Fatal(err.Error())
+		return fmt.Errorf("error al abrir el archivo de configuracion: %w", err)
 	}
 	defer configFile.Close()
 
 	jsonParser := json.NewDecoder(configFile)
-	jsonParser.Decode(&configuracion)
+	if err := jsonParser.Decode(estructuraDeConfig); err != nil {
+		return fmt.Errorf("error al decodificar la configuracion %w", err)
+	}
+	return nil
 
-	return configuracion
 }
 
 func detenerKernel() {
@@ -46,25 +42,52 @@ func detenerKernel() {
 
 }
 
-func crearPcb(tamanio int) *PCB {
-	pcb := new(PCB)
-	pcb.Pid = pid
-	pcb.tamanio = tamanio
-	if config_kernel.Algoritmo_Plani == "" {
-		crearSJF(pcb)
+func (k *Kernel) InicializarEstados() {
+	k.procesoPorEstado = make(map[int][]*PCB)
+
+	// Inicializamos todos los estados del map
+	for i := 0; i <= EstadoExit; i++ {
+		k.procesoPorEstado[i] = []*PCB{}
+	}
+}
+
+func (k *Kernel) HandshakeMemoria() error {
+	url := fmt.Sprintf("http://%s:%d/memoria/handshake", k.ConfigKernel.Ip_memoria, k.ConfigKernel.Puerto_Memoria)
+	respuesta, err := utils.EnviarSolicitudHTTPString("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("memoria no responde: %w", err)
+	}
+
+	if respuesta != "OK" {
+		return fmt.Errorf("respuesta inesperada de memoria: %s", respuesta)
+	}
+
+	return nil
+}
+
+//en memo
+/*
+func handlecheck(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+*/
+func (k *Kernel) CrearPCB(tamanio int, arch_pseudo string) *PCB {
+	pcb := &PCB{
+		Pid:         k.pidActual,
+		Tamanio:     tamanio,
+		Arch_pseudo: arch_pseudo,
+	}
+
+	if k.ConfigKernel.Algoritmo_Plani == "SJF" {
+		k.CrearSJF(pcb)
 	} else {
 		pcb.SJF = nil
 	}
 
-	incrementarPid()
+	k.pidActual++
 	//pcb.Pc = 0
 	return pcb
-}
-
-//
-
-func incrementarPid() {
-	pid++
 }
 
 func FIFO(l_estado *[]*PCB, pcb *PCB) { //FIFO
@@ -85,271 +108,276 @@ func cambiarMetricasTiempo(pPcb *PCB, posEstado int) {
 
 }
 
-func cambiarDeEstado(l_est_origen *[]*PCB, l_est_destino *[]*PCB, indice int, estado int) {
+func (k *Kernel) AgregarAEstado(estado int, pcb *PCB) {
+	k.procesoPorEstado[estado] = append(k.procesoPorEstado[estado], pcb)
+}
 
-	if indice < 0 || indice >= len(*l_est_origen) {
-		fmt.Println("Índice fuera de rango")
-		return
+func (k *Kernel) QuitarDeEstado(estado int, pid int) {
+	procesos := k.procesoPorEstado[estado]
+	for i, pcb := range procesos {
+		if pcb.Pid == pid {
+			// Quitar el proceso de la lista del estado
+			k.procesoPorEstado[estado] = append(procesos[:i], procesos[i+1:]...)
+			break
+		}
+	}
+}
+
+func (k *Kernel) MoverDeEstadoPorPid(estadoActual, estadoNuevo int, pid int) {
+	// Buscar el puntero al PCB en el estado actual
+	procesos := k.procesoPorEstado[estadoActual]
+	var pcb *PCB
+	encontrado := false
+	for i, p := range procesos {
+		if p.Pid == pid {
+			pcb = p
+			// Eliminar el puntero del estado actual
+			k.procesoPorEstado[estadoActual] = append(procesos[:i], procesos[i+1:]...)
+			encontrado = true
+			break
+		}
 	}
 
-	// Obtener el elemento
-	pcb := (*l_est_origen)[indice]
-
-	fmt.Println("Lista new antes:", l_est_origen)
+	if !encontrado {
+		fmt.Printf("Proceso %d no encontrado en el estado %d\n", pid, estadoActual)
+		return
+	}
 
 	// Actualizar métricas
 	cambiarMetricasTiempo(pcb, pcb.estado)
-	cambiarMetricasEstado(pcb, estado)
+	cambiarMetricasEstado(pcb, estadoNuevo)
 
-	// Cambiar estado del PCB
-	pcb.estado = estado
+	// Cambiar el estado del proceso
+	pcb.estado = estadoNuevo
 
-	// Intercambio de PCB entre listas
-	*l_est_destino = append(*l_est_destino, pcb)
-	*l_est_origen = append((*l_est_origen)[:indice], (*l_est_origen)[indice+1:]...)
-
-	//Log de los cambios
-	fmt.Println("Lista new:", l_est_origen)
-	fmt.Println("Lista ready:", l_est_destino)
+	// Agregar el puntero al PCB al nuevo estado
+	k.AgregarAEstado(estadoNuevo, pcb)
 }
 
-//agregarACola(){
-//
-//}
+func (k *Kernel) QuitarPrimerElemento(estado int) *PCB {
+	pcbs := k.procesoPorEstado[estado]
+	primer_elemento := pcbs[0]
+	k.procesoPorEstado[estado] = pcbs[1:]
 
-func crearSJF(pcb *PCB) {
-	sjf := new(SJF)
-	sjf.Estimado_anterior = config_kernel.Estimacion_Inicial
-	sjf.Real_anterior = 0 //no ejecuto valor igual a 0
+	return primer_elemento
+
+}
+
+func (k *Kernel) MoverDeEstado(estadoActual, estadoNuevo int) {
+	// Buscar el puntero al PCB en el estado actual
+	pcbs := k.procesoPorEstado[estadoActual]
+	if len(pcbs) == 0 {
+		fmt.Printf("No hay procesos en el estado %d\n", estadoActual)
+		return
+	}
+	encontrado := false
+	primera_pos := 0
+	pcb_a_mover := pcbs[primera_pos]
+	// Elimina el pcb del estado actual
+	k.procesoPorEstado[estadoActual] = pcbs[1:]
+	encontrado = true
+
+	if !encontrado {
+		fmt.Printf("Proceso %d no encontrado en el estado %d\n", pcb_a_mover.Pid, estadoActual)
+		return
+	}
+
+	// Actualizar métricas
+	cambiarMetricasTiempo(pcb_a_mover, pcb_a_mover.estado)
+	cambiarMetricasEstado(pcb_a_mover, estadoNuevo)
+
+	// Cambiar el estado del proceso
+	pcb_a_mover.estado = estadoNuevo
+
+	// Agregar el puntero al PCB al nuevo estado
+	k.AgregarAEstado(estadoNuevo, pcb_a_mover)
+}
+
+func (k *Kernel) CrearSJF(pcb *PCB) {
+	sjf := &SJF{
+		Estimado_anterior: k.ConfigKernel.Estimacion_Inicial,
+		Real_anterior:     0, //no ejecuto valor igual a 0
+	}
 	pcb.SJF = sjf
 }
 
-func actualizarEstimacionSJF(pcb *PCB, tiempoEnExecute time.Duration) {
+func (k *Kernel) actualizarEstimacionSJF(pcb *PCB, tiempoEnExecute time.Duration) {
 	if pcb == nil || pcb.SJF == nil {
 		return
 	}
-	realAnterior := float64(tiempoEnExecute)
-	alpha := config_kernel.Alfa
+	real_anterior := float64(tiempoEnExecute.Milliseconds())
+	alpha := k.ConfigKernel.Alfa
 	sjf := pcb.SJF
 
-	sjf.Estimado_anterior = alpha*realAnterior + (1-alpha)*sjf.Estimado_anterior
+	sjf.Estimado_anterior = alpha*real_anterior + (1-alpha)*sjf.Estimado_anterior
 }
 
-func iniciarProceso(tamanio int) {
-	pcb := crearPcb(tamanio)
+func (k *Kernel) IniciarProceso(tamanio int, arch_pseudo string) *PCB {
+	pcb := k.CrearPCB(tamanio, arch_pseudo)
 	pcb.contador = time.Now()
 
 	cambiarMetricasEstado(pcb, EstadoNew)
-	FIFO(&l_new, pcb) //meter en la cola new no hay planificacion para meter en la cola new
-
+	k.AgregarAEstado(EstadoNew, pcb) //meter en la cola new no hay planificacion para meter en la cola new
+	return pcb
 }
 
-func planiLargoPlazo(tamanio int, archivoPseudo string) error { //fijarte si podes hacer que entre a la cola de new y que prg dsp por el sig
-
-	iniciarProceso(tamanio)
-	//log.Info("## (%d) Se crea el proceso - Estado: NEW", pcb.Pid)
-	hay_espacio, err := hayEspacio(tamanio, archivoPseudo)
+func (k *Kernel) PlaniLargoPlazo() error { //fijarte si podes hacer que entre a la cola de new y que prg dsp por el sig
+	if k.ConfigKernel.Ready_ingress_algorithm == "PCMP" {
+		sort.Sort(PorTamanio(k.procesoPorEstado[EstadoNew]))
+	}
+	pcb := k.procesoPorEstado[EstadoNew][0]
+	hay_espacio, err := k.MemoHayEspacio(pcb.Pid, pcb.Tamanio, pcb.Arch_pseudo)
 
 	if err != nil {
 		log.Printf("Error codificando mensaje: %s", err.Error())
 		return err
 	}
+
 	if hay_espacio {
-		if config_kernel.Ready_ingress_algorithm == "PMCP" || len(l_new) == 1 {
-			// Cambiar de estado del proceso de NEW a READY
-			cambiarDeEstado(&l_new, &l_ready, 0, EstadoReady)
-			//log.Info("## (%d) Pasa del estado NEW al estado READY", *pid)
-		}
+		// Cambiar de estado del proceso de NEW a READY
+		k.MoverDeEstado(EstadoNew, EstadoReady)
+		//log.Info("## (%d) Pasa del estado NEW al estado READY", *pid)
 	}
 	return nil //dudoso
 }
 
-func buscarCPU() *CPU {
+func (k *Kernel) BolicheMomento(pcb_creado *PCB) { //Plani largo plazo para procesos recien creados
 
-	for id, cpu := range cpuLibres {
+	if k.ConfigKernel.Ready_ingress_algorithm == "PMCP" || len(k.procesoPorEstado[EstadoNew]) == 1 { //Si es PMCP o soy el primero
+		hay_espacio, _ := k.MemoHayEspacio(pcb_creado.Pid, pcb_creado.Tamanio, pcb_creado.Arch_pseudo)
+		if hay_espacio {
+			k.MoverDeEstadoPorPid(EstadoNew, EstadoReady, pcb_creado.Pid)
+		}
+	}
+}
+
+func (k *Kernel) ObtenerCPULibre() *CPU {
+
+	for _, cpu := range k.cpusLibres {
 		if cpu.Esta_libre {
 			return cpu // La primera CPU que esta libre
 		}
 	}
 	return nil // No hay CPU libre
 }
-func planiCortoPlazo() {
 
-	if config_kernel.Algoritmo_Plani == "SJF" {
-		sort.Sort(PorSJF(l_ready)) //SJF distinto de nil
+func (k *Kernel) ReplanificarProceso() {
+	// Para FIFO ya esta preparada la lista
+	if k.ConfigKernel.Algoritmo_Plani == "SJF" {
+		sort.Sort(PorSJF(k.procesoPorEstado[EstadoReady])) //SJF distinto de nil
 	}
 }
-func enviarProcesoAExecute() {
 
-	if len(l_ready) == 0 {
+func (k *Kernel) IntentarEnviarProcesoAExecute() {
+
+	if len(k.procesoPorEstado[EstadoReady]) == 0 {
 		fmt.Println("No hay procesos en READY")
 		return
 	}
 
-	planiCortoPlazo()
+	k.ReplanificarProceso()
 
 	//Tomamos el primer PCB tras el sort si era SJF y sino FIFO
 	indice := 0
-	pcb := (l_ready)[indice]
+	pcb := k.procesoPorEstado[EstadoReady][indice]
 
 	// intentamos asignarle cpu
-	cpu_seleccionada := buscarCPU()
+	cpu_seleccionada := k.ObtenerCPULibre()
 
 	if cpu_seleccionada == nil { //no hay cpu libre
 		fmt.Printf("No hay cpu libre")
 		return
 	}
-
+	cpu_seleccionada.Esta_libre = false
 	cpu_seleccionada.Pid = pcb.Pid
 	cpu_seleccionada.Pc = pcb.Pc
-	handleDispatch(cpu_seleccionada)
-	cambiarDeEstado(&l_ready, &l_execute, indice, EstadoReady)
 
-	cpu_seleccionada.Esta_libre = false
+	if err := handleDispatch(cpu_seleccionada); err != nil {
+		fmt.Printf("Error al despachar proceso a la cpu: %v\n", err)
+		cpu_seleccionada.Esta_libre = true //Revertir si falla
+	}
+
+	handleDispatch(cpu_seleccionada)
+	k.MoverDeEstadoPorPid(EstadoReady, EstadoExecute, pcb.Pid)
 
 	fmt.Printf("Proceso %d a Execute en CPU %d\n", pcb.Pid, cpu_seleccionada.ID)
 }
 
-// post /dispach hola soy kernel aca tenes el pid y pc (no el tid) /interrupt sali chvom /syscalll ahola soy cpu termine
-// /cpu
-
-func handleDispatch(cpu_seleccionada *CPU) {
+func handleDispatch(cpu_seleccionada *CPU) error {
 
 	fullURL := fmt.Sprintf("%sdispatch", cpu_seleccionada.Url)
 
 	datos := fmt.Sprintf("%d %d", cpu_seleccionada.Pid, cpu_seleccionada.Pc)
-	utils.EnviarSolicitudHTTPString("POST", fullURL, datos)
+	_, err := utils.EnviarSolicitudHTTPString("POST", fullURL, datos)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func enviarProcessExe(cpu CPU, proceso *PCB) (string, error) {
-	//ENVIAR PROCESO A CPU
-	procecssEjec := fmt.Sprintf("%d %d", proceso.Pid, proceso.Pc)
-	url := fmt.Sprintf("http://%s/pid", cpu.Url, procecssEjec)
+func (k *Kernel) solicitudEliminarProceso(pid int) (string, error) {
 
-	respuestaMemo, err := http.Get(url)
+	url := fmt.Sprintf("http://%s:%d/memoria/%d", k.ConfigKernel.Ip_memoria, k.ConfigKernel.Puerto_Memoria, pid)
+	respuestaMemo, err := utils.EnviarSolicitudHTTPString("GET", url, nil)
 
 	if err != nil {
 		log.Printf("Error codificando mensaje: %s", err.Error())
 		return "", err
 	}
 
-	bodyByte, err := io.ReadAll(respuestaMemo.Body)
-
-	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
-		return "", err
-	}
-
-	fmt.Println(string(bodyByte))
-
-	return string(bodyByte), nil
-}
-
-/*func ingresarColaNew(pid *int) {
-	crearPcb(*pid)
-
-	//inicio := time.Now()
-	cola_new = append(cola_new, pcb)
-
-}*/ //obsolteta aparentemente
-
-func modificarEstado(pcb *PCB, pos int) {
-
-	pcb.Me[pos]++
+	//Deberia responder "OK"
+	return respuestaMemo, err
 
 }
 
-func solicitudMemo(pidAPreguntar int, tamanio int, archivoPseudo string) (string, error) {
-	preguntaMemo := solicitudIniciarProceso{
-		Pid:           pidAPreguntar,
-		ArchivoPseudo: archivoPseudo,
-		Tamanio:       tamanio,
-	}
-	url := fmt.Sprintf("http://%s:%d/", config_kernel.Ip_kernel, config_kernel.Puerto_Memoria)
-	body, err := json.Marshal(preguntaMemo)
+func (k *Kernel) MemoHayEspacio(pid int, tamanio int, archivoPseudo string) (bool, error) {
 
-	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
-		return "", err
-	}
-
-	respuesta, err := http.Post(url, "application/json", bytes.NewBuffer(body))
-
-	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
-		return "", err
-	}
-
-	var respuestaMemo string
-	err = json.NewDecoder(respuesta.Body).Decode(&respuestaMemo)
-
-	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
-		return "", err
-	}
-
-	return respuestaMemo, nil
-
-}
-
-func solicitudEliminarProceso(pid int) (string, error) {
-
-	url := fmt.Sprintf("http://%s:%d/%d", config_kernel.Ip_kernel, config_kernel.Puerto_Memoria, pid)
-
-	respuestaMemo, err := http.Get(url)
-
-	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
-		return "", err
-	}
-
-	bodyByte, err := io.ReadAll(respuestaMemo.Body)
-
-	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
-		return "", err
-	}
-
-	fmt.Println(string(bodyByte))
-
-	return string(bodyByte), nil
-
-}
-
-func hayEspacio(pid int, tamanio int, archivoPseudo string) (bool, error) {
-
-	mensaje, err := solicitudMemo(pid, tamanio, archivoPseudo)
+	solicitud_memoria := fmt.Sprintf("%d %d %s", pid, tamanio, archivoPseudo)
+	url := fmt.Sprintf("http://%s:%d/memoria/hay_lugar", k.ConfigKernel.Ip_memoria, k.ConfigKernel.Puerto_Memoria)
+	respuesta, err := utils.EnviarSolicitudHTTPString("POST", url, solicitud_memoria)
 
 	if err != nil {
 		log.Printf("Error codificando mensaje: %s", err.Error())
 		return false, err
 	}
 
-	if mensaje == "okay" {
+	if respuesta == "Si kernel, hay espacio" {
 		return true, nil
 	}
 	return false, nil
-	//mux.HandleFunc("/hay_espacio", hayEspacio())
 
 }
 
-func recibirSyscallCPU(w http.ResponseWriter, r *http.Request) {
+func (k *Kernel) RecibirSyscallCPU(w http.ResponseWriter, r *http.Request) {
 	var respuesta string
 
 	if err := json.NewDecoder(r.Body).Decode(&respuesta); err != nil {
-		fmt.Errorf("error creando la solicitud: %w", err)
+		fmt.Println("error creando la solicitud:", err)
 		return
 	}
 
 	syscall := strings.Split(respuesta, " ")
-	gestionarSyscalls(syscall)
+	k.GestionarSyscalls(syscall)
 }
 
-func gestionarSyscalls(syscall []string) {
+func (k *Kernel) GestionarSyscalls(syscall []string) {
 
-	id_cpu, _ := strconv.Atoi(syscall[IdCPU])
-	pc, _ := strconv.Atoi(syscall[PC])
-	cpu_ejecutando := cpuLibres[id_cpu]
+	id_cpu, err := strconv.Atoi(syscall[IdCPU])
+
+	if err != nil || id_cpu >= len(k.cpusLibres) {
+		log.Printf("ID de CPU invalido: %v", syscall[IdCPU])
+		return
+	}
+
+	pc, err := strconv.Atoi(syscall[PC])
+
+	if err != nil {
+		log.Printf("PC invalido: %v", syscall[PC])
+		return
+	}
+
+	cpu_ejecutando := k.cpusLibres[id_cpu]
 	cod_op := syscall[CodOp]
 
 	switch cod_op {
@@ -359,19 +387,17 @@ func gestionarSyscalls(syscall []string) {
 		nombre := syscall[3]
 		tiempo, _ := strconv.Atoi(syscall[4])
 
-		manejarIO(nombre, cpu_ejecutando.Pid, tiempo)
+		k.ManejarIO(nombre, cpu_ejecutando, tiempo)
+		k.MoverDeEstado(EstadoExecute, EstadoBlock)
 		//manejarIO
 		//validar que exista la io
 		//enviar mensaje a io
 
 	case "INIC_PROC":
 		// 2 20 INIT_PROC proceso1 256
-
 		nombre_arch := syscall[3]
 		tamanio, _ := strconv.Atoi(syscall[4])
-		planiLargoPlazo(tamanio, nombre_arch)
-		cpu_ejecutando.Pc = pc //Actualizar pc para cpu
-		handleDispatch(cpu_ejecutando)
+		k.GestionarINIT_PROC(nombre_arch, tamanio, pc, cpu_ejecutando)
 
 	case "DUMP_MEMORY":
 		// 2 30 DUMP_MEMORY
@@ -382,19 +408,42 @@ func gestionarSyscalls(syscall []string) {
 	case "EXIT":
 		// 2 EXIT
 		//finalizarProc
+		k.GestionarEXIT(cpu_ejecutando)
+	}
 
+	k.IntentarEnviarProcesoAExecute()
+}
+
+func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int, cpu_ejecutando *CPU) {
+	new_pcb := k.IniciarProceso(tamanio, nombre_arch)
+	//log.Info("## (%d) Se crea el proceso - Estado: NEW", pcb.Pid)
+
+	k.BolicheMomento(new_pcb)
+	cpu_ejecutando.Pc = pc //Actualizar pc para cpu
+	handleDispatch(cpu_ejecutando)
+}
+
+func (k *Kernel) GestionarEXIT(cpu_ejecutando *CPU) {
+	respuesta, err := k.solicitudEliminarProceso(cpu_ejecutando.Pid)
+	if err != nil {
+		fmt.Println("Error", err)
+	}
+
+	if respuesta == "OK" {
+		k.MoverDeEstadoPorPid(EstadoExecute, EstadoExit, cpu_ejecutando.Pid)
+		k.QuitarDeEstado(cpu_ejecutando.Pid, EstadoExit)
+		//k.EliminarProceso(cpu_ejecutando.Pid)
+		cpu_ejecutando.Esta_libre = true
+		//k.IntentarEnviarProcesoAReady()
 	}
 }
 
-func agregarAColaBlocked(nombre_io string, io IO) {
-}
-
-func buscarIOLibre(nombre string) *IO {
+func (k *Kernel) buscarIOLibre(nombre string) *IO {
 
 	ioMutex.RLock()
 	defer ioMutex.RUnlock()
 
-	if iosDispo, ok := ios[nombre]; ok {
+	if iosDispo, ok := k.ios[nombre]; ok {
 		for _, instancia := range iosDispo.io {
 			if instancia.Esta_libre {
 				return instancia
@@ -406,56 +455,57 @@ func buscarIOLibre(nombre string) *IO {
 
 }
 
-func buscarPorPid(lista *[]*PCB, pid int) int {
-	for pos, pcb := range *lista {
-		if pcb.Pid == pid {
-			return pos
-		}
-	}
-	return -1
+func RegistrarCPUaLibre(cpu_a_liberar *CPU) {
+	cpu_a_liberar.Esta_libre = true
+	cpu_a_liberar.Pid = -1
 }
 
-func manejarIO(nombre_io string, pid int, duracion int) {
+func (k *Kernel) ManejarIO(nombre_io string, cpu_ejecutando *CPU, duracion int) {
+	defer RegistrarCPUaLibre(cpu_ejecutando)
+	io, existeIO := k.ios[nombre_io]
 
-	io, existeIO := ios[nombre_io]
 	if !existeIO {
-		return // mandar a exit falta!!
+		k.GestionarEXIT(cpu_ejecutando)
+		return
 	}
-	pos := buscarPorPid(&l_ready, pid)
-	cambiarDeEstado(&l_execute, &l_block, pos, EstadoBlock)
 
-	IO_Seleccionada := buscarIOLibre(nombre_io)
+	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, cpu_ejecutando.Pid)
+
+	IO_Seleccionada := k.buscarIOLibre(nombre_io)
 
 	if IO_Seleccionada == nil { //no hay io libre
-		io.procEsperandoPorIO = append(io.procEsperandoPorIO, pid)
+		io.procEsperandoPorIO = append(io.procEsperandoPorIO, cpu_ejecutando.Pid)
+		return
 	}
-
-	IO_Seleccionada.Pid = pid
+	// si hay io libre
+	IO_Seleccionada.Pid = cpu_ejecutando.Pid
 	//enviar a io
 	IO_Seleccionada.Esta_libre = false
 
 	enviarProcesoAIO(IO_Seleccionada, duracion)
 
-	return
-
 }
 
 func enviarProcesoAIO(io_seleccionada *IO, duracion int) {
 
-	fullURL := fmt.Sprintf("%sio/tarea", io_seleccionada.Url)
-
+	fullURL := fmt.Sprintf("%sio/hace_algo", io_seleccionada.Url)
 	datos := fmt.Sprintf("%d %d", io_seleccionada.Pid, duracion)
 	utils.EnviarSolicitudHTTPString("POST", fullURL, datos)
 }
 
-func recibirRespuestaIO(w http.ResponseWriter, r *http.Request) {
+func (k *Kernel) RecibirRespuestaIO(w http.ResponseWriter, r *http.Request) {
 	var respuesta string
 	if err := json.NewDecoder(r.Body).Decode(&respuesta); err != nil {
-		fmt.Errorf("Error recibiendo la solicitud:%w", err)
+		fmt.Println("Error recibiendo la solicitud:", err)
 		return
 	}
 
 	data := strings.Split(respuesta, " ")
+
+	if len(data) < 3 {
+		log.Printf("Respuesta IO mal formada: %s", respuesta)
+		return
+	}
 
 	cod_op := data[0]    // cod_op
 	nombre_io := data[1] // nombre_io
@@ -463,57 +513,74 @@ func recibirRespuestaIO(w http.ResponseWriter, r *http.Request) {
 
 	switch cod_op {
 	case "FIN_IO":
-		pos := buscarPorPid(&l_block, pid_io)
-		cambiarDeEstado(&l_block, &l_ready, pos, EstadoReady)
+		k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid_io)
 
 	case "DESCONEXION":
+		k.BorrarIO(nombre_io, pid_io)
 	}
 
 }
 
-// func sacarProcesoIO()
+func (k *Kernel) BorrarIO(nombre_io string, pid int) {
 
-func conectarNuevaCPU(w http.ResponseWriter, r *http.Request) { // Handshake
+	iosMismoNombre := k.ios[nombre_io]
+	for i, valor := range iosMismoNombre.io {
+		if valor.Pid == pid {
+			iosMismoNombre.io = append(iosMismoNombre.io[:i], iosMismoNombre.io[i+1:]...)
+			return
+		}
+	}
+	fmt.Printf("No se encontró una instancia con pid %d en %s para desconectar\n", pid, nombre_io)
+}
+
+func (k *Kernel) registrarNuevaCPU(w http.ResponseWriter, r *http.Request) { // Handshake
+
 	var cpu_string string
 	if err := json.NewDecoder(r.Body).Decode(&cpu_string); err != nil {
-		fmt.Errorf("Error recibiendo la solicitud:%w", err)
+		fmt.Println("Error recibiendo la solicitud:", err)
 		return
 	}
 
 	aux := strings.Split(cpu_string, " ") //ID IP PUERTO
 
 	if len(aux) != 3 {
-		http.Error(w, "Formato inválido", http.StatusBadRequest)
+		http.Error(w, "Formato invalido. Esperando: 'ID IP PUERTO'", http.StatusBadRequest)
 		return
 	}
 
+	http.Error(w, "Formato invalido. Esperando: 'ID IP PUERTO'", http.StatusBadRequest)
+
+	nueva_ID_CPU, _ := strconv.Atoi(aux[0])
 	ip := aux[1]
 	puerto := aux[2]
-	url := fmt.Sprintf("http://%s:%s/", ip, puerto)
 
-	nueva_ID_CPU, err := strconv.Atoi(aux[0])
+	url := fmt.Sprintf("http://%s:%s/cpu/registrar_cpu", ip, puerto)
 
-	if err != nil {
-		http.Error(w, "Formato invalido. Esperando: 'ID IP PUERTO'", http.StatusBadRequest)
-	}
 	nueva_cpu := CPU{
 		ID:         nueva_ID_CPU,
 		Url:        url,
 		Pid:        -1,
+		Pc:         0,
 		Esta_libre: true}
 
 	// Agrego y sincronizo el nuevo CPU
 	mutex_cpus_libres.Lock()
 	defer mutex_cpus_libres.Unlock()
 
-	cpuLibres[nueva_cpu.ID] = &nueva_cpu
+	k.cpusLibres[nueva_cpu.ID] = &nueva_cpu
+
+	fmt.Printf("Se conectó una nueva CPU con ID %d en %s\n", nueva_cpu.ID, url)
+
+	//RESPONDER OK
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 
 }
 
-func conectarNuevaIO(w http.ResponseWriter, r *http.Request) { // Handshake
+func (k *Kernel) registrarNuevaIO(w http.ResponseWriter, r *http.Request) { // Handshake
 	var io_string string
 	if err := json.NewDecoder(r.Body).Decode(&io_string); err != nil {
-		fmt.Errorf("Error recibiendo la solicitud:%w", err)
+		fmt.Println("Error recibiendo la solicitud:", err)
 		return
 	}
 
@@ -525,7 +592,7 @@ func conectarNuevaIO(w http.ResponseWriter, r *http.Request) { // Handshake
 	}
 
 	nombre_io := aux[0] //Para mas claridad :p
-	url := fmt.Sprintf("http://%s:%s/", aux[1], aux[2])
+	url := fmt.Sprintf("http://%s:%s/io/registrar_io", aux[1], aux[2])
 
 	mutex_ios.Lock()
 
@@ -538,28 +605,16 @@ func conectarNuevaIO(w http.ResponseWriter, r *http.Request) { // Handshake
 	}
 	// Si no existe una io con ese nombre, lo agrego nuevito
 
-	if _, ok := ios[nombre_io]; !ok {
+	if _, ok := k.ios[nombre_io]; !ok {
 		// Agrego y sincronizo el nuevo dispositivo io
 
-		ios[nombre_io] = &IOS{
+		k.ios[nombre_io] = &IOS{
 			io:                 []*IO{nuevaIO},
 			procEsperandoPorIO: []int{},
 		}
 	} else {
 		// Sino, actualizo los valores en esa posicion
-		ios[nombre_io].io = append(ios[nombre_io].io, nuevaIO)
+		k.ios[nombre_io].io = append(k.ios[nombre_io].io, nuevaIO)
 	}
 
 }
-
-// Ej 3 CPUs
-// cpus := []CPU{
-// 	{ID: 1, URL: "http://localhost:5001"},
-// 	{ID: 2, URL: "http://localhost:5002"},
-// 	{ID: 3, URL: "http://localhost:5003"},
-// }
-
-// Al principio todas están libres
-// for _, cpu := range cpus {
-// 	cpusLibres <- cpu
-// }
