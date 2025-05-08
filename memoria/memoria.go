@@ -13,8 +13,16 @@ func main() {
 	//var configuracion *Config = cliente.iniciarConfiguracion("config.json")
 	config_memo = iniciarConfiguracionMemo("config.json")
 	mux := http.NewServeMux()
-	mux.HandleFunc("/paquetes", servidor.RecibirPaquetes)
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
+	mux.HandleFunc("/memoria/fetch", Fetch)
+
+	// APIs a hacer
+	// mux.HandleFunc("/memoria/hay_lugar", VerificarHayLugar)
+	// mux.HandleFunc("/memoria/crear_proceso", CrearProceso)
+	// mux.HandleFunc("/memoria/handshake", HanshakeKernel)
+	// mux.HandleFUnc("/memoria/WRITE",Escribir)
+	// mux.HandleFunc("/memoria/READ",LeerEnMemoria)
+
 	url := fmt.Sprintf(":%d", config_memo.Puerto_mem)
 
 	slog.Debug("Iniciando servidor")
@@ -22,4 +30,5 @@ func main() {
 	if err != nil {
 		panic("Error al iniciar el servidor")
 	}
+
 }
