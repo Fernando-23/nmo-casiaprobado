@@ -35,6 +35,7 @@ type PCB struct {
 type SJF struct {
 	Estimado_anterior float64
 	Real_anterior     float64
+	Estimado_actual   float64
 }
 
 type CPU struct {

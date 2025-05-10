@@ -99,12 +99,13 @@ func cambiarMetricasEstado(pPcb *PCB, posEstado int) {
 	pPcb.contador = time.Now()
 }
 
-func duracionEnEstado(pPcb *PCB, posEstado int) time.Duration {
+func duracionEnEstado(pPcb *PCB) time.Duration {
 	tiempoActual := time.Now()
 	return tiempoActual.Sub(pPcb.contador)
 }
+
 func cambiarMetricasTiempo(pPcb *PCB, posEstado int) {
-	pPcb.Mt[posEstado] += duracionEnEstado(pPcb, posEstado)
+	pPcb.Mt[posEstado] += duracionEnEstado(pPcb)
 
 }
 
@@ -196,6 +197,7 @@ func (k *Kernel) MoverDeEstado(estadoActual, estadoNuevo int) {
 func (k *Kernel) CrearSJF(pcb *PCB) {
 	sjf := &SJF{
 		Estimado_anterior: k.ConfigKernel.Estimacion_Inicial,
+		Estimado_actual:   k.ConfigKernel.Estimacion_Inicial,
 		Real_anterior:     0, //no ejecuto valor igual a 0
 	}
 	pcb.SJF = sjf
@@ -261,11 +263,109 @@ func (k *Kernel) ObtenerCPULibre() *CPU {
 	return nil // No hay CPU libre
 }
 
-func (k *Kernel) ReplanificarProceso() {
-	// Para FIFO ya esta preparada la lista
-	if k.ConfigKernel.Algoritmo_Plani == "SJF" {
-		sort.Sort(PorSJF(k.procesoPorEstado[EstadoReady])) //SJF distinto de nil
+func (k *Kernel) ChequearSiHayQueDesalojar() {
+	primer_elemento := k.procesoPorEstado[EstadoReady][0]
+	estimacion := primer_elemento.SJF.Estimado_actual
+	var maxEstimacionRestante float64 = -1
+	var cpu_desalojo *CPU
+	var pcb *PCB
+
+	for _, cpu := range k.cpusLibres {
+
+		pcb = k.BuscarPorPid(EstadoExecute, cpu.Pid)
+		if pcb == nil {
+			fmt.Println("no esta el proceso en la lista de execute en la que deberia estar")
+			continue
+		}
+
+		tiempo_ejecutando := duracionEnEstado(pcb)
+		estimacion_falta_ejecutar := pcb.SJF.Estimado_actual - float64(tiempo_ejecutando)
+
+		if estimacion_falta_ejecutar > estimacion && estimacion_falta_ejecutar > maxEstimacionRestante {
+			maxEstimacionRestante = estimacion_falta_ejecutar
+			cpu_desalojo = cpu
+		}
 	}
+
+	if cpu_desalojo != nil {
+		fmt.Printf("Desalojando proceso %d de CPU %d (estimacion restante: %.2f) para ejecutar proceso %d (estimacion: %.2f)",
+			cpu_desalojo.Pid, cpu_desalojo.ID, maxEstimacionRestante, primer_elemento.Pid, primer_elemento.SJF.Estimado_actual)
+
+		pc_a_actualizar := EnviarInterrupt(cpu_desalojo)
+
+		k.CambiosEnElPlantel(cpu_desalojo, pc_a_actualizar)
+
+		return
+	}
+
+}
+
+// -----------Informa el Club Atletico Velez Sarsfield------------
+func (k *Kernel) CambiosEnElPlantel(cpu *CPU, pc_a_actualizar int) {
+	// Debutante
+	// CALIENTA KAROL
+	proceso_suplente := k.procesoPorEstado[EstadoReady][0]
+
+	proceso_titular := k.BuscarPorPid(EstadoExecute, cpu.Pid)
+
+	// Actualizamos pc en el pcb del proceso que estaba ejecutando
+	proceso_titular.Pc = pc_a_actualizar
+
+	// Ahora si desalojamos al pcb correspondiente
+	k.MoverDeEstadoPorPid(EstadoExecute, EstadoReady, proceso_titular.Pid)
+
+	// Actualizar la cpu con el proceso nuevo
+	cpu.Pc = proceso_suplente.Pc
+	cpu.Pid = proceso_suplente.Pid
+
+	// Enviar nuevo proceso a cpu
+	handleDispatch(cpu)
+	// ENTRA AQUINO (Mi primo, que si aprobo el tp)
+	k.MoverDeEstadoPorPid(EstadoReady, EstadoExecute, proceso_suplente.Pid)
+
+	fmt.Printf("CAMBIO: Sale %d (est. %.2f), entra %d (est. %.2f)\n", // Leer con voz de gangoso
+		proceso_titular.Pid, proceso_titular.SJF.Estimado_actual,
+		proceso_suplente.Pid, proceso_suplente.SJF.Estimado_actual)
+}
+
+func EnviarInterrupt(cpu *CPU) int { // yo te hablo por la puerta interrupt y me desocupo
+	fullURL := fmt.Sprintf("%s/interrupt", cpu.Url)
+	resp, err := utils.EnviarSolicitudHTTPString("POST", fullURL, "OK")
+	if err != nil {
+		return -1
+	}
+
+	pc, _ := strconv.Atoi(resp)
+	return pc
+}
+
+func (k *Kernel) BuscarPorPid(estado_actual int, pid_a_buscar int) *PCB {
+	// Buscar el puntero al PCB en el estado actual
+	procesos := k.procesoPorEstado[estado_actual]
+	var pcb *PCB
+	for _, proceso := range procesos {
+		if proceso.Pid == pid_a_buscar {
+			pcb = proceso
+			return pcb
+		}
+	}
+	return nil
+}
+
+func (k *Kernel) ReplanificarProceso() bool {
+	// Para FIFO ya esta preparada la lista
+
+	if k.ConfigKernel.Algoritmo_Plani == "SJF" || k.ConfigKernel.Algoritmo_Plani == "SRT" {
+		lista_ready := k.procesoPorEstado[EstadoReady]
+		pcb_nuevo_pid := lista_ready[len(lista_ready)-1].Pid
+
+		sort.Sort(PorSJF(k.procesoPorEstado[EstadoReady])) //SJF distinto de nil
+
+		if k.ConfigKernel.Algoritmo_Plani == "SRT" && pcb_nuevo_pid == lista_ready[0].Pid { //  10 15 18 31 32 500
+			return true
+		}
+	}
+	return false
 }
 
 func (k *Kernel) IntentarEnviarProcesoAExecute() {
@@ -275,19 +375,22 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 		return
 	}
 
-	k.ReplanificarProceso()
+	// intentamos asignarle cpu
+	cpu_seleccionada := k.ObtenerCPULibre()
+
+	chequear_desalojo := k.ReplanificarProceso()
 
 	//Tomamos el primer PCB tras el sort si era SJF y sino FIFO
 	indice := 0
 	pcb := k.procesoPorEstado[EstadoReady][indice]
 
-	// intentamos asignarle cpu
-	cpu_seleccionada := k.ObtenerCPULibre()
-
 	if cpu_seleccionada == nil { //no hay cpu libre
-		fmt.Printf("No hay cpu libre")
-		return
+		if chequear_desalojo {
+			k.ChequearSiHayQueDesalojar()
+			return
+		}
 	}
+
 	cpu_seleccionada.Esta_libre = false
 	cpu_seleccionada.Pid = pcb.Pid
 	cpu_seleccionada.Pc = pcb.Pc
@@ -406,11 +509,13 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 		utils.EnviarSolicitudHTTPString("POST", cpu_ejecutando.Url, mensaje_DUMP_MEMORY)
 
 	case "EXIT":
-		// 2 EXIT
+		// 2 30 EXIT
 		//finalizarProc
 		k.GestionarEXIT(cpu_ejecutando)
+
 	}
 
+	cpu_ejecutando.Esta_libre = true
 	k.IntentarEnviarProcesoAExecute()
 }
 
@@ -554,7 +659,7 @@ func (k *Kernel) registrarNuevaCPU(w http.ResponseWriter, r *http.Request) { // 
 	ip := aux[1]
 	puerto := aux[2]
 
-	url := fmt.Sprintf("http://%s:%s/cpu/registrar_cpu", ip, puerto)
+	url := fmt.Sprintf("http://%s:%s/cpu", ip, puerto)
 
 	nueva_cpu := CPU{
 		ID:         nueva_ID_CPU,
