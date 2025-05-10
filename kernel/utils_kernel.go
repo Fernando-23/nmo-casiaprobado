@@ -144,7 +144,7 @@ func (k *Kernel) MoverDeEstadoPorPid(estadoActual, estadoNuevo int, pid int) {
 		return
 	}
 
-	// Actualizar métricas
+	// Actualizar metricas
 	cambiarMetricasTiempo(pcb, pcb.estado)
 	cambiarMetricasEstado(pcb, estadoNuevo)
 
@@ -210,8 +210,9 @@ func (k *Kernel) actualizarEstimacionSJF(pcb *PCB, tiempoEnExecute time.Duration
 	real_anterior := float64(tiempoEnExecute.Milliseconds())
 	alpha := k.ConfigKernel.Alfa
 	sjf := pcb.SJF
-
-	sjf.Estimado_anterior = alpha*real_anterior + (1-alpha)*sjf.Estimado_anterior
+	aux := sjf.Estimado_actual
+	sjf.Estimado_actual = (alpha * real_anterior) + ((1 - alpha) * sjf.Estimado_anterior)
+	sjf.Estimado_anterior = aux
 }
 
 func (k *Kernel) IniciarProceso(tamanio int, arch_pseudo string) *PCB {
@@ -223,24 +224,66 @@ func (k *Kernel) IniciarProceso(tamanio int, arch_pseudo string) *PCB {
 	return pcb
 }
 
-func (k *Kernel) PlaniLargoPlazo() error { //fijarte si podes hacer que entre a la cola de new y que prg dsp por el sig
-	if k.ConfigKernel.Ready_ingress_algorithm == "PCMP" {
-		sort.Sort(PorTamanio(k.procesoPorEstado[EstadoNew]))
-	}
-	pcb := k.procesoPorEstado[EstadoNew][0]
-	hay_espacio, err := k.MemoHayEspacio(pcb.Pid, pcb.Tamanio, pcb.Arch_pseudo)
+func (k *Kernel) ListaNewSoloYo() (bool, error) {
+	lista_new := k.procesoPorEstado[EstadoNew]
+	if len(lista_new) == 1 {
+		primer_elemento := lista_new[0]
+		hay_espacio, err := k.MemoHayEspacio(primer_elemento.Pid, primer_elemento.Tamanio, primer_elemento.Arch_pseudo)
+		if err != nil {
+			log.Printf("Error codificando mensaje: %s", err.Error())
+			return true, err
+		}
+		if hay_espacio {
+			// Cambiar de estado del proceso de NEW a READY
+			k.MoverDeEstado(EstadoNew, EstadoReady)
 
+			//log.Info("## (%d) Pasa del estado NEW al estado READY", *pid)
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func (k *Kernel) PlanificarLargoPorLista(codLista int) (bool, error) {
+	if (k.procesoPorEstado[codLista]) != nil {
+		if k.ConfigKernel.Ready_ingress_algorithm == "PCMP" {
+			sort.Sort(PorTamanio(k.procesoPorEstado[codLista]))
+		}
+		pcb := k.procesoPorEstado[codLista][0]
+		hay_espacio, err := k.MemoHayEspacio(pcb.Pid, pcb.Tamanio, pcb.Arch_pseudo)
+
+		if err != nil {
+			log.Printf("Error codificando mensaje: %s", err.Error())
+			return true, err
+		}
+
+		if hay_espacio {
+			// Cambiar de estado del proceso de NEW a READY
+			k.MoverDeEstado(codLista, EstadoReady)
+
+			//log.Info("## (%d) Pasa del estado NEW al estado READY", *pid)
+		}
+		return true, nil
+
+	}
+	return false, nil
+}
+
+func (k *Kernel) PlaniLargoPlazo() error {
+	//fijarte si podes hacer que entre a la cola de new y que prg dsp por el sig
+	hay_elementosLSR, err := k.PlanificarLargoPorLista(EstadoBlockReady)
 	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
 		return err
 	}
+	if !hay_elementosLSR {
+		_, err := k.PlanificarLargoPorLista(EstadoNew)
 
-	if hay_espacio {
-		// Cambiar de estado del proceso de NEW a READY
-		k.MoverDeEstado(EstadoNew, EstadoReady)
-		//log.Info("## (%d) Pasa del estado NEW al estado READY", *pid)
+		if err != nil {
+			return err
+		}
 	}
-	return nil //dudoso
+
+	return nil
 }
 
 func (k *Kernel) BolicheMomento(pcb_creado *PCB) { //Plani largo plazo para procesos recien creados
@@ -312,6 +355,8 @@ func (k *Kernel) CambiosEnElPlantel(cpu *CPU, pc_a_actualizar int) {
 	proceso_titular.Pc = pc_a_actualizar
 
 	// Ahora si desalojamos al pcb correspondiente
+	tiempo_en_cancha := duracionEnEstado(proceso_titular)
+	k.actualizarEstimacionSJF(proceso_titular, tiempo_en_cancha)
 	k.MoverDeEstadoPorPid(EstadoExecute, EstadoReady, proceso_titular.Pid)
 
 	// Actualizar la cpu con el proceso nuevo
@@ -489,9 +534,8 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 
 		nombre := syscall[3]
 		tiempo, _ := strconv.Atoi(syscall[4])
-
+		cpu_ejecutando.Pc = pc
 		k.ManejarIO(nombre, cpu_ejecutando, tiempo)
-		k.MoverDeEstado(EstadoExecute, EstadoBlock)
 		//manejarIO
 		//validar que exista la io
 		//enviar mensaje a io
@@ -521,9 +565,16 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 
 func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int, cpu_ejecutando *CPU) {
 	new_pcb := k.IniciarProceso(tamanio, nombre_arch)
+	k.AgregarAEstado(EstadoNew, new_pcb)
 	//log.Info("## (%d) Se crea el proceso - Estado: NEW", pcb.Pid)
 
-	k.BolicheMomento(new_pcb)
+	unElemento, err := k.ListaNewSoloYo()
+	if err != nil {
+		return
+	}
+	if !unElemento {
+		k.PlaniLargoPlazo()
+	}
 	cpu_ejecutando.Pc = pc //Actualizar pc para cpu
 	handleDispatch(cpu_ejecutando)
 }
@@ -574,7 +625,10 @@ func (k *Kernel) ManejarIO(nombre_io string, cpu_ejecutando *CPU, duracion int) 
 		return
 	}
 
+	pcb := k.BuscarPorPid(EstadoExecute, cpu_ejecutando.Pid)
+	pcb.Pc = cpu_ejecutando.Pc
 	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, cpu_ejecutando.Pid)
+	go k.temporizadorSuspension(pcb.Pid)
 
 	IO_Seleccionada := k.buscarIOLibre(nombre_io)
 
@@ -589,6 +643,16 @@ func (k *Kernel) ManejarIO(nombre_io string, cpu_ejecutando *CPU, duracion int) 
 
 	enviarProcesoAIO(IO_Seleccionada, duracion)
 
+}
+
+func (k *Kernel) temporizadorSuspension(pid int) {
+	suspension := time.Duration(k.ConfigKernel.Tiempo_Suspension)
+	time.Sleep(suspension)
+
+	pcb := k.BuscarPorPid(EstadoBlock, pid)
+	if pcb != nil {
+		k.MoverDeEstadoPorPid(EstadoBlock, EstadoBlockSuspended, pid)
+	}
 }
 
 func enviarProcesoAIO(io_seleccionada *IO, duracion int) {
@@ -619,6 +683,7 @@ func (k *Kernel) RecibirRespuestaIO(w http.ResponseWriter, r *http.Request) {
 	switch cod_op {
 	case "FIN_IO":
 		k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid_io)
+		k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoBlockReady, pid_io)
 
 	case "DESCONEXION":
 		k.BorrarIO(nombre_io, pid_io)

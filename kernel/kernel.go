@@ -43,13 +43,22 @@ func main() {
 	tamanio, _ := strconv.Atoi(args[2])
 
 	fmt.Println("Archivo de pseudocodigo ", args[1])
-	fmt.Println("Tamaño de proceso", args[2])
-
-	pcb := kernel.IniciarProceso(tamanio, archivoPseudo)
+	fmt.Println("Tamanio de proceso", args[2])
 
 	detenerKernel()
 
-	kernel.BolicheMomento(pcb) //punchi punchi
+	pcb := kernel.IniciarProceso(tamanio, archivoPseudo)
+	kernel.AgregarAEstado(EstadoNew, pcb)
+
+	unElemento, err := kernel.ListaNewSoloYo()
+
+	if err != nil || !unElemento {
+		return
+	}
+
+	kernel.IntentarEnviarProcesoAExecute()
+
+	//kernel.BolicheMomento(pcb) //punchi punchi
 
 	kernel.IntentarEnviarProcesoAExecute()
 
