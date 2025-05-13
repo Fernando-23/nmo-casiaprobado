@@ -72,8 +72,8 @@ func EnviarPaquete(ip string, puerto int, paquete Paquete) {
 	log.Printf("respuesta del servidor: %s", resp.Status)
 }
 
-func ConfigurarLogger() {
-	logFile, err := os.OpenFile("tp0.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+func ConfigurarLogger(nombre string) {
+	logFile, err := os.OpenFile(nombre+".log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
 		panic(err)
 	}
