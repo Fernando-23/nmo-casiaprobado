@@ -11,6 +11,7 @@ import (
 func main() {
 
 	//var configuracion *Config = cliente.iniciarConfiguracion("config.json")
+	tam_memo_actual = config_memo.Tamanio_memoria
 	config_memo = iniciarConfiguracionMemo("config.json")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)

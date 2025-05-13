@@ -43,6 +43,7 @@ func main() {
 	// Ciclo de instruccion
 
 	for {
+		sem_datos_kernel.Lock()
 		pid_log := strconv.Itoa(*pid_ejecutando)
 		pc_log := strconv.Itoa(*pc_ejecutando)
 		for !*hay_interrupcion {
@@ -59,7 +60,6 @@ func main() {
 			execute(cod_op, operacion)
 
 		}
-
 		actualizarContexto()
 		*hay_interrupcion = false
 

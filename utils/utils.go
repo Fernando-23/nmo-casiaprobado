@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 )
 
 func EnviarSolicitudHTTP(method string, url string, body interface{}) (string, error) {
@@ -41,4 +42,19 @@ func EnviarSolicitudHTTP(method string, url string, body interface{}) (string, e
 	}
 
 	return string(resBody), nil
+}
+
+func IniciarConfiguracion[T any](ruta string, estructuraDeConfig *T) error {
+	configFile, err := os.Open(ruta)
+	if err != nil {
+		return fmt.Errorf("error al abrir el archivo de configuracion: %w", err)
+	}
+	defer configFile.Close()
+
+	jsonParser := json.NewDecoder(configFile)
+	if err := jsonParser.Decode(estructuraDeConfig); err != nil {
+		return fmt.Errorf("error al decodificar la configuracion %w", err)
+	}
+	return nil
+
 }

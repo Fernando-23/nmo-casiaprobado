@@ -30,6 +30,8 @@ func esperarDatosKernel(w http.ResponseWriter, r *http.Request) {
 	*pid_ejecutando = pid_aux
 	*pc_ejecutando = pc_aux
 
+	sem_datos_kernel.Unlock()
+
 }
 
 func registrarCpu() {

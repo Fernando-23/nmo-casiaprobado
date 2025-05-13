@@ -63,7 +63,7 @@ func Fetch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	linea_instruccion := elemento_en_memo_sistema[pc]
+	linea_instruccion := elemento_en_memo_sistema[pc].Arch_pesudocodigo
 	if linea_instruccion == "" {
 		fmt.Println("El proceso se encontro en memoria del sistema, pero no tiene ninguna instruccion")
 		return
@@ -94,8 +94,18 @@ func VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	CrearNuevoProceso(pid, arch_pseudo)
+	tam_memo_actual -= tamanio
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 
+}
+
+func CrearNuevoProceso(pid int, arch_pseudo string) {
+	nuevo_elemento, ok := memoria_sistema[pid]
+	if !ok {
+		fmt.Println("Ya se encuentra creado un proceso")
+		return
+	}
+	memoria_sistema[pid] = nuevo_elemento
 }

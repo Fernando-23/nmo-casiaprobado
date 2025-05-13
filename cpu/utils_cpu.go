@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
@@ -37,6 +38,7 @@ var (
 	id_cpu           string
 	pid_ejecutando   *int
 	pc_ejecutando    *int
+	sem_datos_kernel sync.Mutex
 )
 
 func iniciarConfiguracionIO(filePath string) *ConfigCPU {
