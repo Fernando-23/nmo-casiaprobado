@@ -1,12 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -18,18 +19,10 @@ type ConfigIO struct {
 	Log_level     string `json:"log_level"`
 }
 
-type HandshakeRequest struct {
-	NombreIO string `json:"nombre_io"`
-	PuertoIO int    `json:"puerto_io`
-	IpIO     string `json:"ip_io"`
-}
-
-type Peticion struct {
-	Pid    int `json:"pid"`
-	Tiempo int `json:"tiempo"`
-}
-
-var config_IO *ConfigIO
+var (
+	config_IO *ConfigIO
+	url_io    string
+)
 
 func iniciarConfiguracionIO(filePath string) *ConfigIO {
 	var configuracion *ConfigIO
@@ -45,43 +38,33 @@ func iniciarConfiguracionIO(filePath string) *ConfigIO {
 	return configuracion
 }
 
-func handshakeKernel(nombre string) {
-	peticion := HandshakeRequest{
-		NombreIO: nombre,
-		PuertoIO: (*config_IO).Puerto_io,
-		IpIO:     (*config_IO).Ip_io,
-	}
+func RegistrarIO(nombre string) {
 
-	url := fmt.Sprintf("http://%s:%d/", (*config_IO).Ip_io, (*config_IO).Puerto_kernel)
-	body, err := json.Marshal(peticion)
-	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
-		return
-	}
+	fullURL := fmt.Sprintf("%sio/registrar_io", url_io)
+	registro := fmt.Sprintf("%s %d %d", nombre, config_IO.Ip_io, config_IO.Puerto_io)
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		log.Println("Error enviando datos", resp)
-		return
-	}
+	utils.EnviarSolicitudHTTPString("POST", fullURL, registro)
 
 	log.Println("Hanshake realizado correctamente!")
+	log.Println("Se registro la IO correctamente")
+
 }
 
-func atenderPeticion(w http.ResponseWriter, r *http.Request) {
-	var peticion_recibida Peticion
+func AtenderPeticion(w http.ResponseWriter, r *http.Request) {
+	var peticion_recibida string
 	err := json.NewDecoder(r.Body).Decode(&peticion_recibida)
-
 	if err != nil {
-		log.Printf("Error al decodificar mensaje: %s\n", err.Error())
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Error al decodificar mensaje"))
+		log.Println("Error recibiendo datos")
 		return
 	}
 
-	time.Sleep(time.Duration(peticion_recibida.Tiempo) * time.Millisecond )
+	aux := strings.Split(peticion_recibida, " ")
+	pid_recibido := aux[0]
+	tiempo_recibido, _ := strconv.Atoi(aux[1])
+
+	time.Sleep(time.Duration(tiempo_recibido) * time.Millisecond)
+	finalizoIO := fmt.Sprintf("FIN_IO %s", pid_recibido)
 	w.WriteHeader(http.StatusOK)
-	finalizoIO := fmt.Sprintf("%d",peticion_recibida.Pid)
 	w.Write([]byte(finalizoIO))
 
 }
