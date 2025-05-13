@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ func main() {
 	fmt.Println("Iniciando CPU...")
 	// Preparacion incial
 	config_CPU = iniciarConfiguracionIO("config.json")
+	mux := http.NewServeMux()
 	args := os.Args
 	id_cpu = args[1]
 	pid_ejecutando = new(int)
@@ -29,7 +31,6 @@ func main() {
 
 	// Conexion con Kernel
 	fmt.Println("Iniciando handshake con kernel")
-	//time.Sleep(2000 * time.Nanosecond) //mas que nada para probar
 	registrarCpu()
 
 	var instruccion string
@@ -64,5 +65,5 @@ func main() {
 		*hay_interrupcion = false
 
 	}
-
+  
 }

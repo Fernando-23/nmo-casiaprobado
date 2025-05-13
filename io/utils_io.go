@@ -2,8 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type ConfigIO struct {
@@ -14,7 +19,10 @@ type ConfigIO struct {
 	Log_level     string `json:"log_level"`
 }
 
-var config_IO *ConfigIO
+var (
+	config_IO *ConfigIO
+	url_io    string
+)
 
 func iniciarConfiguracionIO(filePath string) *ConfigIO {
 	var configuracion *ConfigIO
@@ -28,4 +36,35 @@ func iniciarConfiguracionIO(filePath string) *ConfigIO {
 	jsonParser.Decode(&configuracion)
 
 	return configuracion
+}
+
+func RegistrarIO(nombre string) {
+
+	fullURL := fmt.Sprintf("%sio/registrar_io", url_io)
+	registro := fmt.Sprintf("%s %d %d", nombre, config_IO.Ip_io, config_IO.Puerto_io)
+
+	utils.EnviarSolicitudHTTPString("POST", fullURL, registro)
+
+	log.Println("Hanshake realizado correctamente!")
+	log.Println("Se registro la IO correctamente")
+
+}
+
+func AtenderPeticion(w http.ResponseWriter, r *http.Request) {
+	var peticion_recibida string
+	err := json.NewDecoder(r.Body).Decode(&peticion_recibida)
+	if err != nil {
+		log.Println("Error recibiendo datos")
+		return
+	}
+
+	aux := strings.Split(peticion_recibida, " ")
+	pid_recibido := aux[0]
+	tiempo_recibido, _ := strconv.Atoi(aux[1])
+
+	time.Sleep(time.Duration(tiempo_recibido) * time.Millisecond)
+	finalizoIO := fmt.Sprintf("FIN_IO %s", pid_recibido)
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(finalizoIO))
+
 }
