@@ -60,7 +60,7 @@ func fetch() string {
 	peticion := fmt.Sprintf("%d %d", *pid_ejecutando, *pc_ejecutando)
 	fullUrl := fmt.Sprintf("http://%s/memoria/fetch", url_memo)
 
-	instruccion, _ := utils.EnviarSolicitudHTTP("POST", fullUrl, peticion)
+	instruccion, _ := utils.EnviarSolicitudHTTPString("POST", fullUrl, peticion)
 
 	return instruccion
 }

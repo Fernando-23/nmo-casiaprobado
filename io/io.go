@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+
+	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
 func main() {
@@ -12,8 +14,7 @@ func main() {
 	nombre_io := args[1]
 
 	fmt.Println("Iniciando I/O..")
-	config_IO = iniciarConfiguracionIO("config.json")
-	url_io = fmt.Sprintf("http://%d:%d/", config_IO.Ip_io, config_IO.Puerto_io)
+	utils.IniciarConfiguracion("config.json", config_IO)
 	RegistrarIO(nombre_io)
 
 	//Iniciando servidor para peticiones I/O - Kernel

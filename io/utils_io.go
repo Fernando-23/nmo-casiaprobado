@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
 type ConfigIO struct {
@@ -40,8 +42,8 @@ func iniciarConfiguracionIO(filePath string) *ConfigIO {
 
 func RegistrarIO(nombre string) {
 
-	fullURL := fmt.Sprintf("%sio/registrar_io", url_io)
-	registro := fmt.Sprintf("%s %d %d", nombre, config_IO.Ip_io, config_IO.Puerto_io)
+	fullURL := fmt.Sprintf("http://%s:%d/io/registrar_io", config_IO.Ip_io, config_IO.Puerto_io)
+	registro := fmt.Sprintf("%s %s %d", nombre, config_IO.Ip_io, config_IO.Puerto_io)
 
 	utils.EnviarSolicitudHTTPString("POST", fullURL, registro)
 

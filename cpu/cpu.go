@@ -2,20 +2,19 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 
+	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 	cliente "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Cliente"
 )
 
 func main() {
 	fmt.Println("Iniciando CPU...")
 	// Preparacion incial
-	config_CPU = iniciarConfiguracionIO("config.json")
-	mux := http.NewServeMux()
+	utils.IniciarConfiguracion("config.json", config_CPU)
 	args := os.Args
 	id_cpu = args[1]
 	pid_ejecutando = new(int)
@@ -40,7 +39,8 @@ func main() {
 	mux.HandleFunc("/cpu/dispatch", esperarDatosKernel)
 	mux.HandleFunc("/cpu/interrupt", recibirInterrupt)
 
-	http.ListenAndServe(id_cpu, mux)
+	socket_cpu := fmt.Sprintf(":%d", config_CPU.Puerto_CPU)
+	http.ListenAndServe(socket_cpu, mux)
 	// Ciclo de instruccion
 
 	for {
@@ -65,5 +65,5 @@ func main() {
 		*hay_interrupcion = false
 
 	}
-  
+
 }

@@ -13,7 +13,7 @@ func requestWRITE(direccion int, datos string) (string, error) {
 	fullUrl := fmt.Sprintf("http://%s/memoria/WRITE", url_memo)
 
 	log.Printf("Se esta intentando escribir %s en la direccion %d", datos, direccion)
-	respuesta, err := utils.EnviarSolicitudHTTP("POST", fullUrl, peticion_WRITE)
+	respuesta, err := utils.EnviarSolicitudHTTPString("POST", fullUrl, peticion_WRITE)
 
 	return respuesta, err
 }
@@ -23,7 +23,7 @@ func requestREAD(direccion int, tamanio int) (string, error) {
 	peticion_READ := fmt.Sprintf("%d %d", direccion, tamanio)
 	fullUrl := fmt.Sprintf("http://%s/memoria/READ", url_memo)
 
-	respuesta, err := utils.EnviarSolicitudHTTP("POST", fullUrl, peticion_READ)
+	respuesta, err := utils.EnviarSolicitudHTTPString("POST", fullUrl, peticion_READ)
 
 	log.Printf("Se esta intentando leer en la direccion %d", direccion)
 

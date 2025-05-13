@@ -14,7 +14,7 @@ import (
 func main() {
 
 	fmt.Printf("Iniciando Kernel...")
-	cliente.ConfigurarLogger()
+	cliente.ConfigurarLogger("kernel")
 	kernel := &Kernel{
 		procesoPorEstado: make(map[int][]*PCB),
 		cpusLibres:       make(map[int]*CPU),

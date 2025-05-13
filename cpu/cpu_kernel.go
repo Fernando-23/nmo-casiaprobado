@@ -39,7 +39,7 @@ func registrarCpu() {
 	peticion := fmt.Sprintf("%s %d %s", id_cpu, config_CPU.Puerto_CPU, config_CPU.Ip_CPU)
 	url := fmt.Sprintf("http://%s/cpu/registrar_cpu", url_kernel)
 
-	if respuesta, err := utils.EnviarSolicitudHTTP("POST", url, peticion); err != nil && respuesta != "OK" {
+	if respuesta, err := utils.EnviarSolicitudHTTPString("POST", url, peticion); err != nil && respuesta != "OK" {
 		log.Println("No se pudo registrar la cpu")
 		return
 	}
@@ -52,7 +52,7 @@ func enviarSyscall(cod_op_syscall string, syscall string) {
 
 	url := fmt.Sprintf("http://%s/cpu/syscall", url_kernel)
 
-	utils.EnviarSolicitudHTTP("POST", url, syscall)
+	utils.EnviarSolicitudHTTPString("POST", url, syscall)
 
 	log.Println("Se envio correctamente la Syscall: ", cod_op_syscall)
 }
@@ -61,7 +61,7 @@ func actualizarContexto() {
 
 	url := fmt.Sprintf("http://%s/cpu/syscall", url_kernel)
 	contexto := fmt.Sprintf("%d %d", *pid_ejecutando, *pc_ejecutando)
-	utils.EnviarSolicitudHTTP("POST", url, contexto)
+	utils.EnviarSolicitudHTTPString("POST", url, contexto)
 
 	log.Println("Se envio el contexto por interrupcion correctamente")
 }

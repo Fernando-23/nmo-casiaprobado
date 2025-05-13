@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 	servidor "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Servidor"
 )
 
@@ -12,7 +13,7 @@ func main() {
 
 	//var configuracion *Config = cliente.iniciarConfiguracion("config.json")
 	tam_memo_actual = config_memo.Tamanio_memoria
-	config_memo = iniciarConfiguracionMemo("config.json")
+	utils.IniciarConfiguracion("config.json", config_memo)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
 	mux.HandleFunc("/memoria/fetch", Fetch)
