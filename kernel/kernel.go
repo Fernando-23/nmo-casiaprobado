@@ -31,12 +31,12 @@ func main() {
 		return
 	}
 
-	err = kernel.HandshakeMemoria()
+	/*err = kernel.HandshakeMemoria()
 
 	if err != nil {
 		slog.Info("Memoria no activa")
 		return
-	}
+	}*/
 	args := os.Args
 
 	archivoPseudo := args[1]
@@ -45,42 +45,43 @@ func main() {
 	fmt.Println("Archivo de pseudocodigo ", args[1])
 	fmt.Println("Tamanio de proceso", args[2])
 
+	//Iniciar servidor
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/cpu/registrar_cpu", kernel.registrarNuevaCPU)
+	mux.HandleFunc("/cpu/syscall", kernel.RecibirSyscallCPU)
+	mux.HandleFunc("io/registrar_io", kernel.registrarNuevaIO) // cambiar en io lo que envia
+	mux.HandleFunc("io/recibir_respuesta", kernel.RecibirRespuestaIO)
+	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
+
+	url_socket := fmt.Sprintf(":%d", kernel.ConfigKernel.Puerto_Kernel)
+	go http.ListenAndServe(url_socket, mux)
+	/*if socket_kernel != nil {
+		panic("Error al iniciar el servidor")
+	}*/
+
 	detenerKernel()
 
 	pcb := kernel.IniciarProceso(tamanio, archivoPseudo)
-	kernel.AgregarAEstado(EstadoNew, pcb)
+	fmt.Println("1er Proceso creado: ", pcb.Pid)
+	//kernel.AgregarAEstado(EstadoNew, pcb)
 
 	unElemento, err := kernel.ListaNewSoloYo()
 
 	if err != nil || !unElemento {
 		return
 	}
-
-	kernel.IntentarEnviarProcesoAExecute()
+	//kernel.IntentarEnviarProcesoAExecute()
 
 	//kernel.BolicheMomento(pcb) //punchi punchi
 
 	kernel.IntentarEnviarProcesoAExecute()
 
-	//Iniciar servidor
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("cpu/registrar_cpu", kernel.registrarNuevaCPU)
-	mux.HandleFunc("cpu/syscall", kernel.RecibirSyscallCPU)
-	mux.HandleFunc("io/registrar_io", kernel.registrarNuevaIO) // cambiar en io lo que envia
-	mux.HandleFunc("io/recibir_respuesta", kernel.RecibirRespuestaIO)
-	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
-
 	slog.Debug("Iniciando Servidor de KERNEL")
 
-	url_socket := fmt.Sprintf(":%d", kernel.ConfigKernel.Puerto_Kernel)
-	socket_kernel := http.ListenAndServe(url_socket, mux)
-	if socket_kernel != nil {
-		panic("Error al iniciar el servidor")
-	}
+	//cliente.EnviarMensaje(kernel.ConfigKernel.Ip_memoria, kernel.ConfigKernel.Puerto_Memoria, "Hola soy modulo Kernel")
 
-	cliente.EnviarMensaje(kernel.ConfigKernel.Ip_memoria, kernel.ConfigKernel.Puerto_Memoria, "Hola soy modulo Kernel")
-
+	select {}
 	//2d0 proc
 	//enviamos msg a memoria funcion (tamanio pid)
 

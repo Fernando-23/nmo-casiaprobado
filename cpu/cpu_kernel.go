@@ -31,15 +31,15 @@ func esperarDatosKernel(w http.ResponseWriter, r *http.Request) {
 	*pc_ejecutando = pc_aux
 
 	sem_datos_kernel.Unlock()
-
 }
 
-func registrarCpu() {
+func registrarCpu(url2_kernel string) {
 
-	peticion := fmt.Sprintf("%s %d %s", id_cpu, config_CPU.Puerto_CPU, config_CPU.Ip_CPU)
-	url := fmt.Sprintf("http://%s/cpu/registrar_cpu", url_kernel)
+	peticion := fmt.Sprintf("%s %s %d", id_cpu, config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
+	url := fmt.Sprintf("%s/cpu/registrar_cpu", url2_kernel)
 
-	if respuesta, err := utils.EnviarSolicitudHTTPString("POST", url, peticion); err != nil && respuesta != "OK" {
+	if respuesta, err := utils.EnviarSolicitudHTTPString("POST", url, peticion); err != nil {
+		fmt.Println("Respuesta de Kernel", respuesta)
 		log.Println("No se pudo registrar la cpu")
 		return
 	}
@@ -50,7 +50,7 @@ func registrarCpu() {
 
 func enviarSyscall(cod_op_syscall string, syscall string) {
 
-	url := fmt.Sprintf("http://%s/cpu/syscall", url_kernel)
+	url := fmt.Sprintf("%s/cpu/syscall", url_kernel)
 
 	utils.EnviarSolicitudHTTPString("POST", url, syscall)
 
@@ -59,7 +59,7 @@ func enviarSyscall(cod_op_syscall string, syscall string) {
 
 func actualizarContexto() {
 
-	url := fmt.Sprintf("http://%s/cpu/syscall", url_kernel)
+	url := fmt.Sprintf("%s/cpu/syscall", url_kernel)
 	contexto := fmt.Sprintf("%d %d", *pid_ejecutando, *pc_ejecutando)
 	utils.EnviarSolicitudHTTPString("POST", url, contexto)
 

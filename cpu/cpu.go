@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 	cliente "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Cliente"
@@ -14,6 +15,7 @@ import (
 func main() {
 	fmt.Println("Iniciando CPU...")
 	// Preparacion incial
+	config_CPU = &ConfigCPU{}
 	utils.IniciarConfiguracion("config.json", config_CPU)
 	args := os.Args
 	id_cpu = args[1]
@@ -21,8 +23,8 @@ func main() {
 	pc_ejecutando = new(int)
 
 	url_cpu = fmt.Sprintf("http://%s:%d", config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
-	url_kernel = fmt.Sprintf("http://%s:%d", config_CPU.Ip_Kernel, config_CPU.Puerto_Kernel)
-	url_memo = fmt.Sprintf("http://%s:%d", config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
+	url2_kernel := fmt.Sprintf("http://%s:%d", config_CPU.Ip_Kernel, config_CPU.Puerto_Kernel)
+	url2_memo := fmt.Sprintf("http://%s:%d", config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
 	nombre_logger := fmt.Sprintf("cpu %s", id_cpu)
 	cliente.ConfigurarLogger(nombre_logger)
 
@@ -30,26 +32,26 @@ func main() {
 
 	// Conexion con Kernel
 	fmt.Println("Iniciando handshake con kernel")
-	registrarCpu()
+	registrarCpu(url2_kernel)
 
 	var instruccion string
 
-	*hay_interrupcion = false
+	hay_interrupcion = false
 	mux := http.NewServeMux()
 	mux.HandleFunc("/cpu/dispatch", esperarDatosKernel)
 	mux.HandleFunc("/cpu/interrupt", recibirInterrupt)
 
 	socket_cpu := fmt.Sprintf(":%d", config_CPU.Puerto_CPU)
-	http.ListenAndServe(socket_cpu, mux)
+	go http.ListenAndServe(socket_cpu, mux)
 	// Ciclo de instruccion
 
 	for {
 		sem_datos_kernel.Lock()
 		pid_log := strconv.Itoa(*pid_ejecutando)
 		pc_log := strconv.Itoa(*pc_ejecutando)
-		for !*hay_interrupcion {
-
-			instruccion = fetch()
+		for !hay_interrupcion {
+			time.Sleep(9000)
+			instruccion = fetch(url2_memo)
 			slog.Info("## PID: %s - FETCH - Program Counter: %s", pid_log, pc_log)
 
 			if instruccion == "" {
@@ -62,7 +64,7 @@ func main() {
 
 		}
 		actualizarContexto()
-		*hay_interrupcion = false
+		hay_interrupcion = false
 
 	}
 

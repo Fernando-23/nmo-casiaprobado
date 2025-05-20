@@ -4,28 +4,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 )
 
-func iniciarConfiguracionMemo(filePath string) *ConfigMemo {
-	var configuracion *ConfigMemo
-	configFile, err := os.Open(filePath)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	defer configFile.Close()
-
-	jsonParser := json.NewDecoder(configFile)
-	jsonParser.Decode(&configuracion)
-
-	return configuracion
-}
-
-func CargarArchivoPseudocodigo(path string) *[]string {
+func CargarArchivoPseudocodigo(path string) []string {
 	archivo, err := os.Open(path)
 
 	if err != nil {
@@ -42,11 +27,11 @@ func CargarArchivoPseudocodigo(path string) *[]string {
 		nuevas_instr_pid = append(nuevas_instr_pid, scaner.Text())
 	}
 
-	return &nuevas_instr_pid
+	return nuevas_instr_pid
 
 }
 
-func Fetch(w http.ResponseWriter, r *http.Request) {
+func (memo *Memo) Fetch(w http.ResponseWriter, r *http.Request) {
 	var request string
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		fmt.Println("error al recibir fetch de cpu")
@@ -56,24 +41,28 @@ func Fetch(w http.ResponseWriter, r *http.Request) {
 	pid, _ := strconv.Atoi(aux[0])
 	pc, _ := strconv.Atoi(aux[1])
 
-	elemento_en_memo_sistema, ok := memoria_sistema[pid]
-
-	if !ok {
-		fmt.Println("No se encontro un proceso")
+	elemento_en_memo_sistema, ok := memo.memoria_sistema[pid]
+	if !ok || len(elemento_en_memo_sistema) == 0 {
+		fmt.Println("No hay mas instrucciones")
 		return
 	}
-
-	linea_instruccion := elemento_en_memo_sistema[pc].Arch_pesudocodigo
-	if linea_instruccion == "" {
-		fmt.Println("El proceso se encontro en memoria del sistema, pero no tiene ninguna instruccion")
-		return
+	//para pruebas nomas
+	for _, linea_a_leer := range elemento_en_memo_sistema {
+		fmt.Println(linea_a_leer)
 	}
+
+	instruccion := elemento_en_memo_sistema[pc]
+	memo.memoria_sistema[pid] = elemento_en_memo_sistema[1:]
+	// if !ok {
+	// 	fmt.Println("No se encontro un proceso")
+	// 	return
+	// }
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(linea_instruccion))
+	w.Write([]byte(instruccion))
 }
 
-func VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
+func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 	var request string
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -93,19 +82,29 @@ func VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	CrearNuevoProceso(pid, arch_pseudo)
-	tam_memo_actual -= tamanio
-
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	w.Write([]byte("Si kernel, hay espacio"))
 
+	memo.CrearNuevoProceso(pid, arch_pseudo)
+	tam_memo_actual -= tamanio
 }
 
-func CrearNuevoProceso(pid int, arch_pseudo string) {
-	nuevo_elemento, ok := memoria_sistema[pid]
-	if !ok {
+func (memo *Memo) CrearNuevoProceso(pid int, arch_pseudo string) {
+	_, ok := memo.memoria_sistema[pid]
+	if ok {
 		fmt.Println("Ya se encuentra creado un proceso")
 		return
 	}
-	memoria_sistema[pid] = nuevo_elemento
+
+	nuevo_elemento := CargarArchivoPseudocodigo(arch_pseudo)
+	memo.memoria_sistema[pid] = nuevo_elemento
 }
+
+func HanshakeKernel(w http.ResponseWriter, r *http.Request) {
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
+//hola soy santi, soy el mejor de todos y para nada fer escribio esto mientras YO, Santi, estaba distraido a la 1:30 AM
+//me debes 9 lucas santi paga lo que debes

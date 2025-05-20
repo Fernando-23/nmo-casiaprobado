@@ -10,8 +10,11 @@ import (
 )
 
 func main() {
+
 	args := os.Args
 	nombre_io := args[1]
+
+	config_IO = &ConfigIO{}
 
 	fmt.Println("Iniciando I/O..")
 	utils.IniciarConfiguracion("config.json", config_IO)

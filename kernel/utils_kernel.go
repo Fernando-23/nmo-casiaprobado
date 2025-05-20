@@ -227,6 +227,7 @@ func (k *Kernel) IniciarProceso(tamanio int, arch_pseudo string) *PCB {
 func (k *Kernel) ListaNewSoloYo() (bool, error) {
 	lista_new := k.procesoPorEstado[EstadoNew]
 	if len(lista_new) == 1 {
+		fmt.Println("primer elemento", lista_new)
 		primer_elemento := lista_new[0]
 		hay_espacio, err := k.MemoHayEspacio(primer_elemento.Pid, primer_elemento.Tamanio, primer_elemento.Arch_pseudo)
 		if err != nil {
@@ -415,9 +416,8 @@ func (k *Kernel) ReplanificarProceso() bool {
 
 func (k *Kernel) IntentarEnviarProcesoAExecute() {
 
-	if len(k.procesoPorEstado[EstadoReady]) == 0 {
+	if len(k.procesoPorEstado[EstadoReady]) != 0 {
 		fmt.Println("No hay procesos en READY")
-		return
 	}
 
 	// intentamos asignarle cpu
@@ -453,7 +453,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 
 func handleDispatch(cpu_seleccionada *CPU) error {
 
-	fullURL := fmt.Sprintf("%sdispatch", cpu_seleccionada.Url)
+	fullURL := fmt.Sprintf("%s/dispatch", cpu_seleccionada.Url)
 
 	datos := fmt.Sprintf("%d %d", cpu_seleccionada.Pid, cpu_seleccionada.Pc)
 	_, err := utils.EnviarSolicitudHTTPString("POST", fullURL, datos)
@@ -506,6 +506,7 @@ func (k *Kernel) RecibirSyscallCPU(w http.ResponseWriter, r *http.Request) {
 	}
 
 	syscall := strings.Split(respuesta, " ")
+	fmt.Println("PRUEBA, syscall haber como llegas: ", syscall)
 	k.GestionarSyscalls(syscall)
 }
 
@@ -705,6 +706,7 @@ func (k *Kernel) BorrarIO(nombre_io string, pid int) {
 
 func (k *Kernel) registrarNuevaCPU(w http.ResponseWriter, r *http.Request) { // Handshake
 
+	fmt.Println("Al menos, entre a registrar nueva cpu")
 	var cpu_string string
 	if err := json.NewDecoder(r.Body).Decode(&cpu_string); err != nil {
 		fmt.Println("Error recibiendo la solicitud:", err)
