@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 )
@@ -88,4 +89,8 @@ func IniciarConfiguracion[T any](ruta string, estructuraDeConfig *T) error {
 	}
 	return nil
 
+}
+
+func LoggerConFormato(format string, args ...interface{}) {
+	slog.Info(fmt.Sprintf(format, args...))
 }

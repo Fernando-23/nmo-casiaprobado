@@ -50,4 +50,4 @@ func RecibirMensaje(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
-var hola = "10"
+//var hola int = 10

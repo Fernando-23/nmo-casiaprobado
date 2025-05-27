@@ -220,14 +220,14 @@ func (k *Kernel) IniciarProceso(tamanio int, arch_pseudo string) *PCB {
 	pcb.contador = time.Now()
 
 	cambiarMetricasEstado(pcb, EstadoNew)
-	k.AgregarAEstado(EstadoNew, pcb) //meter en la cola new no hay planificacion para meter en la cola new
+	//k.AgregarAEstado(EstadoNew, pcb) //meter en la cola new no hay planificacion para meter en la cola new
 	return pcb
 }
 
 func (k *Kernel) ListaNewSoloYo() (bool, error) {
 	lista_new := k.procesoPorEstado[EstadoNew]
 	if len(lista_new) == 1 {
-		fmt.Println("primer elemento", lista_new)
+		fmt.Println("Soy el primer elemento", lista_new[0].Pid)
 		primer_elemento := lista_new[0]
 		hay_espacio, err := k.MemoHayEspacio(primer_elemento.Pid, primer_elemento.Tamanio, primer_elemento.Arch_pseudo)
 		if err != nil {
@@ -267,15 +267,18 @@ func (k *Kernel) PlanificarLargoPorLista(codLista int) (bool, error) {
 		return true, nil
 
 	}
+	fmt.Println("No hay elementos en Ready Suspended")
 	return false, nil
 }
 
 func (k *Kernel) PlaniLargoPlazo() error {
 	//fijarte si podes hacer que entre a la cola de new y que prg dsp por el sig
-	hay_elementosLSR, err := k.PlanificarLargoPorLista(EstadoBlockReady)
+	// LSR: Lista Suspendido Ready
+	hay_elementosLSR, err := k.PlanificarLargoPorLista(EstadoReadySuspended)
 	if err != nil {
 		return err
 	}
+
 	if !hay_elementosLSR {
 		_, err := k.PlanificarLargoPorLista(EstadoNew)
 
@@ -445,7 +448,6 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 		cpu_seleccionada.Esta_libre = true //Revertir si falla
 	}
 
-	handleDispatch(cpu_seleccionada)
 	k.MoverDeEstadoPorPid(EstadoReady, EstadoExecute, pcb.Pid)
 
 	fmt.Printf("Proceso %d a Execute en CPU %d\n", pcb.Pid, cpu_seleccionada.ID)
@@ -491,6 +493,7 @@ func (k *Kernel) MemoHayEspacio(pid int, tamanio int, archivoPseudo string) (boo
 	}
 
 	if respuesta == "Si kernel, hay espacio" {
+		fmt.Println("PRUEBA - efectivamente, habia espacio")
 		return true, nil
 	}
 	return false, nil
@@ -514,7 +517,7 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 
 	id_cpu, err := strconv.Atoi(syscall[IdCPU])
 
-	if err != nil || id_cpu >= len(k.cpusLibres) {
+	if err != nil || id_cpu >= len(k.cpusLibres) { // id_cpu != k.cpusLibres[IdCPU].ID
 		log.Printf("ID de CPU invalido: %v", syscall[IdCPU])
 		return
 	}
@@ -541,7 +544,7 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 		//validar que exista la io
 		//enviar mensaje a io
 
-	case "INIC_PROC":
+	case "INIT_PROC":
 		// 2 20 INIT_PROC proceso1 256
 		nombre_arch := syscall[3]
 		tamanio, _ := strconv.Atoi(syscall[4])
@@ -565,6 +568,7 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 }
 
 func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int, cpu_ejecutando *CPU) {
+	fmt.Println("PRUEBA - Se entro a gestionarINIT_PROC")
 	new_pcb := k.IniciarProceso(tamanio, nombre_arch)
 	k.AgregarAEstado(EstadoNew, new_pcb)
 	//log.Info("## (%d) Se crea el proceso - Estado: NEW", pcb.Pid)
@@ -576,8 +580,8 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int, cpu
 	if !unElemento {
 		k.PlaniLargoPlazo()
 	}
-	cpu_ejecutando.Pc = pc //Actualizar pc para cpu
-	handleDispatch(cpu_ejecutando)
+	// cpu_ejecutando.Pc = pc //Actualizar pc para cpu
+	// handleDispatch(cpu_ejecutando)
 }
 
 func (k *Kernel) GestionarEXIT(cpu_ejecutando *CPU) {
@@ -684,7 +688,7 @@ func (k *Kernel) RecibirRespuestaIO(w http.ResponseWriter, r *http.Request) {
 	switch cod_op {
 	case "FIN_IO":
 		k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid_io)
-		k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoBlockReady, pid_io)
+		k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid_io)
 
 	case "DESCONEXION":
 		k.BorrarIO(nombre_io, pid_io)

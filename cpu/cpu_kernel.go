@@ -30,6 +30,7 @@ func esperarDatosKernel(w http.ResponseWriter, r *http.Request) {
 	*pid_ejecutando = pid_aux
 	*pc_ejecutando = pc_aux
 
+	utils.LoggerConFormato("Me llego el proceso con pid %d de kernel", *pid_ejecutando)
 	sem_datos_kernel.Unlock()
 }
 
@@ -52,7 +53,10 @@ func enviarSyscall(cod_op_syscall string, syscall string) {
 
 	url := fmt.Sprintf("%s/cpu/syscall", url_kernel)
 
+	fmt.Println("Intento enviar la syscall...")
+	fmt.Println(syscall)
 	utils.EnviarSolicitudHTTPString("POST", url, syscall)
+	fmt.Println("Che aca le pase la syscall a kernel y soy un genio ;)")
 
 	log.Println("Se envio correctamente la Syscall: ", cod_op_syscall)
 }

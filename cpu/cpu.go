@@ -23,8 +23,8 @@ func main() {
 	pc_ejecutando = new(int)
 
 	url_cpu = fmt.Sprintf("http://%s:%d", config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
-	url2_kernel := fmt.Sprintf("http://%s:%d", config_CPU.Ip_Kernel, config_CPU.Puerto_Kernel)
-	url2_memo := fmt.Sprintf("http://%s:%d", config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
+	url_kernel = fmt.Sprintf("http://%s:%d", config_CPU.Ip_Kernel, config_CPU.Puerto_Kernel)
+	url_memo = fmt.Sprintf("http://%s:%d", config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
 	nombre_logger := fmt.Sprintf("cpu %s", id_cpu)
 	cliente.ConfigurarLogger(nombre_logger)
 
@@ -32,7 +32,7 @@ func main() {
 
 	// Conexion con Kernel
 	fmt.Println("Iniciando handshake con kernel")
-	registrarCpu(url2_kernel)
+	registrarCpu(url_kernel)
 
 	var instruccion string
 
@@ -47,12 +47,14 @@ func main() {
 
 	for {
 		sem_datos_kernel.Lock()
+		utils.LoggerConFormato("Me unlockee jejeje")
+		time.Sleep(9 * time.Second)
 		pid_log := strconv.Itoa(*pid_ejecutando)
 		pc_log := strconv.Itoa(*pc_ejecutando)
 		for !hay_interrupcion {
-			time.Sleep(9000)
-			instruccion = fetch(url2_memo)
-			slog.Info("## PID: %s - FETCH - Program Counter: %s", pid_log, pc_log)
+			instruccion = fetch(url_memo)
+			slog.Info(fmt.Sprintf("## PID: %s - FETCH - Program Counter: %s\n", pid_log, pc_log))
+			fmt.Println("PRUEBA - PC: ", *pc_ejecutando)
 
 			if instruccion == "" {
 				fmt.Printf("No hay una instruccion valida asociado a este Program Counter.")
@@ -60,12 +62,12 @@ func main() {
 			}
 
 			cod_op, operacion := decode(instruccion)
+			fmt.Println("Aca llego la instruccion: ", instruccion)
 			execute(cod_op, operacion)
 
 		}
 		actualizarContexto()
 		hay_interrupcion = false
-
 	}
 
 }

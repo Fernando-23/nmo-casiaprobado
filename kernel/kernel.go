@@ -64,14 +64,13 @@ func main() {
 
 	pcb := kernel.IniciarProceso(tamanio, archivoPseudo)
 	fmt.Println("1er Proceso creado: ", pcb.Pid)
-	//kernel.AgregarAEstado(EstadoNew, pcb)
+	kernel.AgregarAEstado(EstadoNew, pcb)
 
 	unElemento, err := kernel.ListaNewSoloYo()
 
 	if err != nil || !unElemento {
 		return
 	}
-	//kernel.IntentarEnviarProcesoAExecute()
 
 	//kernel.BolicheMomento(pcb) //punchi punchi
 

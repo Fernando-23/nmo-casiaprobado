@@ -46,13 +46,14 @@ func (memo *Memo) Fetch(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("No hay mas instrucciones")
 		return
 	}
+
 	//para pruebas nomas
 	for _, linea_a_leer := range elemento_en_memo_sistema {
 		fmt.Println(linea_a_leer)
 	}
 
 	instruccion := elemento_en_memo_sistema[pc]
-	memo.memoria_sistema[pid] = elemento_en_memo_sistema[1:]
+	//memo.memoria_sistema[pid] = elemento_en_memo_sistema[1:]
 	// if !ok {
 	// 	fmt.Println("No se encontro un proceso")
 	// 	return

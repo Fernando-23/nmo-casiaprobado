@@ -146,3 +146,5 @@ func recibirInterrupt(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+
+var hola int = 0

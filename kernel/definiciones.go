@@ -107,7 +107,7 @@ const (
 	EstadoExecute
 	EstadoBlock
 	EstadoBlockSuspended
-	EstadoBlockReady
+	EstadoReadySuspended
 	EstadoExit
 )
 const (
