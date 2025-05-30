@@ -107,5 +107,31 @@ func HanshakeKernel(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+func (memo *Memo) InicializarTablaPaginas(pid int, tamanio int) {
+	nueva_tabla_asociado_al_pid_pasado := memo.tabla_global_nivel0[pid]
+	nueva_tabla_asociado_al_pid_pasado = &Tabla{
+		nivel_tabla: 0,
+		nro_marco:   0,
+		offset:      tamanio - 1,
+		// El tamanio esta DUDOSISIMO, es mas que nada un ej pero 100% hay que cambiarlo jasdaj
+		sgte_tabla: nil,
+	}
+
+	if config_memo.Cant_niveles == 0 {
+		return
+	}
+
+	for i := 1; i <= config_memo.Cant_niveles; i++ {
+		nueva_tabla_asociado_al_pid_pasado.sgte_tabla = &Tabla{
+			nivel_tabla: i,
+			nro_marco:   0,
+			offset:      tamanio - 1,
+			sgte_tabla:  nil,
+		}
+	}
+	//aca habria algo igual para la cantidad de entradas, que me imagino que es el marco :P
+
+}
+
 //hola soy santi, soy el mejor de todos y para nada fer escribio esto mientras YO, Santi, estaba distraido a la 1:30 AM
 //me debes 9 lucas santi paga lo que debes

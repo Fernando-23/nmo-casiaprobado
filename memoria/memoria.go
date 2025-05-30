@@ -14,7 +14,8 @@ func main() {
 	//var configuracion *Config = cliente.iniciarConfiguracion("config.json")
 	config_memo = &ConfigMemo{}
 	memo := &Memo{
-		memoria_sistema: make(map[int][]string),
+		memoria_sistema:     make(map[int][]string),
+		tabla_global_nivel0: make(map[int]*Tabla),
 	}
 	utils.IniciarConfiguracion("config.json", config_memo)
 
