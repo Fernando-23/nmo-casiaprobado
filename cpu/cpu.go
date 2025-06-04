@@ -47,27 +47,29 @@ func main() {
 
 	for {
 		sem_datos_kernel.Lock()
-		utils.LoggerConFormato("Me unlockee jejeje")
-		time.Sleep(9 * time.Second)
-		pid_log := strconv.Itoa(*pid_ejecutando)
-		pc_log := strconv.Itoa(*pc_ejecutando)
-		for !hay_interrupcion {
-			instruccion = fetch(url_memo)
-			slog.Info(fmt.Sprintf("## PID: %s - FETCH - Program Counter: %s\n", pid_log, pc_log))
-			fmt.Println("PRUEBA - PC: ", *pc_ejecutando)
+		if hay_datos != "" {
+			utils.LoggerConFormato("Me unlockee jejeje")
+			time.Sleep(9 * time.Second)
+			pid_log := strconv.Itoa(*pid_ejecutando)
+			pc_log := strconv.Itoa(*pc_ejecutando)
+			for !hay_interrupcion {
+				instruccion = fetch(url_memo)
+				slog.Info(fmt.Sprintf("## PID: %s - FETCH - Program Counter: %s\n", pid_log, pc_log))
+				fmt.Println("PRUEBA - PC: ", *pc_ejecutando)
 
-			if instruccion == "" {
-				fmt.Printf("No hay una instruccion valida asociado a este Program Counter.")
-				break
+				if instruccion == "" {
+					fmt.Printf("No hay una instruccion valida asociado a este Program Counter.")
+					break
+				}
+
+				cod_op, operacion := decode(instruccion)
+				fmt.Println("Aca llego la instruccion: ", instruccion)
+				execute(cod_op, operacion)
+
 			}
-
-			cod_op, operacion := decode(instruccion)
-			fmt.Println("Aca llego la instruccion: ", instruccion)
-			execute(cod_op, operacion)
-
+			actualizarContexto()
+			hay_interrupcion = false
 		}
-		actualizarContexto()
-		hay_interrupcion = false
 	}
 
 }

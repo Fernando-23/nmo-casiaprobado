@@ -17,7 +17,7 @@ func esperarDatosKernel(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Se produjo un error al deserializar: ", err)
 		return
 	}
-
+	hay_datos = respuesta
 	datos := strings.Split(respuesta, " ")
 	if len(datos) != 2 {
 		http.Error(w, "Se recibio una formato incorrecto", http.StatusBadRequest)

@@ -67,6 +67,7 @@ var (
 	ioMutex           sync.RWMutex
 	mutex_cpus_libres sync.Mutex
 	mutex_ios         sync.Mutex
+	mutex_syscall     sync.Mutex
 )
 
 // PROCESO MAS CHICO PRIMERO

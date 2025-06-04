@@ -15,15 +15,22 @@ type ConfigMemo struct {
 }
 
 type Memo struct {
-	memoria_sistema     map[int][]string
-	tabla_global_nivel0 map[int]*Tabla //Lo hice puntero porque tiene toda la pinta
-} //pero no se si para los de nivel0 haga falta, asumo que si
+	memoria_sistema  map[int][]string
+	global_ptrs_tpag map[int][]*Tabla
+	//------------------[pid][0,1,2,...n-niveles], cada nivel apunta a *Tabla
+
+}
 
 type Tabla struct {
-	nivel_tabla int
-	nro_marco   int // Este creo q era la cantidad de entradas, estoy medio matado asi q para nosotros del futuro
-	offset      int
-	sgte_tabla  *Tabla
+	lv_tabla      int
+	Entradas      []*EntradaTPag
+	bit_presencia int
+	sgte_tabla    *Tabla
+}
+
+type EntradaTPag struct {
+	nro_marco int
+	offset    int
 }
 
 var (

@@ -42,7 +42,7 @@ func iniciarConfiguracionIO(filePath string) *ConfigIO {
 
 func RegistrarIO(nombre string) {
 
-	fullURL := fmt.Sprintf("http://%s:%d/io/registrar_io", config_IO.Ip_io, config_IO.Puerto_io)
+	fullURL := fmt.Sprintf("http://%s:%d/io/registrar_io", config_IO.Ip_kernel, config_IO.Puerto_kernel)
 	registro := fmt.Sprintf("%s %s %d", nombre, config_IO.Ip_io, config_IO.Puerto_io)
 
 	utils.EnviarSolicitudHTTPString("POST", fullURL, registro)

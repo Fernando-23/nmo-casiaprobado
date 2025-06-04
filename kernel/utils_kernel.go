@@ -418,9 +418,9 @@ func (k *Kernel) ReplanificarProceso() bool {
 }
 
 func (k *Kernel) IntentarEnviarProcesoAExecute() {
-
-	if len(k.procesoPorEstado[EstadoReady]) != 0 {
+	if len(k.procesoPorEstado[EstadoReady]) == 0 {
 		fmt.Println("No hay procesos en READY")
+		return
 	}
 
 	// intentamos asignarle cpu
@@ -509,7 +509,11 @@ func (k *Kernel) RecibirSyscallCPU(w http.ResponseWriter, r *http.Request) {
 	}
 
 	syscall := strings.Split(respuesta, " ")
+
 	fmt.Println("PRUEBA, syscall haber como llegas: ", syscall)
+
+	mutex_syscall.Lock()
+	defer mutex_syscall.Unlock()
 	k.GestionarSyscalls(syscall)
 }
 
@@ -555,6 +559,7 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 
 		mensaje_DUMP_MEMORY := fmt.Sprintf("DUMP_MEMORY %d", cpu_ejecutando.Pid)
 		utils.EnviarSolicitudHTTPString("POST", cpu_ejecutando.Url, mensaje_DUMP_MEMORY)
+		cpu_ejecutando.Esta_libre = true
 
 	case "EXIT":
 		// 2 30 EXIT
@@ -562,9 +567,8 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 		k.GestionarEXIT(cpu_ejecutando)
 
 	}
-
-	cpu_ejecutando.Esta_libre = true
 	k.IntentarEnviarProcesoAExecute()
+
 }
 
 func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int, cpu_ejecutando *CPU) {
@@ -581,7 +585,6 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int, cpu
 		k.PlaniLargoPlazo()
 	}
 	// cpu_ejecutando.Pc = pc //Actualizar pc para cpu
-	// handleDispatch(cpu_ejecutando)
 }
 
 func (k *Kernel) GestionarEXIT(cpu_ejecutando *CPU) {
@@ -633,7 +636,7 @@ func (k *Kernel) ManejarIO(nombre_io string, cpu_ejecutando *CPU, duracion int) 
 	pcb := k.BuscarPorPid(EstadoExecute, cpu_ejecutando.Pid)
 	pcb.Pc = cpu_ejecutando.Pc
 	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, cpu_ejecutando.Pid)
-	go k.temporizadorSuspension(pcb.Pid)
+	go k.temporizadorSuspension(pcb.Pid) // ta raro
 
 	IO_Seleccionada := k.buscarIOLibre(nombre_io)
 
@@ -662,7 +665,7 @@ func (k *Kernel) temporizadorSuspension(pid int) {
 
 func enviarProcesoAIO(io_seleccionada *IO, duracion int) {
 
-	fullURL := fmt.Sprintf("%sio/hace_algo", io_seleccionada.Url)
+	fullURL := fmt.Sprintf("%s/io/hace_algo", io_seleccionada.Url)
 	datos := fmt.Sprintf("%d %d", io_seleccionada.Pid, duracion)
 	utils.EnviarSolicitudHTTPString("POST", fullURL, datos)
 }
@@ -732,6 +735,7 @@ func (k *Kernel) registrarNuevaCPU(w http.ResponseWriter, r *http.Request) { // 
 
 	url := fmt.Sprintf("http://%s:%s/cpu", ip, puerto)
 
+	mutex_cpus_libres.Lock()
 	nueva_cpu := CPU{
 		ID:         nueva_ID_CPU,
 		Url:        url,
@@ -740,7 +744,6 @@ func (k *Kernel) registrarNuevaCPU(w http.ResponseWriter, r *http.Request) { // 
 		Esta_libre: true}
 
 	// Agrego y sincronizo el nuevo CPU
-	mutex_cpus_libres.Lock()
 	defer mutex_cpus_libres.Unlock()
 
 	k.cpusLibres[nueva_cpu.ID] = &nueva_cpu
@@ -768,10 +771,9 @@ func (k *Kernel) registrarNuevaIO(w http.ResponseWriter, r *http.Request) { // H
 	}
 
 	nombre_io := aux[0] //Para mas claridad :p
-	url := fmt.Sprintf("http://%s:%s/io/registrar_io", aux[1], aux[2])
+	url := fmt.Sprintf("http://%s:%s", aux[1], aux[2])
 
 	mutex_ios.Lock()
-
 	defer mutex_ios.Unlock()
 
 	nuevaIO := &IO{
@@ -779,6 +781,7 @@ func (k *Kernel) registrarNuevaIO(w http.ResponseWriter, r *http.Request) { // H
 		Pid:        -1,
 		Esta_libre: true,
 	}
+
 	// Si no existe una io con ese nombre, lo agrego nuevito
 
 	if _, ok := k.ios[nombre_io]; !ok {

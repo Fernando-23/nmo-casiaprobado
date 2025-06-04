@@ -50,7 +50,7 @@ func main() {
 
 	mux.HandleFunc("/cpu/registrar_cpu", kernel.registrarNuevaCPU)
 	mux.HandleFunc("/cpu/syscall", kernel.RecibirSyscallCPU)
-	mux.HandleFunc("io/registrar_io", kernel.registrarNuevaIO) // cambiar en io lo que envia
+	mux.HandleFunc("/io/registrar_io", kernel.registrarNuevaIO) // cambiar en io lo que envia
 	mux.HandleFunc("io/recibir_respuesta", kernel.RecibirRespuestaIO)
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
 

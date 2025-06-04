@@ -101,18 +101,19 @@ func (memo *Memo) CrearNuevoProceso(pid int, arch_pseudo string) {
 	memo.memoria_sistema[pid] = nuevo_elemento
 }
 
-func HanshakeKernel(w http.ResponseWriter, r *http.Request) {
+func Hanshake(w http.ResponseWriter, r *http.Request) {
 
+	respuesta := fmt.Sprintf("%s %s", config_memo.Cant_entradasXpag, config_memo.Tamanio_pag)
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	w.Write([]byte(respuesta))
 }
 
-func (memo *Memo) InicializarTablaPaginas(pid int, tamanio int) {
-	nueva_tabla_asociado_al_pid_pasado := memo.tabla_global_nivel0[pid]
-	nueva_tabla_asociado_al_pid_pasado = &Tabla{
-		nivel_tabla: 0,
-		nro_marco:   0,
-		offset:      tamanio - 1,
+func (memo *Memo) InicializarTablaPunterosAsociadosA(pid int, tamanio int) {
+	nuevo_puntero_de_tablas := memo.global_ptrs_tpag[pid][0]
+	nuevo_puntero_de_tablas = &Tabla{
+		lv_tabla:      0,
+		entradas:      nil,
+		bit_presencia: 1,
 		// El tamanio esta DUDOSISIMO, es mas que nada un ej pero 100% hay que cambiarlo jasdaj
 		sgte_tabla: nil,
 	}
@@ -122,16 +123,12 @@ func (memo *Memo) InicializarTablaPaginas(pid int, tamanio int) {
 	}
 
 	for i := 1; i <= config_memo.Cant_niveles; i++ {
-		nueva_tabla_asociado_al_pid_pasado.sgte_tabla = &Tabla{
-			nivel_tabla: i,
-			nro_marco:   0,
-			offset:      tamanio - 1,
-			sgte_tabla:  nil,
+		nuevo_puntero_de_tablas.sgte_tabla = &Tabla{
+			lv_tabla:   i,
+			entradas:   nil,
+			sgte_tabla: nil,
 		}
 	}
 	//aca habria algo igual para la cantidad de entradas, que me imagino que es el marco :P
 
 }
-
-//hola soy santi, soy el mejor de todos y para nada fer escribio esto mientras YO, Santi, estaba distraido a la 1:30 AM
-//me debes 9 lucas santi paga lo que debes

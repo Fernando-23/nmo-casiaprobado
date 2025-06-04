@@ -37,6 +37,7 @@ var (
 	pid_ejecutando   *int
 	pc_ejecutando    *int
 	sem_datos_kernel sync.Mutex
+	hay_datos        string
 )
 
 func fetch(url_memo string) string {
@@ -105,7 +106,7 @@ func execute(cod_op string, operacion []string) {
 
 		mensaje_init_proc := fmt.Sprintf("%s %d INIT_PROC %s %s", id_cpu, *pc_ejecutando, operacion[0], operacion[1])
 		enviarSyscall("INIT_PROC", mensaje_init_proc)
-		hay_interrupcion = true
+		hay_interrupcion = false
 
 	case "DUMP_MEMORY":
 		// ID_CPU PC DUMP_MEMORY
@@ -116,10 +117,9 @@ func execute(cod_op string, operacion []string) {
 
 	case "EXIT":
 		// ID_CPU PC DUMP_MEMORY
-
+		hay_interrupcion = true
 		mensaje_exit := fmt.Sprintf("%s %d EXIT", id_cpu, *pc_ejecutando)
 		enviarSyscall("EXIT", mensaje_exit)
-		hay_interrupcion = true
 
 	default:
 		fmt.Println("Error, ingrese una instruccion valida")

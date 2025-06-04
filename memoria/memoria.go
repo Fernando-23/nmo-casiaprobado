@@ -14,8 +14,8 @@ func main() {
 	//var configuracion *Config = cliente.iniciarConfiguracion("config.json")
 	config_memo = &ConfigMemo{}
 	memo := &Memo{
-		memoria_sistema:     make(map[int][]string),
-		tabla_global_nivel0: make(map[int]*Tabla),
+		memoria_sistema:  make(map[int][]string),
+		global_ptrs_tpag: make(map[int][]*Tabla),
 	}
 	utils.IniciarConfiguracion("config.json", config_memo)
 
@@ -28,7 +28,7 @@ func main() {
 
 	// APIs a hacer
 	// mux.HandleFUnc("/memoria/WRITE",Escribir)
-	mux.HandleFunc("/memoria/handshake", HanshakeKernel)
+	mux.HandleFunc("/memoria/handshake", Hanshake)
 	mux.HandleFunc("/memoria/hay_lugar", memo.VerificarHayLugar)
 	mux.HandleFunc("/memoria/fetch", memo.Fetch)
 	// mux.HandleFunc("/memoria/crear_proceso", CrearProceso)
