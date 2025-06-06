@@ -7,37 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
-)
-
-type ConfigCPU struct {
-	Puerto_CPU      int    `json:"port_cpu"`
-	Ip_CPU          string `json:"ip_cpu"`
-	Ip_Memoria      string `json:"ip_memory"`
-	Puerto_Memoria  int    `json:"port_memory"`
-	Ip_Kernel       string `json:"ip_kernel"`
-	Puerto_Kernel   int    `json:"port_kernel"`
-	Entrada_TLB     int    `json:"tlb_entries"`
-	Reemplazo_TLB   string `json:"tlb_replacement"`
-	Entrada_Cache   int    `json:"cache_entries"`
-	Reemplazo_Cache string `json:"cache_replacement"`
-	Delay_Cache     int    `json:"cache_delay"`
-	Log_level       string `json:"log_level"`
-}
-
-var (
-	config_CPU       *ConfigCPU
-	url_cpu          string
-	url_kernel       string
-	url_memo         string
-	hay_interrupcion bool
-	id_cpu           string
-	pid_ejecutando   *int
-	pc_ejecutando    *int
-	sem_datos_kernel sync.Mutex
-	hay_datos        string
 )
 
 func fetch(url_memo string) string {
@@ -68,25 +39,36 @@ func execute(cod_op string, operacion []string) {
 		slog.Info("PID: %d - Ejecutando: %s", pid_string, cod_op)
 
 	case "WRITE":
-		direccion, _ := strconv.Atoi(operacion[0])
+		dir_logica, _ := strconv.Atoi(operacion[0])
 		datos := operacion[1]
 
 		slog.Info("## PID: %s - Ejecutando: %s - %s - %s", pid_string, cod_op, operacion[0], datos)
 
-		respuesta, _ := requestWRITE(direccion, datos)
-		fmt.Println(respuesta)
+		respuesta, dir_fisica, err := requestWRITE(dir_logica, datos)
+		if err != nil {
+			hay_interrupcion = true
+			*pc_ejecutando++
+			return
+		}
 
-		slog.Info("PID: " + pid_string + " - Acción: ESCRIBIR - Dirección Física: " + operacion[0] + " - Valor: " + datos)
+		utils.LoggerConFormato("PID: %d - Acción: ESCRITURA - Dirección Física: [ %d | %d ] - Valor: %s", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, respuesta)
 
 	case "READ":
-		direccion, _ := strconv.Atoi(operacion[0])
+		dir_logica, _ := strconv.Atoi(operacion[0])
 		tamanio, _ := strconv.Atoi(operacion[1])
 
 		slog.Info("## PID: %s - Ejecutando: %s - %s - %s", pid_string, cod_op, operacion[0], operacion[1])
 
 		//Gestionar mejor el error :p
-		valor_leido, _ := requestREAD(direccion, tamanio)
-		slog.Info("PID: " + pid_string + " - Acción: LEER - Dirección Física: " + operacion[0] + " - Valor: " + valor_leido)
+		valor_leido, dir_fisica, err := requestREAD(dir_logica, tamanio)
+		//si el valor leido es un aviso de direccionamiento invalido
+		//habilitar un hay_interrupcion
+		if err != nil {
+			hay_interrupcion = true
+			*pc_ejecutando++
+			return
+		}
+		utils.LoggerConFormato("PID: %d - Acción: LEER - Dirección Física: [ %d | %d ] - Valor: %s", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, valor_leido)
 
 	case "GOTO":
 		slog.Info("PID: %s - Ejecutando: %s", pid_string, cod_op)
@@ -144,7 +126,18 @@ func recibirInterrupt(w http.ResponseWriter, r *http.Request) {
 		hay_interrupcion = true
 		return
 	}
+}
 
+func chequarTLBActiva() {
+	if config_CPU.Entrada_TLB > 0 {
+		tlb_activa = true
+	}
+}
+
+func chequearCachePagsActiva() {
+	if config_CPU.Entrada_Cache > 0 {
+		cache_pags_activa = true
+	}
 }
 
 var hola int = 0

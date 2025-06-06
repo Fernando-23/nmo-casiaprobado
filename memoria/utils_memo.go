@@ -102,6 +102,11 @@ func (memo *Memo) CrearNuevoProceso(pid int, arch_pseudo string) {
 }
 
 func Hanshake(w http.ResponseWriter, r *http.Request) {
+	var request string
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		fmt.Println("error al recibir los datos desde kernel")
+		return
+	}
 
 	respuesta := fmt.Sprintf("%s %s", config_memo.Cant_entradasXpag, config_memo.Tamanio_pag)
 	w.WriteHeader(http.StatusOK)

@@ -15,22 +15,25 @@ type ConfigMemo struct {
 }
 
 type Memo struct {
-	memoria_sistema  map[int][]string
-	global_ptrs_tpag map[int][]*Tabla
-	//------------------[pid][0,1,2,...n-niveles], cada nivel apunta a *Tabla
-
+	memoria_sistema map[int][]string
+	ptrs_raiz_tpag  map[int][]*Tabla
+	//------------------[pid][tablas lv1], cada nivel apunta a *Tabla
 }
 
-type Tabla struct {
+type TablaPuntero struct {
+	lv_tabla      int
+	nro_pagina    []*TablaPuntero
+	bit_presencia int
+}
+
+type TablaUltimoNivel struct {
 	lv_tabla      int
 	Entradas      []*EntradaTPag
 	bit_presencia int
-	sgte_tabla    *Tabla
 }
 
 type EntradaTPag struct {
 	nro_marco int
-	offset    int
 }
 
 var (

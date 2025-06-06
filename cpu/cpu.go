@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
@@ -28,7 +29,23 @@ func main() {
 	nombre_logger := fmt.Sprintf("cpu %s", id_cpu)
 	cliente.ConfigurarLogger(nombre_logger)
 
+	chequarTLBActiva()
+	chequearCachePagsActiva()
+
+	// if tlb_activa {
+	// 	make(tlb,)
+	// }
+
+	// if cache_pags_activa{
+	// 	make()
+	// }
+
 	cliente.EnviarMensaje(config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria, "Conexion hecha con modulo CPU")
+	handshake_memoria, _ := utils.EnviarSolicitudHTTPString("GET", url_memo, nil)
+	aux_datos_mmu := strings.Split(handshake_memoria, " ")
+	cant_niveles, _ = strconv.Atoi(aux_datos_mmu[0])
+	cant_entradas_tpag, _ = strconv.Atoi(aux_datos_mmu[1])
+	tam_pag, _ = strconv.Atoi(aux_datos_mmu[2])
 
 	// Conexion con Kernel
 	fmt.Println("Iniciando handshake con kernel")
