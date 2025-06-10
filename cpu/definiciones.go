@@ -6,18 +6,18 @@ import (
 )
 
 type ConfigCPU struct {
-	Puerto_CPU      int    `json:"port_cpu"`
-	Ip_CPU          string `json:"ip_cpu"`
-	Ip_Memoria      string `json:"ip_memory"`
-	Puerto_Memoria  int    `json:"port_memory"`
-	Ip_Kernel       string `json:"ip_kernel"`
-	Puerto_Kernel   int    `json:"port_kernel"`
-	Entrada_TLB     int    `json:"tlb_entries"`
-	Reemplazo_TLB   string `json:"tlb_replacement"`
-	Entrada_Cache   int    `json:"cache_entries"`
-	Reemplazo_Cache string `json:"cache_replacement"`
-	Delay_Cache     int    `json:"cache_delay"`
-	Log_level       string `json:"log_level"`
+	Puerto_CPU          int    `json:"port_cpu"`
+	Ip_CPU              string `json:"ip_cpu"`
+	Ip_Memoria          string `json:"ip_memory"`
+	Puerto_Memoria      int    `json:"port_memory"`
+	Ip_Kernel           string `json:"ip_kernel"`
+	Puerto_Kernel       int    `json:"port_kernel"`
+	Cant_entradas_TLB   int    `json:"tlb_entries"`
+	Alg_repl_TLB        string `json:"tlb_replacement"`
+	Cant_entradas_cache int    `json:"cache_entries"`
+	Alg_repl_cache      string `json:"cache_replacement"`
+	Delay_Cache         int    `json:"cache_delay"`
+	Log_level           string `json:"log_level"`
 }
 
 type DireccionFisica struct {
@@ -26,9 +26,10 @@ type DireccionFisica struct {
 }
 
 type EntradaTLB struct {
-	pagina    int
-	frame     int
-	timestamp time.Duration
+	pagina                int
+	frame                 int
+	timestamp_lru         time.Duration
+	timestamp_tiempo_vida time.Duration
 }
 
 type EntradaCachePag struct {

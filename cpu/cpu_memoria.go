@@ -20,14 +20,12 @@ func requestWRITE(direccion int, datos string) (string, error) {
 	return respuesta, err
 }
 
-// READ    200         50
-//
-//	DIR LOGICA   OFFSET
 func requestREAD(direccion_logica int, tamanio int) (string, DireccionFisica, error) {
-
-	// busquedaMemoria(direccion_logica)
 	var dir_fisica DireccionFisica
-	dir_fisica, err := traduccionMMU(direccion_logica)
+	// busquedaMemoria(direccion_logica)
+
+	nro_pagina := math.Floor(float64(direccion_logica) / float64(tam_pag))
+	dir_fisica, err := traduccionMMU(direccion_logica, nro_pagina)
 
 	if err != nil {
 		return "", dir_fisica, err
@@ -45,7 +43,7 @@ func requestREAD(direccion_logica int, tamanio int) (string, DireccionFisica, er
 }
 
 func traduccionMMU(direccion_logica int, nro_pagina float64) (DireccionFisica, error) {
-	//nro_pagina := math.Floor(float64(direccion_logica) / float64(tam_pag))
+
 	desplazamiento := int(direccion_logica) % int(tam_pag)
 	dir_fisica := DireccionFisica{
 		frame:  -1,
@@ -82,6 +80,105 @@ func busquedaTabla(pid int, nivel_actual int, entrada_a_acceder int) int {
 	return respuesta
 }
 
-func TLB(nro_pagina int, dir_logica int) {
+func TLB(direccion_logica int, nro_pagina int) (int, error) {
+
+	for i := 0; i <= config_CPU.Cant_entradas_TLB; i++ {
+		if tlb[i].pagina == nro_pagina {
+			// Caso TLB HIT
+			utils.LoggerConFormato("PID: %d - TLB HIT - Pagina: %d", *pid_ejecutando, nro_pagina)
+			return tlb[i].frame, nil
+		}
+	}
+	// Caso TLB MISS
+
+	dir_fisica, _ := traduccionMMU(direccion_logica, float64(nro_pagina))
+	hayEspacioEnTLB, entrada := chequearEspacioEnTLB()
+
+	if hayEspacioEnTLB {
+		cambiarEstadoMarco(nro_pagina, dir_fisica.frame, entrada)
+		return dir_fisica.frame, nil
+	}
+
+	aplicarDesalojo()
+	return dir_fisica.frame, nil
+}
+
+func aplicarDesalojo() error {
+	alg_reemplazo := config_CPU.Alg_repl_TLB
+	switch alg_reemplazo {
+	case "FIFO":
+		aux := tlb[0]
+		aux_entrada := 0
+		for i := 1; i < config_CPU.Cant_entradas_TLB; i++ {
+			if aux.timestamp_tiempo_vida < tlb[i].timestamp_tiempo_vida {
+				aux = tlb[i]
+				aux_entrada = i
+			}
+		}
+		cambiarEstadoMarco(aux.pagina, aux.frame, aux_entrada)
+		return nil
+	case "LRU":
+		aux := tlb[0]
+		aux_entrada := 0
+		for i := 1; i < config_CPU.Cant_entradas_TLB; i++ {
+			if aux.timestamp_lru < tlb[i].timestamp_lru {
+				aux = tlb[i]
+				aux_entrada = i
+			}
+		}
+		cambiarEstadoMarco(aux.pagina, aux.frame, aux_entrada)
+		return nil
+	default:
+		return fmt.Errorf("y,la verda q me pasaste cualquier verdura en el algoritmo de TLB")
+	}
+}
+
+func cachePags() {
 
 }
+
+func cambiarEstadoMarco(nro_pagina int, frame int, entrada_tlb int) {
+	tlb[entrada_tlb].pagina = nro_pagina
+	tlb[entrada_tlb].frame = frame
+	utils.LoggerConFormato("Se realizo un cambio de marco en la TLB correctamente")
+}
+
+func chequearEspacioEnTLB() (bool, int) {
+	for i := 0; i <= config_CPU.Cant_entradas_TLB; i++ {
+		if tlb[i].pagina < 0 {
+			return true, i
+		}
+	}
+	return false, -1
+}
+
+func liberarTLB() {
+	for i := 0; i <= config_CPU.Cant_entradas_TLB; i++ {
+		tlb[i].pagina = -1
+		tlb[i].frame = -1
+	}
+}
+
+/*
+
+func busquedaMemoria() int {
+	frame := -1
+
+	if cache_pags_activa {
+		frame, err = cache_pags()
+		if frame >= 0 {
+			return frame
+		}
+	}
+
+	if tlb_activa {
+		frame, err = TLB()
+		if frame >= 0 {
+			return frame
+		}
+	}
+
+	traduccionMMU()
+
+}
+*/

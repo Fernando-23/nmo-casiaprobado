@@ -129,13 +129,13 @@ func recibirInterrupt(w http.ResponseWriter, r *http.Request) {
 }
 
 func chequarTLBActiva() {
-	if config_CPU.Entrada_TLB > 0 {
+	if config_CPU.Cant_entradas_TLB > 0 {
 		tlb_activa = true
 	}
 }
 
 func chequearCachePagsActiva() {
-	if config_CPU.Entrada_Cache > 0 {
+	if config_CPU.Cant_entradas_cache > 0 {
 		cache_pags_activa = true
 	}
 }
