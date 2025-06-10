@@ -33,10 +33,11 @@ func requestREAD(direccion_logica int, tamanio int) (string, DireccionFisica, er
 		return "", dir_fisica, err
 	}
 
-	peticion_READ := fmt.Sprintf("%d %d %d", dir_fisica.frame, dir_fisica.offset, tamanio)
+	peticion_READ := fmt.Sprintf("%d %d %d", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, tamanio)
 	fullUrl := fmt.Sprintf("http://%s/memoria/READ", url_memo)
 
 	respuesta, err := utils.EnviarSolicitudHTTPString("POST", fullUrl, peticion_READ)
+	//---------------------------------------------- PID FRAME OFFSET TAMANIO
 
 	log.Printf("Se esta intentando leer en la direccion fisica [ %d | %d ]", dir_fisica.frame, dir_fisica.offset)
 
@@ -51,11 +52,14 @@ func traduccionMMU(direccion_logica int, nro_pagina float64) (DireccionFisica, e
 		offset: -1,
 	}
 
+	// 1
 	for nivel_actual := 1; nivel_actual <= int(cant_niveles); nivel_actual++ {
 		//Santi: Lo mas hardcodeado que vi
-		entrada_nivel_X := int(math.Floor(nro_pagina/math.Pow(float64(cant_entradas_tpag), float64((cant_niveles-nivel_actual))))) % int(cant_entradas_tpag)
-
-		respuesta := busquedaTabla(*pid_ejecutando, nivel_actual, entrada_nivel_X)
+		entrada_nivel_final := int(math.Floor(nro_pagina/math.Pow(float64(cant_entradas_tpag), float64((cant_niveles-nivel_actual))))) % int(cant_entradas_tpag)
+		respuesta := busquedaTabla(*pid_ejecutando, nivel_actual, entrada_nivel_final)
+		// -2 Direccionamiento invalido
+		// -1 Todo bien, sigo al sgte nivel
+		//>=0 Es un frame, lo devuelvo
 		if respuesta >= 0 {
 			utils.LoggerConFormato("PID : %d - OBTENER MARCO - Página: %d - Marco: %d", *pid_ejecutando, int(nro_pagina), respuesta)
 			dir_fisica.frame = respuesta
@@ -72,7 +76,8 @@ func traduccionMMU(direccion_logica int, nro_pagina float64) (DireccionFisica, e
 
 func busquedaTabla(pid int, nivel_actual int, entrada_a_acceder int) int {
 	solicitud_acceso_tpaginas := fmt.Sprintf("%d %d %d", pid, nivel_actual, entrada_a_acceder)
-	aux, _ := utils.EnviarSolicitudHTTPString("POST", url_memo, solicitud_acceso_tpaginas)
+	fullUrl := fmt.Sprintf("http://%s/memoria/busqueda_tabla", url_memo)
+	aux, _ := utils.EnviarSolicitudHTTPString("POST", fullUrl, solicitud_acceso_tpaginas)
 	respuesta, _ := strconv.Atoi(aux)
 	return respuesta
 }

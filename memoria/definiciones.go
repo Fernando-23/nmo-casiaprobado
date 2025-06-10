@@ -16,28 +16,57 @@ type ConfigMemo struct {
 
 type Memo struct {
 	memoria_sistema map[int][]string
-	ptrs_raiz_tpag  map[int][]*Tabla
-	//------------------[pid][tablas lv1], cada nivel apunta a *Tabla
+	l_proc          map[int]*Proceso
+	ptrs_raiz_tpag  map[int]*NivelTPag
+	tabla_frames    []int //sincronizacion
 }
 
-type TablaPuntero struct {
-	lv_tabla      int
-	nro_pagina    []*TablaPuntero
-	bit_presencia int
+type Proceso struct {
+	ptr_a_frames_asignados []*int //apunta a elementos de la tabla_frames
 }
 
-type TablaUltimoNivel struct {
-	lv_tabla      int
-	Entradas      []*EntradaTPag
-	bit_presencia int
+/*
+Proceso marcos asignados
+
+ptr_a_frames_asignados  map[int]*Frame        ->1    ->6     ->8   ->34
+
+
+frames
+   1	   --
+   2	   --
+   3	   --
+   4
+   5
+   6
+   7
+
+[0]  p1 'HOLAMUN'
+[1]  p1 'DOCOMO'
+.
+.
+.
+[79] p1 'ESTAS'
+
+*/
+
+type Metricas struct {
+	accesos_a_tpags        int
+	cant_instr_solicitadas int
+	bajadas_de_swap        int
+	subidas_a_memoria      int
+	cant_read              int
+	cant_write             int
 }
 
-type EntradaTPag struct {
-	nro_marco int
+type NivelTPag struct {
+	lv_tabla   int
+	entradas   []*int
+	sgte_nivel *NivelTPag
 }
 
 var (
-	memoria_usuario []byte
-	config_memo     *ConfigMemo
-	tam_memo_actual int
+	memoria_principal  []byte
+	config_memo        *ConfigMemo
+	frames_disponibles int
+	tam_memo_actual    int
 )

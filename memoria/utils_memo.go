@@ -4,10 +4,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
 func CargarArchivoPseudocodigo(path string) []string {
@@ -108,32 +111,73 @@ func Hanshake(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respuesta := fmt.Sprintf("%s %s", config_memo.Cant_entradasXpag, config_memo.Tamanio_pag)
+	respuesta := fmt.Sprintf("%d %d", config_memo.Cant_entradasXpag, config_memo.Tamanio_pag)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(respuesta))
 }
 
 func (memo *Memo) InicializarTablaPunterosAsociadosA(pid int, tamanio int) {
-	nuevo_puntero_de_tablas := memo.global_ptrs_tpag[pid][0]
-	nuevo_puntero_de_tablas = &Tabla{
-		lv_tabla:      0,
-		entradas:      nil,
-		bit_presencia: 1,
-		// El tamanio esta DUDOSISIMO, es mas que nada un ej pero 100% hay que cambiarlo jasdaj
-		sgte_tabla: nil,
+	nuevo_puntero_de_tablas := memo.ptrs_raiz_tpag[pid]
+	nuevo_puntero_de_tablas = &NivelTPag{
+		lv_tabla:   0,
+		sgte_nivel: nil,
 	}
 
 	if config_memo.Cant_niveles == 0 {
 		return
 	}
 
-	for i := 1; i <= config_memo.Cant_niveles; i++ {
-		nuevo_puntero_de_tablas.sgte_tabla = &Tabla{
+	for i := 1; i < config_memo.Cant_niveles; i++ {
+		nuevo_puntero_de_tablas.sgte_nivel = &NivelTPag{
 			lv_tabla:   i,
-			entradas:   nil,
-			sgte_tabla: nil,
+			sgte_nivel: nil,
 		}
 	}
-	//aca habria algo igual para la cantidad de entradas, que me imagino que es el marco :P
 
+	nuevo_puntero_de_tablas.sgte_nivel = &NivelTPag{
+		lv_tabla:   config_memo.Cant_niveles,
+		sgte_nivel: nil,
+	}
+
+	memo.AsignarFramesAProceso(nuevo_puntero_de_tablas, tamanio, pid)
+}
+
+func (memo *Memo) AsignarFramesAProceso(tpags_final *NivelTPag, tamanio int, pid int) {
+	if memo.HayFramesLibresPara(tamanio) {
+		tpags_final.entradas = make([]*int, config_memo.Cant_entradasXpag)
+		frames_a_reservar := memo.LaCuentitaMaestro(tamanio, config_memo.Tamanio_pag)
+		memo.ModificarEstadoFrames(frames_a_reservar, pid)
+
+		utils.LoggerConFormato("Se asigno correctamente frames a un proceso")
+	}
+	utils.LoggerConFormato("No se pudo asignar frames a un proceso")
+}
+
+// Traeme la dolorosa, la juguetona pa
+func (memo *Memo) LaCuentitaMaestro(tamanio_proc int, tamanio_frame int) int {
+	la_dolorosa := tamanio_proc / tamanio_frame
+	if (tamanio_proc % tamanio_frame) != 0 {
+		return la_dolorosa + 1
+	}
+
+	return la_dolorosa
+}
+
+func (memo *Memo) ModificarEstadoFrames(frames_a_reservar int, pid int) {
+
+	for marcos := 0; frames_a_reservar != 0 && frames_disponibles > 0; marcos++ {
+		if memo.tabla_frames[marcos] < 0 {
+			memo.tabla_frames[marcos] = pid
+			frames_a_reservar--
+			frames_disponibles--
+		}
+
+		if frames_a_reservar != 0 {
+			slog.Error("Se intento asignar mas frames de los que habia diponibles") //poner pid que pide mucho si queres
+		}
+	}
+}
+
+func (memo *Memo) HayFramesLibresPara(tamanio int) bool {
+	return frames_disponibles > tamanio
 }

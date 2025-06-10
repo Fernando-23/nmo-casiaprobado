@@ -11,17 +11,17 @@ import (
 
 func main() {
 
-	//var configuracion *Config = cliente.iniciarConfiguracion("config.json")
 	config_memo = &ConfigMemo{}
-	memo := &Memo{
-		memoria_sistema:  make(map[int][]string),
-		global_ptrs_tpag: make(map[int][]*Tabla),
-	}
 	utils.IniciarConfiguracion("config.json", config_memo)
-
-	memoria_usuario = make([]byte, config_memo.Tamanio_memoria)
+	cant_frames_totales := config_memo.Tamanio_memoria / config_memo.Tamanio_pag
+	memo := &Memo{
+		memoria_sistema: make(map[int][]string),
+		ptrs_raiz_tpag:  make(map[int]*NivelTPag),
+		tabla_frames:    make([]int, cant_frames_totales),
+	}
 
 	tam_memo_actual = config_memo.Tamanio_memoria
+	memoria_principal = make([]byte, config_memo.Tamanio_memoria)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
