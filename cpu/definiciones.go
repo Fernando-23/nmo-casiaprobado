@@ -33,8 +33,11 @@ type EntradaTLB struct {
 }
 
 type EntradaCachePag struct {
-	pagina    int
-	contenido string
+	pagina         int
+	frame          int
+	contenido      string
+	bit_uso        int
+	bit_modificado int
 }
 
 var (

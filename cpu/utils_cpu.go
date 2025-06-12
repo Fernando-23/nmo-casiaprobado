@@ -44,12 +44,7 @@ func execute(cod_op string, operacion []string) {
 
 		slog.Info("## PID: %s - Ejecutando: %s - %s - %s", pid_string, cod_op, operacion[0], datos)
 
-		respuesta, dir_fisica, err := requestWRITE(dir_logica, datos)
-		if err != nil {
-			hay_interrupcion = true
-			*pc_ejecutando++
-			return
-		}
+		respuesta, dir_fisica := requestWRITE(dir_logica, datos)
 
 		utils.LoggerConFormato("PID: %d - Acción: ESCRITURA - Dirección Física: [ %d | %d ] - Valor: %s", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, respuesta)
 
@@ -60,14 +55,10 @@ func execute(cod_op string, operacion []string) {
 		slog.Info("## PID: %s - Ejecutando: %s - %s - %s", pid_string, cod_op, operacion[0], operacion[1])
 
 		//Gestionar mejor el error :p
-		valor_leido, dir_fisica, err := requestREAD(dir_logica, tamanio)
+		valor_leido, dir_fisica := requestREAD(dir_logica, tamanio)
 		//si el valor leido es un aviso de direccionamiento invalido
 		//habilitar un hay_interrupcion
-		if err != nil {
-			hay_interrupcion = true
-			*pc_ejecutando++
-			return
-		}
+
 		utils.LoggerConFormato("PID: %d - Acción: LEER - Dirección Física: [ %d | %d ] - Valor: %s", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, valor_leido)
 
 	case "GOTO":
@@ -137,6 +128,39 @@ func chequarTLBActiva() {
 func chequearCachePagsActiva() {
 	if config_CPU.Cant_entradas_cache > 0 {
 		cache_pags_activa = true
+	}
+}
+
+func liberarTLB() {
+	inicializarTLB()
+}
+
+func liberarCachePags() {
+	inicializarCachePags()
+}
+
+func inicializarTLB() {
+	for i := 0; i <= config_CPU.Cant_entradas_cache; i++ {
+		cache_pags[i].pagina = -1
+		cache_pags[i].contenido = ""
+	}
+}
+
+func inicializarCachePags() {
+	for i := 0; i <= config_CPU.Cant_entradas_cache; i++ {
+		cache_pags[i].pagina = -1
+		cache_pags[i].contenido = ""
+	}
+}
+
+func liberarCaches() {
+
+	if tlb_activa {
+		liberarTLB()
+	}
+
+	if cache_pags_activa {
+		liberarCachePags()
 	}
 }
 

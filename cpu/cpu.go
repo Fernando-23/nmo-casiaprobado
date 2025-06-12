@@ -34,10 +34,12 @@ func main() {
 
 	if tlb_activa {
 		tlb = make([]*EntradaTLB, config_CPU.Cant_entradas_TLB)
+		inicializarTLB()
 	}
 
 	if cache_pags_activa {
 		cache_pags = make([]*EntradaCachePag, config_CPU.Cant_entradas_cache)
+		inicializarCachePags()
 	}
 
 	cliente.EnviarMensaje(config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria, "Conexion hecha con modulo CPU")
@@ -84,10 +86,10 @@ func main() {
 				execute(cod_op, operacion)
 
 			}
+
 			actualizarContexto()
-			if tlb_activa {
-				liberarTLB()
-			}
+			liberarCaches()
+
 			hay_interrupcion = false
 		}
 	}
