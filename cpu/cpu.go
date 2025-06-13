@@ -22,6 +22,7 @@ func main() {
 	id_cpu = args[1]
 	pid_ejecutando = new(int)
 	pc_ejecutando = new(int)
+	noticiero_metereologico = time.Now()
 
 	url_cpu = fmt.Sprintf("http://%s:%d", config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
 	url_kernel = fmt.Sprintf("http://%s:%d", config_CPU.Ip_Kernel, config_CPU.Puerto_Kernel)

@@ -79,7 +79,9 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 	tamanio, _ := strconv.Atoi(aux[1])
 	arch_pseudo := aux[2]
 
-	if tamanio >= config_memo.Tamanio_memoria { //config_memo.Tamanio_memoria va a volar, hay que chequear en memoria_usuario
+	// Lock tam_memo_actual
+	if tamanio >= tam_memo_actual { //config_memo.Tamanio_memoria va a volar, hay que chequear en memoria_usuario
+		// Unlock tam_memo_actual
 		fmt.Println("No hay espacio suficiente para crear el proceso pedido por kernel")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("NO_OK"))
@@ -89,19 +91,26 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Si kernel, hay espacio"))
 
-	memo.CrearNuevoProceso(pid, arch_pseudo)
+	memo.CrearNuevoProceso(pid, tamanio, arch_pseudo)
+	// Lock tam_memo_actual
 	tam_memo_actual -= tamanio
+	// Unlock tam_memo_actual
 }
 
-func (memo *Memo) CrearNuevoProceso(pid int, arch_pseudo string) {
+func (memo *Memo) CrearNuevoProceso(pid int, tamanio int, arch_pseudo string) {
 	_, ok := memo.memoria_sistema[pid]
 	if ok {
 		fmt.Println("Ya se encuentra creado un proceso")
 		return
 	}
 
+	// 1er check, cargar arch pseudo
 	nuevo_elemento := CargarArchivoPseudocodigo(arch_pseudo)
 	memo.memoria_sistema[pid] = nuevo_elemento
+
+	// 2do check, asignarle frames y crear tablas
+	memo.InicializarTablaPunterosAsociadosA(pid, tamanio)
+
 }
 
 func Hanshake(w http.ResponseWriter, r *http.Request) {
@@ -124,19 +133,19 @@ func (memo *Memo) InicializarTablaPunterosAsociadosA(pid int, tamanio int) {
 	}
 
 	if config_memo.Cant_niveles == 0 {
+		memo.AsignarFramesAProceso(nuevo_puntero_de_tablas, tamanio, pid)
 		return
 	}
 
-	for i := 1; i < config_memo.Cant_niveles; i++ {
+	for i := 1; i <= config_memo.Cant_niveles; i++ {
 		nuevo_puntero_de_tablas.sgte_nivel = &NivelTPag{
 			lv_tabla:   i,
 			sgte_nivel: nil,
 		}
-	}
 
-	nuevo_puntero_de_tablas.sgte_nivel = &NivelTPag{
-		lv_tabla:   config_memo.Cant_niveles,
-		sgte_nivel: nil,
+		if i != config_memo.Cant_niveles {
+			nuevo_puntero_de_tablas = nuevo_puntero_de_tablas.sgte_nivel
+		}
 	}
 
 	memo.AsignarFramesAProceso(nuevo_puntero_de_tablas, tamanio, pid)
@@ -180,4 +189,38 @@ func (memo *Memo) ModificarEstadoFrames(frames_a_reservar int, pid int) {
 
 func (memo *Memo) HayFramesLibresPara(tamanio int) bool {
 	return frames_disponibles > tamanio
+}
+
+func (memo *Memo) CrearSwapfile() {
+	_, err := os.Create(config_memo.Path_swap)
+
+	if err != nil {
+		fmt.Println("Error en crear swapfile")
+		return
+	}
+}
+
+func (memo *Memo) EscribirEnSwap(pid int) {
+	file, err := os.Open(config_memo.Path_swap)
+
+	if err != nil {
+		fmt.Println("Error en abrir swapfile")
+		return
+	}
+	defer file.Close()
+
+	frames_asignados_a_pid := memo.l_proc[pid].ptr_a_frames_asignados
+
+	for i := 0; i < len(frames_asignados_a_pid); i++ {
+		ptr_frame_asignado := frames_asignados_a_pid[i]
+		inicio := *frames_asignados_a_pid[i] * config_memo.Tamanio_pag
+		fin_de_pag := inicio + config_memo.Tamanio_pag //Liam vino de rendir funcional mepa
+
+		contenido_pag := memoria_principal[inicio:fin_de_pag]
+		*ptr_frame_asignado = -1
+		file.Write(contenido_pag)
+
+	}
+
+	memo.l_proc[pid].ptr_a_frames_asignados = memo.l_proc[pid].ptr_a_frames_asignados[:0]
 }

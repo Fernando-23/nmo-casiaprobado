@@ -1,5 +1,7 @@
 package main
 
+import "sync"
+
 type ConfigMemo struct {
 	Puerto_mem        int    `json:"port_memory"`
 	Ip_memoria        string `json:"ip_memory"`
@@ -16,6 +18,7 @@ type ConfigMemo struct {
 
 type Memo struct {
 	memoria_sistema map[int][]string
+	swap            DataSwap
 	l_proc          map[int]*Proceso
 	ptrs_raiz_tpag  map[int]*NivelTPag
 	tabla_frames    []int //sincronizacion
@@ -23,6 +26,19 @@ type Memo struct {
 
 type Proceso struct {
 	ptr_a_frames_asignados []*int //apunta a elementos de la tabla_frames
+	// [0,1,2,3,4]
+	// HOLA MUNDO COMO ESTAS
+	// {3,1,8,12,0}
+}
+
+type DataSwap struct {
+	ultimo_byte      int
+	espacio_contiguo map[int]*ProcesoEnSwap
+}
+
+type ProcesoEnSwap struct {
+	inicio  int
+	tamanio int
 }
 
 /*
@@ -65,8 +81,9 @@ type NivelTPag struct {
 }
 
 var (
-	memoria_principal  []byte
-	config_memo        *ConfigMemo
-	frames_disponibles int
-	tam_memo_actual    int
+	memoria_principal       []byte
+	config_memo             *ConfigMemo
+	frames_disponibles      int
+	tam_memo_actual         int
+	mutex_memoria_principal sync.Mutex
 )

@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"strconv"
+	"time"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
@@ -95,6 +96,9 @@ func buscarEnTLB(direccion_logica int, nro_pagina int) int {
 		if tlb[i].pagina == nro_pagina {
 			// Caso TLB HIT
 			utils.LoggerConFormato("PID: %d - TLB HIT - Pagina: %d", *pid_ejecutando, nro_pagina)
+			if tlb_activa {
+				tlb[i].last_recently_used = time.Now()
+			}
 			return tlb[i].frame
 		}
 	}
@@ -143,24 +147,39 @@ func aplicarAlgoritmoTLB() error {
 	case "FIFO":
 		aux := tlb[0]
 		aux_entrada := 0
+		aux_timestamp_tiempo_vida := aux.tiempo_vida.Sub(noticiero_metereologico)
+
 		for i := 1; i < config_CPU.Cant_entradas_TLB; i++ {
-			if aux.timestamp_tiempo_vida < tlb[i].timestamp_tiempo_vida {
+			comparador_timestamp := tlb[i].tiempo_vida.Sub(noticiero_metereologico)
+			if aux_timestamp_tiempo_vida < comparador_timestamp {
 				aux = tlb[i]
 				aux_entrada = i
+				aux_timestamp_tiempo_vida = comparador_timestamp
 			}
 		}
+
 		cambiarEstadoMarco(aux.pagina, aux.frame, aux_entrada)
+
+		aux.tiempo_vida = time.Now()
 		return nil
+
 	case "LRU":
 		aux := tlb[0]
 		aux_entrada := 0
+		aux_timestamp_lru := aux.tiempo_vida.Sub(noticiero_metereologico)
+
 		for i := 1; i < config_CPU.Cant_entradas_TLB; i++ {
-			if aux.timestamp_lru < tlb[i].timestamp_lru {
+			comparador_timestamp := tlb[i].last_recently_used.Sub(noticiero_metereologico)
+			if aux_timestamp_lru < comparador_timestamp {
 				aux = tlb[i]
 				aux_entrada = i
+				aux_timestamp_lru = comparador_timestamp
 			}
 		}
+
 		cambiarEstadoMarco(aux.pagina, aux.frame, aux_entrada)
+		aux.last_recently_used = time.Now()
+
 		return nil
 	default:
 		return fmt.Errorf("y,la verda q me pasaste cualquier verdura en el algoritmo de TLB")
@@ -230,43 +249,60 @@ func aplicarAlgoritmoCachePags(nro_pagina int, frame int, contenido string, acci
 	case "CLOCK-M":
 		// 1) Primera pasada
 		//    u=0;m=0
-		for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
-			if cache_pags[i].bit_uso == 0 && cache_pags[i].bit_modificado == 0 {
-				actualizarEntradaCache(i, nro_pagina, frame, contenido, accion)
-				return
-			}
-		}
+		// for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
+		// 	if cache_pags[i].bit_uso == 0 && cache_pags[i].bit_modificado == 0 {
+		// 		actualizarEntradaCache(i, nro_pagina, frame, contenido, accion)
+		// 		return
+		// 	}
+		// }
 
+		cicloCLockM(0, 0, 0, nro_pagina, frame, contenido, accion)
 		// 2) Segunda pasada
 		//    u=0;m=1
 		//Si no encuentro, u=0 -> u=1
-		for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
-			if cache_pags[i].bit_uso == 0 && cache_pags[i].bit_modificado == 1 {
-				actualizarEntradaCache(i, nro_pagina, frame, contenido, accion)
-				return
-			}
-			cache_pags[i].bit_uso = 0
-		}
+		// for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
+		// 	if cache_pags[i].bit_uso == 0 && cache_pags[i].bit_modificado == 1 {
+		// 		actualizarEntradaCache(i, nro_pagina, frame, contenido, accion)
+		// 		return
+		// 	}
+		// 	cache_pags[i].bit_uso = 0
+		// }
+		cicloCLockM(1, 0, 1, nro_pagina, frame, contenido, accion)
 		// 3) Tercera pasada
 		// reintento de 1)
-		for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
-			if cache_pags[i].bit_uso == 0 && cache_pags[i].bit_modificado == 0 {
-				actualizarEntradaCache(i, nro_pagina, frame, contenido, accion)
-				return
-			}
-		}
+		// for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
+		// 	if cache_pags[i].bit_uso == 0 && cache_pags[i].bit_modificado == 0 {
+		// 		actualizarEntradaCache(i, nro_pagina, frame, contenido, accion)
+		// 		return
+		// 	}
+		// }
+		cicloCLockM(0, 0, 0, nro_pagina, frame, contenido, accion)
 		// 4) Cuarta pasada
 		// reintento de 2)
-		for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
-			if cache_pags[i].bit_uso == 0 && cache_pags[i].bit_modificado == 1 {
-				actualizarEntradaCache(i, nro_pagina, frame, contenido, accion)
-				return
-			}
-		}
-
+		// for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
+		// 	if cache_pags[i].bit_uso == 0 && cache_pags[i].bit_modificado == 1 {
+		// 		actualizarEntradaCache(i, nro_pagina, frame, contenido, accion)
+		// 		return
+		// 	}
+		// }
+		cicloCLockM(0, 0, 1, nro_pagina, frame, contenido, accion)
 	}
 }
 
+func cicloCLockM(sector_extra int, valor_uso int, valor_modificado int, nro_pagina int, frame int, contenido string, accion string) {
+
+	for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
+		if cache_pags[i].bit_uso == valor_uso && cache_pags[i].bit_modificado == valor_modificado {
+			actualizarEntradaCache(i, nro_pagina, frame, contenido, accion)
+			return
+		}
+		if sector_extra == 1 {
+			cache_pags[i].bit_uso = 0
+		}
+
+	}
+
+}
 func actualizarEntradaCache(posicion int, nro_pagina int, frame int, contenido string, accion string) {
 	cache_pags[posicion].contenido = contenido
 	cache_pags[posicion].frame = frame

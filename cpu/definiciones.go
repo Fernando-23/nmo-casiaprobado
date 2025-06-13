@@ -26,10 +26,10 @@ type DireccionFisica struct {
 }
 
 type EntradaTLB struct {
-	pagina                int
-	frame                 int
-	timestamp_lru         time.Duration
-	timestamp_tiempo_vida time.Duration
+	pagina             int
+	frame              int
+	last_recently_used time.Time
+	tiempo_vida        time.Time
 }
 
 type EntradaCachePag struct {
@@ -41,21 +41,22 @@ type EntradaCachePag struct {
 }
 
 var (
-	config_CPU         *ConfigCPU
-	tlb                []*EntradaTLB
-	cache_pags         []*EntradaCachePag
-	url_cpu            string
-	url_kernel         string
-	url_memo           string
-	hay_interrupcion   bool
-	tlb_activa         bool
-	cache_pags_activa  bool
-	id_cpu             string
-	pid_ejecutando     *int
-	pc_ejecutando      *int
-	cant_niveles       int
-	cant_entradas_tpag int
-	tam_pag            int
-	sem_datos_kernel   sync.Mutex
-	hay_datos          string
+	config_CPU              *ConfigCPU
+	tlb                     []*EntradaTLB
+	noticiero_metereologico time.Time
+	cache_pags              []*EntradaCachePag
+	url_cpu                 string
+	url_kernel              string
+	url_memo                string
+	hay_interrupcion        bool
+	tlb_activa              bool
+	cache_pags_activa       bool
+	id_cpu                  string
+	pid_ejecutando          *int
+	pc_ejecutando           *int
+	cant_niveles            int
+	cant_entradas_tpag      int
+	tam_pag                 int
+	sem_datos_kernel        sync.Mutex
+	hay_datos               string
 )
