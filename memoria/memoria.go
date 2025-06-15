@@ -21,6 +21,7 @@ func main() {
 	}
 
 	tam_memo_actual = config_memo.Tamanio_memoria
+	tamanio_pag = config_memo.Tamanio_pag
 	memoria_principal = make([]byte, config_memo.Tamanio_memoria)
 
 	mux := http.NewServeMux()

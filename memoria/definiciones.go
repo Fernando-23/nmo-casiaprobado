@@ -26,6 +26,7 @@ type Memo struct {
 
 type Proceso struct {
 	ptr_a_frames_asignados []*int //apunta a elementos de la tabla_frames
+	tamanio                int
 	// [0,1,2,3,4]
 	// HOLA MUNDO COMO ESTAS
 	// {3,1,8,12,0}
@@ -85,5 +86,6 @@ var (
 	config_memo             *ConfigMemo
 	frames_disponibles      int
 	tam_memo_actual         int
+	tamanio_pag             int
 	mutex_memoria_principal sync.Mutex
 )

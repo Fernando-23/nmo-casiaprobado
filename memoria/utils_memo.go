@@ -148,12 +148,12 @@ func (memo *Memo) InicializarTablaPunterosAsociadosA(pid int, tamanio int) {
 		}
 	}
 
+	nuevo_puntero_de_tablas.entradas = make([]*int, config_memo.Cant_entradasXpag)
 	memo.AsignarFramesAProceso(nuevo_puntero_de_tablas, tamanio, pid)
 }
 
 func (memo *Memo) AsignarFramesAProceso(tpags_final *NivelTPag, tamanio int, pid int) {
 	if memo.HayFramesLibresPara(tamanio) {
-		tpags_final.entradas = make([]*int, config_memo.Cant_entradasXpag)
 		frames_a_reservar := memo.LaCuentitaMaestro(tamanio, config_memo.Tamanio_pag)
 		memo.ModificarEstadoFrames(frames_a_reservar, pid)
 
@@ -174,16 +174,22 @@ func (memo *Memo) LaCuentitaMaestro(tamanio_proc int, tamanio_frame int) int {
 
 func (memo *Memo) ModificarEstadoFrames(frames_a_reservar int, pid int) {
 
-	for marcos := 0; frames_a_reservar != 0 && frames_disponibles > 0; marcos++ {
-		if memo.tabla_frames[marcos] < 0 {
-			memo.tabla_frames[marcos] = pid
+	i := 0
+	for frame := 0; frames_a_reservar != 0 && frames_disponibles > 0; frame++ {
+		if memo.tabla_frames[frame] < 0 {
+			memo.tabla_frames[frame] = frame
+			memo.l_proc[pid].ptr_a_frames_asignados[i] = &memo.tabla_frames[frame]
+			i++
+
 			frames_a_reservar--
 			frames_disponibles--
 		}
+	}
 
-		if frames_a_reservar != 0 {
-			slog.Error("Se intento asignar mas frames de los que habia diponibles") //poner pid que pide mucho si queres
-		}
+	if frames_a_reservar != 0 {
+		slog.Error("Se intento asignar mas frames de los que habia diponibles") //poner pid que pide mucho si queres
+		fmt.Println("Se intento asignar mas frames de los que habia diponibles, hicimo algo mal")
+		return
 	}
 }
 
@@ -200,6 +206,12 @@ func (memo *Memo) CrearSwapfile() {
 	}
 }
 
+func (memo *Memo) CargarDataSwap(pid int, tamanio int) {
+	memo.swap.espacio_contiguo[pid].inicio = memo.swap.ultimo_byte
+	memo.swap.espacio_contiguo[pid].tamanio = tamanio
+	memo.swap.ultimo_byte += tamanio
+}
+
 func (memo *Memo) EscribirEnSwap(pid int) {
 	file, err := os.Open(config_memo.Path_swap)
 
@@ -210,8 +222,9 @@ func (memo *Memo) EscribirEnSwap(pid int) {
 	defer file.Close()
 
 	frames_asignados_a_pid := memo.l_proc[pid].ptr_a_frames_asignados
+	tamanio := memo.l_proc[pid].tamanio
 
-	for i := 0; i < len(frames_asignados_a_pid); i++ {
+	for i := range frames_asignados_a_pid {
 		ptr_frame_asignado := frames_asignados_a_pid[i]
 		inicio := *frames_asignados_a_pid[i] * config_memo.Tamanio_pag
 		fin_de_pag := inicio + config_memo.Tamanio_pag //Liam vino de rendir funcional mepa
@@ -219,8 +232,66 @@ func (memo *Memo) EscribirEnSwap(pid int) {
 		contenido_pag := memoria_principal[inicio:fin_de_pag]
 		*ptr_frame_asignado = -1
 		file.Write(contenido_pag)
+	}
+	memo.CargarDataSwap(pid, tamanio)
+
+	memo.l_proc[pid].ptr_a_frames_asignados = memo.l_proc[pid].ptr_a_frames_asignados[:0]
+}
+
+func (memo *Memo) QuitarDeSwap(pid int) {
+	file, err := os.Open(config_memo.Path_swap)
+
+	if err != nil {
+		fmt.Println("Error en abrir swapfile")
+		return
+	}
+
+	inicio_proceso := memo.swap.espacio_contiguo[pid].inicio
+	tamanio := memo.swap.espacio_contiguo[pid].tamanio
+	file.Seek(int64(inicio_proceso), 1)
+	contenido_proc := make([]byte, tamanio)
+
+	bytes_leidos, _ := file.Read(contenido_proc)
+
+	if bytes_leidos != tamanio { //leyamal yo leyo tu leyes el leye
+		fmt.Errorf("no leo bien necesito gafas")
 
 	}
 
-	memo.l_proc[pid].ptr_a_frames_asignados = memo.l_proc[pid].ptr_a_frames_asignados[:0]
+	fmt.Println(string(contenido_proc[:bytes_leidos]))
+
+	file.Seek(0, 0)
+	file.Close()
+	// compromiso de copactar para el segundo cuatri
+	//segurisimo
+
+	ptr_tpag_del_pid := memo.ptrs_raiz_tpag[pid]
+	if config_memo.Cant_niveles == 0 {
+		memo.AsignarFramesAProceso(ptr_tpag_del_pid, tamanio, pid)
+		return
+	}
+
+	for i := 1; i < config_memo.Cant_niveles; i++ {
+		ptr_tpag_del_pid = ptr_tpag_del_pid.sgte_nivel
+	}
+
+	memo.AsignarFramesAProceso(ptr_tpag_del_pid, tamanio, pid)
+
+	frames_asignados_a_pid := memo.l_proc[pid].ptr_a_frames_asignados
+	var contenido_proc_dividido []byte
+
+	for i := range frames_asignados_a_pid {
+		//tema contenido
+		inicio_contenido := i * tamanio_pag
+		fin_contenido := inicio_contenido + tamanio_pag
+		pagina_a_escribir := contenido_proc_dividido[inicio_contenido:fin_contenido]
+
+		//tema memoria
+		frame := *frames_asignados_a_pid[i]
+		inicio_memo := frame * tamanio_pag
+		fin_memo := inicio_memo + tamanio_pag
+
+		copy(memoria_principal[inicio_memo:fin_memo], pagina_a_escribir)
+	}
+
 }
