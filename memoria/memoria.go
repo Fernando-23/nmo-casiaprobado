@@ -13,7 +13,7 @@ func main() {
 
 	config_memo = &ConfigMemo{}
 	utils.IniciarConfiguracion("config.json", config_memo)
-	cant_frames_totales := config_memo.Tamanio_memoria / config_memo.Tamanio_pag
+	cant_frames_totales := int(config_memo.Tamanio_memoria / config_memo.Tamanio_pag)
 	memo := &Memo{
 		memoria_sistema: make(map[int][]string),
 		ptrs_raiz_tpag:  make(map[int]*NivelTPag),
@@ -23,17 +23,18 @@ func main() {
 	tam_memo_actual = config_memo.Tamanio_memoria
 	tamanio_pag = config_memo.Tamanio_pag
 	memoria_principal = make([]byte, config_memo.Tamanio_memoria)
+	memo.InicializarTablaFramesGlobal(cant_frames_totales)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
-
-	// APIs a hacer
-	// mux.HandleFUnc("/memoria/WRITE",Escribir)
 	mux.HandleFunc("/memoria/handshake", Hanshake)
 	mux.HandleFunc("/memoria/hay_lugar", memo.VerificarHayLugar)
 	mux.HandleFunc("/memoria/fetch", memo.Fetch)
+	mux.HandleFunc("/memoria/busqueda_tabla", memo.buscarEnTablaAsociadoAProceso)
+	mux.HandleFunc("/memoria/READ", memo.LeerEnMemoria)
+	mux.HandleFunc("/memoria/WRITE", memo.EscribirEnMemoria)
+	mux.HandleFunc("/memoria/MEMORY_DUMP", memo.DumpMemory)
 	// mux.HandleFunc("/memoria/crear_proceso", CrearProceso)
-	// mux.HandleFunc("/memoria/READ",LeerEnMemoria)
 
 	url := fmt.Sprintf(":%d", config_memo.Puerto_mem)
 

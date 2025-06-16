@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
@@ -254,8 +255,8 @@ func (memo *Memo) QuitarDeSwap(pid int) {
 	bytes_leidos, _ := file.Read(contenido_proc)
 
 	if bytes_leidos != tamanio { //leyamal yo leyo tu leyes el leye
-		fmt.Errorf("no leo bien necesito gafas")
-
+		//fmt.Errorf("no leo bien necesito gafas")
+		fmt.Println("no leo bien necesito gafas")
 	}
 
 	fmt.Println(string(contenido_proc[:bytes_leidos]))
@@ -293,5 +294,166 @@ func (memo *Memo) QuitarDeSwap(pid int) {
 
 		copy(memoria_principal[inicio_memo:fin_memo], pagina_a_escribir)
 	}
+}
+
+func (memo *Memo) InicializarTablaFramesGlobal(cant_frames_memo int) {
+	for i := 0; i <= cant_frames_memo; i++ {
+		memo.tabla_frames[i] = -1
+	}
+}
+
+// Acceso a espacio de usuario
+func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.Request) {
+	var request string
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		fmt.Println("error al recibir peticion de busqueda en tpags")
+	}
+
+	aux := strings.Split(request, " ")
+	pid, _ := strconv.Atoi(aux[0])
+	nivel_actual_solicitado, _ := strconv.Atoi(aux[1])
+	entrada, _ := strconv.Atoi(aux[2])
+
+	if nivel_actual_solicitado != config_memo.Cant_niveles {
+		hacerRetardo()
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("SEGUI"))
+		return
+	}
+
+	tabla_asociada_proceso := memo.ptrs_raiz_tpag[pid]
+
+	for nivel := 0; nivel < config_memo.Cant_niveles; nivel++ {
+		tabla_asociada_proceso = tabla_asociada_proceso.sgte_nivel
+	}
+
+	respuesta := strconv.Itoa(*tabla_asociada_proceso.entradas[entrada])
+	hacerRetardo()
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(respuesta))
+}
+
+func hacerRetardo() {
+	time.Sleep(time.Duration(config_memo.Delay_memoria) * time.Millisecond)
+}
+
+func (memo *Memo) LeerEnMemoria(w http.ResponseWriter, r *http.Request) {
+	var request string
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		fmt.Println("error al recibir peticion de READ")
+	}
+
+	aux := strings.Split(request, " ")
+	pid, _ := strconv.Atoi(aux[0])
+	frame, _ := strconv.Atoi(aux[1])
+	offset, _ := strconv.Atoi(aux[2])
+	tamanio_a_leer, _ := strconv.Atoi(aux[3])
+
+	if !memo.confirmacionFrameMio(pid, frame) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("NO_ES_MI_FRAME_PADRE_NUESTRO...AMEN"))
+		return
+	}
+
+	base := (frame * config_memo.Tamanio_pag) + offset
+	contenido_leido := memoria_principal[base:tamanio_a_leer]
+	if !memo.SigoEnMiFrame(pid, frame, base, tamanio_a_leer) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ME_PASE_DE_LA_RAYA_AMEN"))
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(contenido_leido))
+}
+
+func (memo *Memo) EscribirEnMemoria(w http.ResponseWriter, r *http.Request) {
+	var request string
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		fmt.Println("error al recibir peticion de WRITE")
+	}
+
+	aux := strings.Split(request, " ")
+	pid, _ := strconv.Atoi(aux[0])
+	frame, _ := strconv.Atoi(aux[1])
+	offset, _ := strconv.Atoi(aux[2])
+	datos_a_escribir := []byte(aux[3])
+
+	if !memo.confirmacionFrameMio(pid, frame) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("NO_ES_MI_FRAME_PADRE_NUESTRO...AMEN"))
+		return
+	}
+
+	base := (frame * config_memo.Tamanio_pag) + offset
+	tamanio_a_escribir := len(datos_a_escribir)
+
+	if !memo.SigoEnMiFrame(pid, frame, base, tamanio_a_escribir) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ME_PASE_DE_LA_RAYA_AMEN"))
+		return
+	}
+
+	copy(memoria_principal[base:], datos_a_escribir)
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
+func (memo *Memo) confirmacionFrameMio(pid int, frame int) bool {
+	cant_frames_asignados_a_pid := len(memo.l_proc[pid].ptr_a_frames_asignados)
+
+	for i := range cant_frames_asignados_a_pid {
+		if *memo.l_proc[pid].ptr_a_frames_asignados[i] == frame {
+			return true
+		}
+	}
+	return false
+
+}
+
+func (memo *Memo) SigoEnMiFrame(pid int, frame int, base int, tamanio_a_escribir int) bool {
+	fin := base + tamanio_a_escribir
+	if config_memo.Tamanio_pag >= fin { //    100 4 96
+		return true
+	}
+	return false
+}
+
+func (memo *Memo) DumpMemory(w http.ResponseWriter, r *http.Request) {
+	var request string
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		fmt.Println("error al recibir peticion de WRITE")
+	}
+
+	pid, _ := strconv.Atoi(request)
+
+	timestamp := time.Now().Format(time.RFC3339) //me lo ensenio mi amigo luchin guita facil
+	nombre := fmt.Sprintf("%s%d-%s.dmp", config_memo.Path_dump, pid, timestamp)
+	file, err := os.Create(nombre)
+
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	frames_asignados_a_pid := memo.l_proc[pid].ptr_a_frames_asignados
+	tamanio := memo.l_proc[pid].tamanio
+
+	err = file.Truncate(int64(tamanio))
+
+	if err != nil {
+		panic(err)
+	}
+
+	for i := range frames_asignados_a_pid {
+		inicio := *frames_asignados_a_pid[i] * config_memo.Tamanio_pag
+		fin_de_pag := inicio + config_memo.Tamanio_pag //Liam vino de rendir funcional mepa
+
+		contenido_pag := memoria_principal[inicio:fin_de_pag]
+		file.Write(contenido_pag)
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 
 }
