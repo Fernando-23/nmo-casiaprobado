@@ -64,8 +64,10 @@ func AtenderPeticion(w http.ResponseWriter, r *http.Request) {
 	pid_recibido := aux[0]
 	tiempo_recibido, _ := strconv.Atoi(aux[1])
 
+	utils.LoggerConFormato("## PID: %s - Inicio de IO - Tiempo: %d", pid_recibido, tiempo_recibido)
 	time.Sleep(time.Duration(tiempo_recibido) * time.Millisecond)
 	finalizoIO := fmt.Sprintf("FIN_IO %s", pid_recibido)
+	utils.LoggerConFormato("## PID: %s - Fin de IO", pid_recibido)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(finalizoIO))
 

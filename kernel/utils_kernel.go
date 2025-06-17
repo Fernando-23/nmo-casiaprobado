@@ -129,6 +129,7 @@ func (k *Kernel) MoverDeEstadoPorPid(estadoActual, estadoNuevo int, pid int) {
 	procesos := k.procesoPorEstado[estadoActual]
 	var pcb *PCB
 	encontrado := false
+	utils.LoggerConFormato("## (%d) Pasa del estado %s al estado %s", pid, estados_proceso[estadoActual], estados_proceso[estadoNuevo])
 	for i, p := range procesos {
 		if p.Pid == pid {
 			pcb = p
@@ -171,6 +172,7 @@ func (k *Kernel) MoverDeEstado(estadoActual, estadoNuevo int) {
 		fmt.Printf("No hay procesos en el estado %d\n", estadoActual)
 		return
 	}
+
 	encontrado := false
 	primera_pos := 0
 	pcb_a_mover := pcbs[primera_pos]
@@ -182,6 +184,8 @@ func (k *Kernel) MoverDeEstado(estadoActual, estadoNuevo int) {
 		fmt.Printf("Proceso %d no encontrado en el estado %d\n", pcb_a_mover.Pid, estadoActual)
 		return
 	}
+
+	utils.LoggerConFormato("## (%d) Pasa del estado %s al estado %s", pcb_a_mover.Pid, estados_proceso[estadoActual], estados_proceso[estadoNuevo])
 
 	// Actualizar métricas
 	cambiarMetricasTiempo(pcb_a_mover, pcb_a_mover.estado)
@@ -351,6 +355,7 @@ func (k *Kernel) ChequearSiHayQueDesalojar() {
 func (k *Kernel) CambiosEnElPlantel(cpu *CPU, pc_a_actualizar int) {
 	// Debutante
 	// CALIENTA KAROL
+	utils.LoggerConFormato("## (%d) - Desalojado por algoritmo SJF/SRT", k.pidActual)
 	proceso_suplente := k.procesoPorEstado[EstadoReady][0]
 
 	proceso_titular := k.BuscarPorPid(EstadoExecute, cpu.Pid)
@@ -468,8 +473,9 @@ func handleDispatch(cpu_seleccionada *CPU) error {
 
 func (k *Kernel) solicitudEliminarProceso(pid int) (string, error) {
 
-	url := fmt.Sprintf("http://%s:%d/memoria/%d", k.ConfigKernel.Ip_memoria, k.ConfigKernel.Puerto_Memoria, pid)
-	respuestaMemo, err := utils.EnviarSolicitudHTTPString("GET", url, nil)
+	url := fmt.Sprintf("http://%s:%d/memoria/exit/", k.ConfigKernel.Ip_memoria, k.ConfigKernel.Puerto_Memoria)
+	pid_string := strconv.Itoa(pid)
+	respuestaMemo, err := utils.EnviarSolicitudHTTPString("POST", url, pid_string)
 
 	if err != nil {
 		log.Printf("Error codificando mensaje: %s", err.Error())
@@ -536,6 +542,7 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 	cpu_ejecutando := k.cpusLibres[id_cpu]
 	cod_op := syscall[CodOp]
 
+	utils.LoggerConFormato("## (%d) - Solicitó syscall: %s", cpu_ejecutando.Pid, cod_op)
 	switch cod_op {
 	case "IO":
 		// 2 20 IO AURICULARES 9000
@@ -572,10 +579,10 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 }
 
 func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int, cpu_ejecutando *CPU) {
-	fmt.Println("PRUEBA - Se entro a gestionarINIT_PROC")
+
 	new_pcb := k.IniciarProceso(tamanio, nombre_arch)
 	k.AgregarAEstado(EstadoNew, new_pcb)
-	//log.Info("## (%d) Se crea el proceso - Estado: NEW", pcb.Pid)
+	utils.LoggerConFormato(" (%d) Se crea el proceso - Estado: NEW", cpu_ejecutando.Pid)
 
 	unElemento, err := k.ListaNewSoloYo()
 	if err != nil {
@@ -594,6 +601,12 @@ func (k *Kernel) GestionarEXIT(cpu_ejecutando *CPU) {
 	}
 
 	if respuesta == "OK" {
+
+		utils.LoggerConFormato("## (%d) - Finaliza el proceso", cpu_ejecutando.Pid)
+		// utils.LoggerConFormato(
+		// 	"## (%d) - Métricas de estado:"+
+		// 		"NEW (%d) (%d), READY (%d) (%d), EXECUTE (%d) (%d)"+
+		// 		",  ", cpu_ejecutando.Pid, k.procesoPorEstado[EstadoNew][cpu_ejecutando.Pid].)
 		k.MoverDeEstadoPorPid(EstadoExecute, EstadoExit, cpu_ejecutando.Pid)
 		k.QuitarDeEstado(cpu_ejecutando.Pid, EstadoExit)
 		//k.EliminarProceso(cpu_ejecutando.Pid)
@@ -638,18 +651,18 @@ func (k *Kernel) ManejarIO(nombre_io string, cpu_ejecutando *CPU, duracion int) 
 	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, cpu_ejecutando.Pid)
 	go k.temporizadorSuspension(pcb.Pid) // ta raro
 
-	IO_Seleccionada := k.buscarIOLibre(nombre_io)
+	IO_seleccionada := k.buscarIOLibre(nombre_io)
 
-	if IO_Seleccionada == nil { //no hay io libre
+	if IO_seleccionada == nil { //no hay io libre
 		io.procEsperandoPorIO = append(io.procEsperandoPorIO, cpu_ejecutando.Pid)
 		return
 	}
 	// si hay io libre
-	IO_Seleccionada.Pid = cpu_ejecutando.Pid
+	IO_seleccionada.Pid = cpu_ejecutando.Pid
 	//enviar a io
-	IO_Seleccionada.Esta_libre = false
-
-	enviarProcesoAIO(IO_Seleccionada, duracion)
+	IO_seleccionada.Esta_libre = false
+	utils.LoggerConFormato("## (%d) - Bloqueado por IO: %s", IO_seleccionada.Pid, nombre_io)
+	enviarProcesoAIO(IO_seleccionada, duracion)
 
 }
 
@@ -667,6 +680,7 @@ func enviarProcesoAIO(io_seleccionada *IO, duracion int) {
 
 	fullURL := fmt.Sprintf("%s/io/hace_algo", io_seleccionada.Url)
 	datos := fmt.Sprintf("%d %d", io_seleccionada.Pid, duracion)
+
 	utils.EnviarSolicitudHTTPString("POST", fullURL, datos)
 }
 
@@ -692,7 +706,7 @@ func (k *Kernel) RecibirRespuestaIO(w http.ResponseWriter, r *http.Request) {
 	case "FIN_IO":
 		k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid_io)
 		k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid_io)
-
+		utils.LoggerConFormato("## (%d) finalizó IO y pasa a READY", pid_io)
 	case "DESCONEXION":
 		k.BorrarIO(nombre_io, pid_io)
 	}

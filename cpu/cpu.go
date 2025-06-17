@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -40,7 +39,7 @@ func main() {
 
 	if cache_pags_activa {
 		cache_pags = make([]*EntradaCachePag, config_CPU.Cant_entradas_cache)
-		inicializarCachePags()
+		reiniciarCachePags()
 	}
 
 	cliente.EnviarMensaje(config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria, "Conexion hecha con modulo CPU")
@@ -70,12 +69,9 @@ func main() {
 		if hay_datos != "" {
 			utils.LoggerConFormato("Me unlockee jejeje")
 			time.Sleep(9 * time.Second)
-			pid_log := strconv.Itoa(*pid_ejecutando)
-			pc_log := strconv.Itoa(*pc_ejecutando)
 			for !hay_interrupcion {
 				instruccion = fetch(url_memo)
-				slog.Info(fmt.Sprintf("## PID: %s - FETCH - Program Counter: %s\n", pid_log, pc_log))
-				fmt.Println("PRUEBA - PC: ", *pc_ejecutando)
+				utils.LoggerConFormato("## PID: %d - FETCH - Program Counter: %d", *pid_ejecutando, *pc_ejecutando)
 
 				if instruccion == "" {
 					fmt.Printf("No hay una instruccion valida asociado a este Program Counter.")
@@ -84,7 +80,7 @@ func main() {
 
 				cod_op, operacion := decode(instruccion)
 				fmt.Println("Aca llego la instruccion: ", instruccion)
-				execute(cod_op, operacion)
+				execute(cod_op, operacion, instruccion)
 
 			}
 

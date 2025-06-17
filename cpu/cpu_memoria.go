@@ -16,10 +16,12 @@ func requestWRITE(direccion_logica int, datos string) (string, DireccionFisica) 
 	nro_pagina := math.Floor(float64(direccion_logica) / float64(tam_pag))
 
 	frame, contenido := busquedaMemoriaFrame(direccion_logica, int(nro_pagina), "WRITE") //el contenido es solo para cache pags activa
+
 	dir_fisica := MMU(frame, desplazamiento)
 
 	//Encuentro en cache pags
 	if contenido != "NO_ENCONTRE" {
+		utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", *pid_ejecutando, int(nro_pagina), frame)
 		return contenido, dir_fisica
 	}
 
@@ -28,8 +30,10 @@ func requestWRITE(direccion_logica int, datos string) (string, DireccionFisica) 
 
 	respuesta, _ := utils.EnviarSolicitudHTTPString("POST", fullUrl, peticion_WRITE)
 	if cache_pags_activa {
-		aplicarAlgoritmoCachePags(int(nro_pagina), frame, respuesta, "WRITE")
+		aplicarAlgoritmoCachePags(int(nro_pagina), frame, dir_fisica.offset, respuesta, "WRITE")
 	}
+
+	utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", *pid_ejecutando, int(nro_pagina), frame)
 
 	log.Printf("Se esta intentando escribir en la direccion fisica [ %d | %d ]", dir_fisica.frame, dir_fisica.offset)
 	return respuesta, dir_fisica
@@ -45,6 +49,7 @@ func requestREAD(direccion_logica int, tamanio int) (string, DireccionFisica) {
 
 	// Encuentro en cache pags
 	if contenido != "NO_ENCONTRE" {
+		utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", *pid_ejecutando, int(nro_pagina), frame)
 		return contenido, dir_fisica
 	}
 
@@ -54,9 +59,10 @@ func requestREAD(direccion_logica int, tamanio int) (string, DireccionFisica) {
 	respuesta, _ := utils.EnviarSolicitudHTTPString("POST", fullUrl, peticion_READ)
 
 	if cache_pags_activa {
-		aplicarAlgoritmoCachePags(int(nro_pagina), frame, respuesta, "READ")
+		aplicarAlgoritmoCachePags(int(nro_pagina), frame, dir_fisica.offset, respuesta, "READ")
 	}
 
+	utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", *pid_ejecutando, int(nro_pagina), frame)
 	log.Printf("Se esta intentando leer en la direccion fisica [ %d | %d ]", dir_fisica.frame, dir_fisica.offset)
 
 	return respuesta, dir_fisica
@@ -99,11 +105,12 @@ func buscarEnTLB(direccion_logica int, nro_pagina int) int {
 			if tlb_activa {
 				tlb[i].last_recently_used = time.Now()
 			}
+
 			return tlb[i].frame
 		}
 	}
 	// Caso TLB MISS
-
+	utils.LoggerConFormato("PID: %d - TLB MISS - Pagina: %d", *pid_ejecutando, nro_pagina)
 	frame := busquedaFrameAMemoria(direccion_logica, float64(nro_pagina))
 	hayEspacioEnTLB, entrada := chequearEspacioEnTLB()
 
@@ -120,6 +127,7 @@ func buscarEnCachePags(dir_logica int, nro_pagina int, accion string) (int, stri
 
 	for i := 0; i <= config_CPU.Cant_entradas_cache; i++ {
 		if cache_pags[i].pagina == nro_pagina {
+			utils.LoggerConFormato("PID: %d- Cache Hit - Pagina: %d", *pid_ejecutando, nro_pagina)
 			switch accion {
 			case "READ":
 				return cache_pags[i].frame, cache_pags[i].contenido
@@ -130,6 +138,8 @@ func buscarEnCachePags(dir_logica int, nro_pagina int, accion string) (int, stri
 
 		}
 	}
+
+	utils.LoggerConFormato("PID: %d- Cache Miss - Pagina: %d", *pid_ejecutando, nro_pagina)
 
 	if tlb_activa {
 		frame := buscarEnTLB(dir_logica, nro_pagina)
@@ -227,21 +237,21 @@ func busquedaMemoriaFrame(dir_logica int, nro_pagina int, accion string) (int, s
 	return frame, ""
 }
 
-func aplicarAlgoritmoCachePags(nro_pagina int, frame int, contenido string, accion string) {
+func aplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int, contenido string, accion string) {
 	algoritmo := config_CPU.Alg_repl_cache
 
 	switch algoritmo {
 	case "CLOCK":
-		for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
+		for i := range config_CPU.Cant_entradas_cache {
 			if cache_pags[i].bit_uso == 0 {
-				actualizarEntradaCache(i, nro_pagina, frame, contenido, accion)
+				actualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
 				return
 			}
 			cache_pags[i].bit_uso = 0
 		}
 		for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
 			if cache_pags[i].bit_uso == 0 {
-				actualizarEntradaCache(i, nro_pagina, frame, contenido, accion)
+				actualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
 				return
 			}
 		}
@@ -256,7 +266,7 @@ func aplicarAlgoritmoCachePags(nro_pagina int, frame int, contenido string, acci
 		// 	}
 		// }
 
-		cicloCLockM(0, 0, 0, nro_pagina, frame, contenido, accion)
+		cicloCLockM(0, 0, 0, nro_pagina, frame, offset, contenido, accion)
 		// 2) Segunda pasada
 		//    u=0;m=1
 		//Si no encuentro, u=0 -> u=1
@@ -267,7 +277,7 @@ func aplicarAlgoritmoCachePags(nro_pagina int, frame int, contenido string, acci
 		// 	}
 		// 	cache_pags[i].bit_uso = 0
 		// }
-		cicloCLockM(1, 0, 1, nro_pagina, frame, contenido, accion)
+		cicloCLockM(1, 0, 1, nro_pagina, frame, offset, contenido, accion)
 		// 3) Tercera pasada
 		// reintento de 1)
 		// for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
@@ -276,7 +286,7 @@ func aplicarAlgoritmoCachePags(nro_pagina int, frame int, contenido string, acci
 		// 		return
 		// 	}
 		// }
-		cicloCLockM(0, 0, 0, nro_pagina, frame, contenido, accion)
+		cicloCLockM(0, 0, 0, nro_pagina, frame, offset, contenido, accion)
 		// 4) Cuarta pasada
 		// reintento de 2)
 		// for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
@@ -285,15 +295,15 @@ func aplicarAlgoritmoCachePags(nro_pagina int, frame int, contenido string, acci
 		// 		return
 		// 	}
 		// }
-		cicloCLockM(0, 0, 1, nro_pagina, frame, contenido, accion)
+		cicloCLockM(0, 0, 1, nro_pagina, frame, offset, contenido, accion)
 	}
 }
 
-func cicloCLockM(sector_extra int, valor_uso int, valor_modificado int, nro_pagina int, frame int, contenido string, accion string) {
+func cicloCLockM(sector_extra int, valor_uso int, valor_modificado int, nro_pagina int, frame int, offset int, contenido string, accion string) {
 
-	for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
+	for i := range config_CPU.Cant_entradas_cache {
 		if cache_pags[i].bit_uso == valor_uso && cache_pags[i].bit_modificado == valor_modificado {
-			actualizarEntradaCache(i, nro_pagina, frame, contenido, accion)
+			actualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
 			return
 		}
 		if sector_extra == 1 {
@@ -303,14 +313,18 @@ func cicloCLockM(sector_extra int, valor_uso int, valor_modificado int, nro_pagi
 	}
 
 }
-func actualizarEntradaCache(posicion int, nro_pagina int, frame int, contenido string, accion string) {
+func actualizarEntradaCache(posicion int, nro_pagina int, frame int, offset int, contenido string, accion string) {
 	cache_pags[posicion].contenido = contenido
 	cache_pags[posicion].frame = frame
+	cache_pags[posicion].offset = offset
 	cache_pags[posicion].pagina = nro_pagina
 	cache_pags[posicion].bit_uso = 1
+
 	if accion == "WRITE" {
 		cache_pags[posicion].bit_modificado = 1
 	}
+
+	utils.LoggerConFormato("PID: %d - Cache Add - Pagina: %d", *pid_ejecutando, nro_pagina)
 }
 
 func MMU(frame int, offset int) DireccionFisica {
@@ -319,4 +333,12 @@ func MMU(frame int, offset int) DireccionFisica {
 		offset: offset,
 	}
 	return dir_fisica
+}
+
+func actualizarPagCompleta(entrada_a_actualizar *EntradaCachePag) {
+	fullUrl := fmt.Sprintf("http://%s/memoria/actualizar_entrada_cache", url_memo)
+	peticion := fmt.Sprintf("%d %d", *pid_ejecutando, entrada_a_actualizar.frame)
+	utils.EnviarSolicitudHTTPString("POST", fullUrl, peticion)
+	utils.LoggerConFormato("PID: %d - Memory Update - Página: %d - Frame: %d",
+		*pid_ejecutando, entrada_a_actualizar.pagina, entrada_a_actualizar.frame)
 }

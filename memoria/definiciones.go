@@ -22,19 +22,18 @@ type Memo struct {
 	l_proc          map[int]*Proceso
 	ptrs_raiz_tpag  map[int]*NivelTPag
 	tabla_frames    []int //sincronizacion
+	metricas        map[int][]int
 }
 
 type Proceso struct {
 	ptr_a_frames_asignados []*int //apunta a elementos de la tabla_frames
 	tamanio                int
-	// [0,1,2,3,4]
-	// HOLA MUNDO COMO ESTAS
-	// {3,1,8,12,0}
 }
 
 type DataSwap struct {
 	ultimo_byte      int
 	espacio_contiguo map[int]*ProcesoEnSwap
+	espacio_libre    []*EspacioLibre
 }
 
 type ProcesoEnSwap struct {
@@ -42,37 +41,9 @@ type ProcesoEnSwap struct {
 	tamanio int
 }
 
-/*
-Proceso marcos asignados
-
-ptr_a_frames_asignados  map[int]*Frame        ->1    ->6     ->8   ->34
-
-
-frames
-   1	   --
-   2	   --
-   3	   --
-   4
-   5
-   6
-   7
-
-[0]  p1 'HOLAMUN'
-[1]  p1 'DOCOMO'
-.
-.
-.
-[79] p1 'ESTAS'
-
-*/
-
-type Metricas struct {
-	accesos_a_tpags        int
-	cant_instr_solicitadas int
-	bajadas_de_swap        int
-	subidas_a_memoria      int
-	cant_read              int
-	cant_write             int
+type EspacioLibre struct {
+	inicio  int
+	tamanio int
 }
 
 type NivelTPag struct {
@@ -80,6 +51,15 @@ type NivelTPag struct {
 	entradas   []*int
 	sgte_nivel *NivelTPag
 }
+
+const (
+	Accesos_a_tpags = iota
+	Cant_instr_solicitadas
+	Bajadas_de_swap
+	Subidas_a_memoria
+	Cant_read
+	Cant_write
+)
 
 var (
 	memoria_principal       []byte
@@ -89,3 +69,5 @@ var (
 	tamanio_pag             int
 	mutex_memoria_principal sync.Mutex
 )
+
+const cant_metricas = 6

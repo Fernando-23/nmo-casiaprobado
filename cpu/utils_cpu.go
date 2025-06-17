@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -29,40 +28,34 @@ func decode(instruccion string) (string, []string) {
 	return cod_op, operacion
 }
 
-func execute(cod_op string, operacion []string) {
+func execute(cod_op string, operacion []string, instruccion_completa string) {
 
-	pid_string := strconv.Itoa(*pid_ejecutando)
+	utils.LoggerConFormato("## PID: %d - Ejecutando: %s", *pid_ejecutando, instruccion_completa)
 	switch cod_op {
 
 	case "NOOP":
 		//consume el tiempo de ciclo de instruccion
-		slog.Info("PID: %d - Ejecutando: %s", pid_string, cod_op)
 
 	case "WRITE":
 		dir_logica, _ := strconv.Atoi(operacion[0])
 		datos := operacion[1]
 
-		slog.Info("## PID: %s - Ejecutando: %s - %s - %s", pid_string, cod_op, operacion[0], datos)
-
 		respuesta, dir_fisica := requestWRITE(dir_logica, datos)
 
-		utils.LoggerConFormato("PID: %d - Acción: ESCRITURA - Dirección Física: [ %d | %d ] - Valor: %s", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, respuesta)
+		utils.LoggerConFormato("PID: %d - Acción: ESCRITURA - Dirección Física: [ %d |  %d  ] - Valor: %s", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, respuesta)
 
 	case "READ":
 		dir_logica, _ := strconv.Atoi(operacion[0])
 		tamanio, _ := strconv.Atoi(operacion[1])
-
-		slog.Info("## PID: %s - Ejecutando: %s - %s - %s", pid_string, cod_op, operacion[0], operacion[1])
 
 		//Gestionar mejor el error :p
 		valor_leido, dir_fisica := requestREAD(dir_logica, tamanio)
 		//si el valor leido es un aviso de direccionamiento invalido
 		//habilitar un hay_interrupcion
 
-		utils.LoggerConFormato("PID: %d - Acción: LEER - Dirección Física: [ %d | %d ] - Valor: %s", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, valor_leido)
+		utils.LoggerConFormato("PID: %d - Acción: LEER - Dirección Física: [ %d |  %d  ] - Valor: %s", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, valor_leido)
 
 	case "GOTO":
-		slog.Info("PID: %s - Ejecutando: %s", pid_string, cod_op)
 
 		nuevo_pc, _ := strconv.Atoi(operacion[0])
 		*pc_ejecutando = nuevo_pc
@@ -108,6 +101,7 @@ func execute(cod_op string, operacion []string) {
 func recibirInterrupt(w http.ResponseWriter, r *http.Request) {
 	var respuesta string
 
+	utils.LoggerConFormato("## Llega interrupción al puerto Interrupt")
 	if err := json.NewDecoder(r.Body).Decode(&respuesta); err != nil {
 		fmt.Println("error decodificando la respuesta: ", err) //revisar porque no podemos usar Errorf
 		return
@@ -135,10 +129,6 @@ func liberarTLB() {
 	inicializarTLB()
 }
 
-func liberarCachePags() {
-	inicializarCachePags()
-}
-
 func inicializarTLB() {
 	for i := 0; i <= config_CPU.Cant_entradas_cache; i++ {
 		cache_pags[i].pagina = -1
@@ -146,8 +136,14 @@ func inicializarTLB() {
 	}
 }
 
-func inicializarCachePags() {
-	for i := 0; i <= config_CPU.Cant_entradas_cache; i++ {
+func reiniciarCachePags() {
+	for i := range config_CPU.Cant_entradas_cache {
+		if cache_pags[i].bit_modificado == 1 {
+			actualizarPagCompleta(cache_pags[i])
+		}
+	}
+
+	for i := range config_CPU.Cant_entradas_cache {
 		cache_pags[i].pagina = -1
 		cache_pags[i].contenido = ""
 	}
@@ -160,7 +156,7 @@ func liberarCaches() {
 	}
 
 	if cache_pags_activa {
-		liberarCachePags()
+		reiniciarCachePags()
 	}
 }
 

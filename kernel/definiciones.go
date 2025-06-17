@@ -111,8 +111,11 @@ const (
 	EstadoReadySuspended
 	EstadoExit
 )
+
 const (
 	IdCPU = iota
 	PC
 	CodOp
 )
+
+var estados_proceso = []string{"NEW", "READY", "EXECUTE", "BLOCKED", "SUSPENDED_BLOCKED", "SUSPENDED_READY", "EXIT"}

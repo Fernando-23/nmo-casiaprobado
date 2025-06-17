@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"slices"
+
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
@@ -63,6 +65,9 @@ func (memo *Memo) Fetch(w http.ResponseWriter, r *http.Request) {
 	// 	return
 	// }
 
+	fmt.Println("La instruccion a enviar es:", instruccion)
+	memo.IncrementarMetrica(pid, Cant_instr_solicitadas)
+	utils.LoggerConFormato("## PID: %d - Obtener instrucción: %d - Instrucción: %s", pid, pc, instruccion)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(instruccion))
 }
@@ -112,6 +117,13 @@ func (memo *Memo) CrearNuevoProceso(pid int, tamanio int, arch_pseudo string) {
 	// 2do check, asignarle frames y crear tablas
 	memo.InicializarTablaPunterosAsociadosA(pid, tamanio)
 
+	// 3er check, inicializar metrica
+	memo.InicializarMetricasPor(pid)
+
+	utils.LoggerConFormato("PID: %d - Proceso Creado - Tamaño: %d", pid, tamanio)
+}
+func (memo *Memo) InicializarMetricasPor(pid int) {
+	memo.metricas[pid] = make([]int, cant_metricas)
 }
 
 func Hanshake(w http.ResponseWriter, r *http.Request) {
@@ -208,13 +220,33 @@ func (memo *Memo) CrearSwapfile() {
 }
 
 func (memo *Memo) CargarDataSwap(pid int, tamanio int) {
+	size_espacio_libre := len(memo.swap.espacio_libre)
+
+	for i := range size_espacio_libre {
+		if tamanio <= memo.swap.espacio_libre[i].tamanio {
+			memo.swap.espacio_contiguo[pid].inicio = memo.swap.espacio_libre[i].inicio
+			memo.swap.espacio_contiguo[pid].tamanio = tamanio
+			memo.swap.espacio_libre = slices.Delete(memo.swap.espacio_libre, i, i+1)
+			return
+		}
+	}
+
 	memo.swap.espacio_contiguo[pid].inicio = memo.swap.ultimo_byte
 	memo.swap.espacio_contiguo[pid].tamanio = tamanio
 	memo.swap.ultimo_byte += tamanio
 }
 
-func (memo *Memo) EscribirEnSwap(pid int) {
-	file, err := os.Open(config_memo.Path_swap)
+func (memo *Memo) EscribirEnSwap(w http.ResponseWriter, r *http.Request) {
+	var request string
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		fmt.Println("error al recibir los datos desde kernel")
+		return
+	}
+
+	pid, _ := strconv.Atoi(request)
+
+	file, err := os.OpenFile(config_memo.Path_swap, os.O_RDWR|os.O_CREATE, 0666)
 
 	if err != nil {
 		fmt.Println("Error en abrir swapfile")
@@ -234,12 +266,25 @@ func (memo *Memo) EscribirEnSwap(pid int) {
 		*ptr_frame_asignado = -1
 		file.Write(contenido_pag)
 	}
+
 	memo.CargarDataSwap(pid, tamanio)
 
 	memo.l_proc[pid].ptr_a_frames_asignados = memo.l_proc[pid].ptr_a_frames_asignados[:0]
+
+	memo.IncrementarMetrica(pid, Bajadas_de_swap)
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
 
-func (memo *Memo) QuitarDeSwap(pid int) {
+func (memo *Memo) QuitarDeSwap(w http.ResponseWriter, r *http.Request) {
+	var request string
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		fmt.Println("error al recibir los datos desde kernel")
+		return
+	}
+
+	pid, _ := strconv.Atoi(request)
+
 	file, err := os.Open(config_memo.Path_swap)
 
 	if err != nil {
@@ -294,6 +339,10 @@ func (memo *Memo) QuitarDeSwap(pid int) {
 
 		copy(memoria_principal[inicio_memo:fin_memo], pagina_a_escribir)
 	}
+
+	memo.IncrementarMetrica(pid, Subidas_a_memoria)
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
 
 func (memo *Memo) InicializarTablaFramesGlobal(cant_frames_memo int) {
@@ -316,6 +365,9 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 
 	if nivel_actual_solicitado != config_memo.Cant_niveles {
 		hacerRetardo()
+
+		memo.IncrementarMetrica(pid, Accesos_a_tpags)
+
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("SEGUI"))
 		return
@@ -323,11 +375,14 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 
 	tabla_asociada_proceso := memo.ptrs_raiz_tpag[pid]
 
-	for nivel := 0; nivel < config_memo.Cant_niveles; nivel++ {
+	for range config_memo.Cant_niveles {
 		tabla_asociada_proceso = tabla_asociada_proceso.sgte_nivel
 	}
 
+	memo.IncrementarMetrica(pid, Accesos_a_tpags)
+
 	respuesta := strconv.Itoa(*tabla_asociada_proceso.entradas[entrada])
+
 	hacerRetardo()
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(respuesta))
@@ -349,7 +404,7 @@ func (memo *Memo) LeerEnMemoria(w http.ResponseWriter, r *http.Request) {
 	offset, _ := strconv.Atoi(aux[2])
 	tamanio_a_leer, _ := strconv.Atoi(aux[3])
 
-	if !memo.confirmacionFrameMio(pid, frame) {
+	if !memo.ConfirmacionFrameMio(pid, frame) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("NO_ES_MI_FRAME_PADRE_NUESTRO...AMEN"))
 		return
@@ -363,6 +418,9 @@ func (memo *Memo) LeerEnMemoria(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	memo.IncrementarMetrica(pid, Cant_read)
+
+	utils.LoggerConFormato("## PID: %d - Lectura - Dir. Física: [ %d |  %d  ] - Tamaño: %d", pid, frame, offset, tamanio_a_leer)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(contenido_leido))
 }
@@ -379,7 +437,7 @@ func (memo *Memo) EscribirEnMemoria(w http.ResponseWriter, r *http.Request) {
 	offset, _ := strconv.Atoi(aux[2])
 	datos_a_escribir := []byte(aux[3])
 
-	if !memo.confirmacionFrameMio(pid, frame) {
+	if !memo.ConfirmacionFrameMio(pid, frame) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("NO_ES_MI_FRAME_PADRE_NUESTRO...AMEN"))
 		return
@@ -394,12 +452,14 @@ func (memo *Memo) EscribirEnMemoria(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	memo.IncrementarMetrica(pid, Cant_write)
 	copy(memoria_principal[base:], datos_a_escribir)
+	utils.LoggerConFormato("## PID: %d - Escritura - Dir. Física: [ %d |  %d  ] - Tamaño: %d ", pid, frame, offset, tamanio_a_escribir)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
 
-func (memo *Memo) confirmacionFrameMio(pid int, frame int) bool {
+func (memo *Memo) ConfirmacionFrameMio(pid int, frame int) bool {
 	cant_frames_asignados_a_pid := len(memo.l_proc[pid].ptr_a_frames_asignados)
 
 	for i := range cant_frames_asignados_a_pid {
@@ -453,7 +513,70 @@ func (memo *Memo) DumpMemory(w http.ResponseWriter, r *http.Request) {
 		file.Write(contenido_pag)
 	}
 
+	utils.LoggerConFormato("## PID: %d - Memory Dump solicitado", pid)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 
+}
+
+func (memo *Memo) EliminarProceso(pid int) bool {
+	proceso_existe := memo.l_proc[pid]
+
+	if proceso_existe != nil {
+		return false
+	}
+
+	frames_asignados_a_pid := memo.l_proc[pid].ptr_a_frames_asignados
+	for i := range frames_asignados_a_pid {
+		ptr_frame_asignado := frames_asignados_a_pid[i]
+		*ptr_frame_asignado = -1
+	}
+
+	memo.EliminarProcesoDeSwap(pid)
+
+	return true
+}
+
+func (memo *Memo) EliminarProcesoDeSwap(pid int) {
+
+	proceso_en_swap := memo.swap.espacio_contiguo[pid]
+
+	delete(memo.swap.espacio_contiguo, pid)
+
+	nueva_instancia_espacio_libre := &EspacioLibre{
+		inicio:  proceso_en_swap.inicio,
+		tamanio: proceso_en_swap.tamanio,
+	}
+
+	memo.swap.espacio_libre = append(memo.swap.espacio_libre, nueva_instancia_espacio_libre)
+
+}
+
+func (memo *Memo) FinalizarProceso(w http.ResponseWriter, r *http.Request) {
+	var request string
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		fmt.Println("error al recibir peticion de WRITE")
+	}
+
+	pid, _ := strconv.Atoi(request)
+
+	eliminado_correctamente := memo.EliminarProceso(pid)
+
+	if !eliminado_correctamente {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("NO_OK"))
+		return
+	}
+
+	mt_a_log := memo.metricas[pid]
+	utils.LoggerConFormato(
+		"## PID: %d - Proceso Destruido - Métricas - Acc.T.Pag: %d; Inst.Sol.: %d; SWAP: %d; Mem.Prin.: %d; Lec.Mem.: %d; Esc.Mem.: %d",
+		pid, mt_a_log[Accesos_a_tpags], mt_a_log[Cant_instr_solicitadas], mt_a_log[Bajadas_de_swap],
+		mt_a_log[Subidas_a_memoria], mt_a_log[Cant_read], mt_a_log[Cant_write])
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
+func (memo *Memo) IncrementarMetrica(pid int, cod_metrica int) {
+	memo.metricas[pid][cod_metrica]++
 }

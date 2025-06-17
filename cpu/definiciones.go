@@ -35,6 +35,7 @@ type EntradaTLB struct {
 type EntradaCachePag struct {
 	pagina         int
 	frame          int
+	offset         int
 	contenido      string
 	bit_uso        int
 	bit_modificado int
