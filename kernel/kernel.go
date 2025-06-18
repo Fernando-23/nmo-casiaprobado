@@ -60,7 +60,15 @@ func main() {
 		panic("Error al iniciar el servidor")
 	}*/
 
-	detenerKernel()
+	waitEnter := make(chan struct{})
+
+	// Lanzamos la rutina que espera el ENTER
+	go esperarEnter(waitEnter)
+
+	fmt.Println("Empezando con la planificacion (se presionó el ENTER)")
+
+	// Esperamos hasta que la gorutine avise que el ENTER fue presionado (queda bloqueada la main rutine)
+	<-waitEnter
 
 	pcb := kernel.IniciarProceso(tamanio, archivoPseudo)
 	fmt.Println("1er Proceso creado: ", pcb.Pid)

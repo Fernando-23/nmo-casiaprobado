@@ -32,13 +32,17 @@ func IniciarConfiguracion[T any](ruta string, estructuraDeConfig *T) error {
 
 }
 
-func detenerKernel() {
+func esperarEnter(signalEnter chan struct{}) {
 
 	fmt.Println("Ingrese ENTER para empezar con la planificacion")
 
-	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	reader := bufio.NewReader(os.Stdin)
+	_, err := reader.ReadBytes('\n')
+	if err != nil {
+		fmt.Println("Error leyendo del teclado:", err)
+	}
 
-	fmt.Println("Empezando con la planificacion")
+	signalEnter <- struct{}{} //Envia una señal para avisar al hilo principal que el usuario presiono Enter
 
 }
 
