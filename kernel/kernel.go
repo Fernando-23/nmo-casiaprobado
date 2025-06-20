@@ -16,13 +16,12 @@ func main() {
 	fmt.Printf("Iniciando Kernel...")
 	cliente.ConfigurarLogger("kernel")
 	kernel := &Kernel{
-		procesoPorEstado: make(map[int][]*PCB),
-		cpusLibres:       make(map[int]*CPU),
-		ConfigKernel:     new(ConfigKernel),
-		ios:              make(map[string]*IOS),
+		cpusLibres:   make(map[int]*CPU),
+		ConfigKernel: new(ConfigKernel),
+		ios:          make(map[string]*IOS),
 	}
 
-	kernel.InicializarEstados()
+	kernel.InicializarMapaDeEstados()
 
 	err := IniciarConfiguracion("config.json", kernel.ConfigKernel)
 
@@ -31,12 +30,11 @@ func main() {
 		return
 	}
 
-	/*err = kernel.HandshakeMemoria()
+	if len(os.Args) < 3 { // ruta archivo-pseudo tamanio
+		fmt.Println("Cantidad de argumentos incorrecta. Uso: ruta <archivo-pseudo> <tamanio>")
+		os.Exit(1)
+	}
 
-	if err != nil {
-		slog.Info("Memoria no activa")
-		return
-	}*/
 	args := os.Args
 
 	archivoPseudo := args[1]
@@ -50,25 +48,28 @@ func main() {
 
 	mux.HandleFunc("/cpu/registrar_cpu", kernel.registrarNuevaCPU)
 	mux.HandleFunc("/cpu/syscall", kernel.RecibirSyscallCPU)
-	mux.HandleFunc("/io/registrar_io", kernel.registrarNuevaIO) // cambiar en io lo que envia
-	mux.HandleFunc("io/recibir_respuesta", kernel.RecibirRespuestaIO)
+	mux.HandleFunc("/kernel/registrar_io", kernel.registrarNuevaIO) // revisado y corregido 20/6
+	mux.HandleFunc("/kernel/desconectar_io", kernel.FinalizarIO)    // revisado y corregido 20/6
+	mux.HandleFunc("/kernel/fin_io", kernel.RecibirFinIO)           // revisado y corregido 20/6
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
 
 	url_socket := fmt.Sprintf(":%d", kernel.ConfigKernel.Puerto_Kernel)
-	go http.ListenAndServe(url_socket, mux)
-	/*if socket_kernel != nil {
-		panic("Error al iniciar el servidor")
-	}*/
 
-	waitEnter := make(chan struct{})
+	go func() {
+		if err := http.ListenAndServe(url_socket, mux); err != nil {
+			fmt.Println("Error al iniciar el servidor HTTP", err)
+			os.Exit(1)
+		}
+	}()
+
+	waitEnter := make(chan struct{}, 1)
 
 	// Lanzamos la rutina que espera el ENTER
 	go esperarEnter(waitEnter)
-
-	fmt.Println("Empezando con la planificacion (se presionó el ENTER)")
-
 	// Esperamos hasta que la gorutine avise que el ENTER fue presionado (queda bloqueada la main rutine)
 	<-waitEnter
+
+	fmt.Println("Empezando con la planificacion (se presionó el ENTER)")
 
 	pcb := kernel.IniciarProceso(tamanio, archivoPseudo)
 	fmt.Println("1er Proceso creado: ", pcb.Pid)

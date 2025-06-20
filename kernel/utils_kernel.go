@@ -18,6 +18,8 @@ import (
 // array de arrays que contenga a todas las colas
 
 func IniciarConfiguracion[T any](ruta string, estructuraDeConfig *T) error {
+
+	fmt.Println("Cargando configuracion desde", ruta)
 	configFile, err := os.Open(ruta)
 	if err != nil {
 		return fmt.Errorf("error al abrir el archivo de configuracion: %w", err)
@@ -46,7 +48,7 @@ func esperarEnter(signalEnter chan struct{}) {
 
 }
 
-func (k *Kernel) InicializarEstados() {
+func (k *Kernel) InicializarMapaDeEstados() {
 	k.procesoPorEstado = make(map[int][]*PCB)
 
 	// Inicializamos todos los estados del map
@@ -77,6 +79,7 @@ func handlecheck(w http.ResponseWriter, r *http.Request) {
 }
 */
 func (k *Kernel) CrearPCB(tamanio int, arch_pseudo string) *PCB {
+
 	pcb := &PCB{
 		Pid:         k.pidActual,
 		Tamanio:     tamanio,
@@ -100,12 +103,12 @@ func FIFO(l_estado *[]*PCB, pcb *PCB) { //FIFO
 
 func cambiarMetricasEstado(pPcb *PCB, posEstado int) {
 	pPcb.Me[posEstado]++ //ver si puede quedar mas lindo
-	pPcb.contador = time.Now()
+	pPcb.HoraIngresoAEstado = time.Now()
 }
 
 func duracionEnEstado(pPcb *PCB) time.Duration {
 	tiempoActual := time.Now()
-	return tiempoActual.Sub(pPcb.contador)
+	return tiempoActual.Sub(pPcb.HoraIngresoAEstado)
 }
 
 func cambiarMetricasTiempo(pPcb *PCB, posEstado int) {
@@ -225,7 +228,7 @@ func (k *Kernel) actualizarEstimacionSJF(pcb *PCB, tiempoEnExecute time.Duration
 
 func (k *Kernel) IniciarProceso(tamanio int, arch_pseudo string) *PCB {
 	pcb := k.CrearPCB(tamanio, arch_pseudo)
-	pcb.contador = time.Now()
+	pcb.HoraIngresoAEstado = time.Now()
 
 	cambiarMetricasEstado(pcb, EstadoNew)
 	//k.AgregarAEstado(EstadoNew, pcb) //meter en la cola new no hay planificacion para meter en la cola new
@@ -359,7 +362,7 @@ func (k *Kernel) ChequearSiHayQueDesalojar() {
 func (k *Kernel) CambiosEnElPlantel(cpu *CPU, pc_a_actualizar int) {
 	// Debutante
 	// CALIENTA KAROL
-	utils.LoggerConFormato("## (%d) - Desalojado por algoritmo SJF/SRT", k.pidActual)
+	utils.LoggerConFormato("## (%d) - Desalojado por algoritmo SJF/SRT", cpu.Pid)
 	proceso_suplente := k.procesoPorEstado[EstadoReady][0]
 
 	proceso_titular := k.BuscarPorPid(EstadoExecute, cpu.Pid)
@@ -619,55 +622,9 @@ func (k *Kernel) GestionarEXIT(cpu_ejecutando *CPU) {
 	}
 }
 
-func (k *Kernel) buscarIOLibre(nombre string) *IO {
-
-	ioMutex.RLock()
-	defer ioMutex.RUnlock()
-
-	if iosDispo, ok := k.ios[nombre]; ok {
-		for _, instancia := range iosDispo.io {
-			if instancia.Esta_libre {
-				return instancia
-			}
-		}
-	}
-
-	return nil
-
-}
-
 func RegistrarCPUaLibre(cpu_a_liberar *CPU) {
 	cpu_a_liberar.Esta_libre = true
 	cpu_a_liberar.Pid = -1
-}
-
-func (k *Kernel) ManejarIO(nombre_io string, cpu_ejecutando *CPU, duracion int) {
-	defer RegistrarCPUaLibre(cpu_ejecutando)
-	io, existeIO := k.ios[nombre_io]
-
-	if !existeIO {
-		k.GestionarEXIT(cpu_ejecutando)
-		return
-	}
-
-	pcb := k.BuscarPorPid(EstadoExecute, cpu_ejecutando.Pid)
-	pcb.Pc = cpu_ejecutando.Pc
-	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, cpu_ejecutando.Pid)
-	go k.temporizadorSuspension(pcb.Pid) // ta raro
-
-	IO_seleccionada := k.buscarIOLibre(nombre_io)
-
-	if IO_seleccionada == nil { //no hay io libre
-		io.procEsperandoPorIO = append(io.procEsperandoPorIO, cpu_ejecutando.Pid)
-		return
-	}
-	// si hay io libre
-	IO_seleccionada.Pid = cpu_ejecutando.Pid
-	//enviar a io
-	IO_seleccionada.Esta_libre = false
-	utils.LoggerConFormato("## (%d) - Bloqueado por IO: %s", IO_seleccionada.Pid, nombre_io)
-	enviarProcesoAIO(IO_seleccionada, duracion)
-
 }
 
 func (k *Kernel) temporizadorSuspension(pid int) {
@@ -678,55 +635,6 @@ func (k *Kernel) temporizadorSuspension(pid int) {
 	if pcb != nil {
 		k.MoverDeEstadoPorPid(EstadoBlock, EstadoBlockSuspended, pid)
 	}
-}
-
-func enviarProcesoAIO(io_seleccionada *IO, duracion int) {
-
-	fullURL := fmt.Sprintf("%s/io/hace_algo", io_seleccionada.Url)
-	datos := fmt.Sprintf("%d %d", io_seleccionada.Pid, duracion)
-
-	utils.EnviarSolicitudHTTPString("POST", fullURL, datos)
-}
-
-func (k *Kernel) RecibirRespuestaIO(w http.ResponseWriter, r *http.Request) {
-	var respuesta string
-	if err := json.NewDecoder(r.Body).Decode(&respuesta); err != nil {
-		fmt.Println("Error recibiendo la solicitud:", err)
-		return
-	}
-
-	data := strings.Split(respuesta, " ")
-
-	if len(data) < 3 {
-		log.Printf("Respuesta IO mal formada: %s", respuesta)
-		return
-	}
-
-	cod_op := data[0]    // cod_op
-	nombre_io := data[1] // nombre_io
-	pid_io, _ := strconv.Atoi(data[2])
-
-	switch cod_op {
-	case "FIN_IO":
-		k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid_io)
-		k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid_io)
-		utils.LoggerConFormato("## (%d) finalizó IO y pasa a READY", pid_io)
-	case "DESCONEXION":
-		k.BorrarIO(nombre_io, pid_io)
-	}
-
-}
-
-func (k *Kernel) BorrarIO(nombre_io string, pid int) {
-
-	iosMismoNombre := k.ios[nombre_io]
-	for i, valor := range iosMismoNombre.io {
-		if valor.Pid == pid {
-			iosMismoNombre.io = append(iosMismoNombre.io[:i], iosMismoNombre.io[i+1:]...)
-			return
-		}
-	}
-	fmt.Printf("No se encontró una instancia con pid %d en %s para desconectar\n", pid, nombre_io)
 }
 
 func (k *Kernel) registrarNuevaCPU(w http.ResponseWriter, r *http.Request) { // Handshake
@@ -771,47 +679,5 @@ func (k *Kernel) registrarNuevaCPU(w http.ResponseWriter, r *http.Request) { // 
 	//RESPONDER OK
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
-
-}
-
-func (k *Kernel) registrarNuevaIO(w http.ResponseWriter, r *http.Request) { // Handshake
-	var io_string string
-	if err := json.NewDecoder(r.Body).Decode(&io_string); err != nil {
-		fmt.Println("Error recibiendo la solicitud:", err)
-		return
-	}
-
-	aux := strings.Split(io_string, " ") // NOMBRE IP PUERTO
-
-	if len(aux) != 3 {
-		http.Error(w, "Formato inválido", http.StatusBadRequest)
-		return
-	}
-
-	nombre_io := aux[0] //Para mas claridad :p
-	url := fmt.Sprintf("http://%s:%s", aux[1], aux[2])
-
-	mutex_ios.Lock()
-	defer mutex_ios.Unlock()
-
-	nuevaIO := &IO{
-		Url:        url,
-		Pid:        -1,
-		Esta_libre: true,
-	}
-
-	// Si no existe una io con ese nombre, lo agrego nuevito
-
-	if _, ok := k.ios[nombre_io]; !ok {
-		// Agrego y sincronizo el nuevo dispositivo io
-
-		k.ios[nombre_io] = &IOS{
-			io:                 []*IO{nuevaIO},
-			procEsperandoPorIO: []int{},
-		}
-	} else {
-		// Sino, actualizo los valores en esa posicion
-		k.ios[nombre_io].io = append(k.ios[nombre_io].io, nuevaIO)
-	}
 
 }

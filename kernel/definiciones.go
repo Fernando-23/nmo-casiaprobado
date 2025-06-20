@@ -21,15 +21,15 @@ type ConfigKernel struct {
 const cantEstados int = 7
 
 type PCB struct {
-	Pid         int
-	Pc          int
-	Me          [cantEstados]int           //Metricas de Estado
-	Mt          [cantEstados]time.Duration //Metricas de Tiempo
-	Tamanio     int                        //revisar a futuro
-	Arch_pseudo string
-	contador    time.Time //revisar a futuro
-	estado      int
-	SJF         *SJF //Estimaciones para planificacion SJF
+	Pid                int
+	Pc                 int
+	Me                 [cantEstados]int           //Metricas de Estado
+	Mt                 [cantEstados]time.Duration //Metricas de Tiempo
+	Tamanio            int                        //revisar a futuro
+	Arch_pseudo        string
+	HoraIngresoAEstado time.Time //revisar a futuro
+	estado             int
+	SJF                *SJF //Estimaciones para planificacion SJF
 }
 
 type SJF struct {
@@ -45,10 +45,17 @@ type CPU struct {
 	Pc         int
 	Esta_libre bool
 }
+
+type ProcesoEsperandoIO struct {
+	pid       int
+	tiempo_io int
+}
+
 type IOS struct {
 	io                 []*IO
-	procEsperandoPorIO []int
+	procEsperandoPorIO []*ProcesoEsperandoIO
 }
+
 type IO struct {
 	Url        string
 	Pid        int
@@ -64,7 +71,6 @@ type Kernel struct {
 }
 
 var (
-	ioMutex           sync.RWMutex
 	mutex_cpus_libres sync.Mutex
 	mutex_ios         sync.Mutex
 	mutex_syscall     sync.Mutex
