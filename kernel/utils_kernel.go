@@ -105,7 +105,7 @@ func FIFO(l_estado *[]*PCB, pcb *PCB) { //FIFO
 
 func cambiarMetricasEstado(pPcb *PCB, posEstado int) {
 	pPcb.Me[posEstado]++ //ver si puede quedar mas lindo
-	pPcb.HoraIngresoAEstado = time.Now()
+
 }
 
 func duracionEnEstado(pPcb *PCB) time.Duration {
@@ -115,18 +115,19 @@ func duracionEnEstado(pPcb *PCB) time.Duration {
 
 func cambiarMetricasTiempo(pPcb *PCB, posEstado int) {
 	pPcb.Mt[posEstado] += duracionEnEstado(pPcb)
-
 }
 
 func (k *Kernel) AgregarAEstado(estado int, pcb *PCB) {
-	mutex_procesoPorEstado.Lock()
-	defer mutex_procesoPorEstado.Unlock()
+	mutex_procesoPorEstado[estado].Lock()
+	defer mutex_procesoPorEstado[estado].Unlock()
+
 	k.procesoPorEstado[estado] = append(k.procesoPorEstado[estado], pcb)
 }
 
 func (k *Kernel) QuitarYObtenerPCB(estado int, pid int) *PCB {
-	mutex_procesoPorEstado.Lock()
-	defer mutex_procesoPorEstado.Unlock()
+	mutex_procesoPorEstado[estado].Lock()
+	defer mutex_procesoPorEstado[estado].Unlock()
+
 	procesos := k.procesoPorEstado[estado]
 	for i, pcb := range procesos {
 		if pcb.Pid == pid {
@@ -138,40 +139,16 @@ func (k *Kernel) QuitarYObtenerPCB(estado int, pid int) *PCB {
 	return nil //no se encontro
 }
 
-func (k *Kernel) MoverDeEstadoPorPid(estadoActual, estadoNuevo int, pid int) {
-	// Buscar el puntero al PCB en el estado actual
-	procesos := k.procesoPorEstado[estadoActual]
-	var pcb *PCB
-	encontrado := false
-	utils.LoggerConFormato("## (%d) Pasa del estado %s al estado %s", pid, estados_proceso[estadoActual], estados_proceso[estadoNuevo])
-	for i, p := range procesos {
-		if p.Pid == pid {
-			pcb = p
-			// Eliminar el puntero del estado actual
-			k.procesoPorEstado[estadoActual] = slices.Delete(procesos, i, i+1)
-			encontrado = true
-			break
-		}
-	}
-
-	if !encontrado {
-		fmt.Printf("Proceso %d no encontrado en el estado %d\n", pid, estadoActual)
-		return
-	}
-
-	// Actualizar metricas
-	cambiarMetricasTiempo(pcb, pcb.estado)
-	cambiarMetricasEstado(pcb, estadoNuevo)
-
-	// Cambiar el estado del proceso
-	pcb.estado = estadoNuevo
-
-	// Agregar el puntero al PCB al nuevo estado
-	k.AgregarAEstado(estadoNuevo, pcb)
-}
-
 func (k *Kernel) QuitarPrimerElemento(estado int) *PCB {
+	mutex_procesoPorEstado[estado].Lock()
+	defer mutex_procesoPorEstado[estado].Unlock()
+
 	pcbs := k.procesoPorEstado[estado]
+
+	if len(pcbs) == 0 {
+		return nil
+	}
+
 	primer_elemento := pcbs[0]
 	k.procesoPorEstado[estado] = pcbs[1:]
 
@@ -179,37 +156,59 @@ func (k *Kernel) QuitarPrimerElemento(estado int) *PCB {
 
 }
 
-func (k *Kernel) MoverDeEstado(estadoActual, estadoNuevo int) {
+func (k *Kernel) MoverDeEstadoPorPid(estadoActual, estadoNuevo int, pid int) {
 	// Buscar el puntero al PCB en el estado actual
-	pcbs := k.procesoPorEstado[estadoActual]
-	if len(pcbs) == 0 {
+	pcb := k.QuitarYObtenerPCB(estadoActual, pid) //aca sincroniza
+
+	if pcb == nil {
+		fmt.Printf("Proceso %d no encontrado en el estado %d\n", pid, estadoActual)
+		return
+	}
+
+	estadoAnterior := estadoActual
+
+	// Actualizar metricas no requiere sincro porque nadie tiene acceso ya a este pcb no pertenece a ningun estado en este instante
+	//sincronizacion inplicita
+
+	cambiarMetricasTiempo(pcb, estadoAnterior)
+
+	pcb.HoraIngresoAEstado = time.Now()
+
+	cambiarMetricasEstado(pcb, estadoNuevo)
+
+	utils.LoggerConFormato("## (%d) Pasa del estado %s al estado %s", pid, estados_proceso[estadoActual], estados_proceso[estadoNuevo])
+
+	// Cambiar el estado del proceso
+	pcb.estado = estadoNuevo
+
+	// Agregar el puntero al PCB al nuevo estado
+	k.AgregarAEstado(estadoNuevo, pcb) //aca sincroniza
+
+}
+
+func (k *Kernel) MoverDeEstado(estadoActual, estadoNuevo int) {
+
+	pcb := k.QuitarPrimerElemento(estadoActual) //ya sincroniza internamente
+
+	if pcb == nil {
 		fmt.Printf("No hay procesos en el estado %d\n", estadoActual)
 		return
 	}
-
-	encontrado := false
-	primera_pos := 0
-	pcb_a_mover := pcbs[primera_pos]
-	// Elimina el pcb del estado actual
-	k.procesoPorEstado[estadoActual] = pcbs[1:]
-	encontrado = true
-
-	if !encontrado {
-		fmt.Printf("Proceso %d no encontrado en el estado %d\n", pcb_a_mover.Pid, estadoActual)
-		return
-	}
-
-	utils.LoggerConFormato("## (%d) Pasa del estado %s al estado %s", pcb_a_mover.Pid, estados_proceso[estadoActual], estados_proceso[estadoNuevo])
-
 	// Actualizar métricas
-	cambiarMetricasTiempo(pcb_a_mover, pcb_a_mover.estado)
-	cambiarMetricasEstado(pcb_a_mover, estadoNuevo)
+	cambiarMetricasTiempo(pcb, estadoActual)
+
+	pcb.HoraIngresoAEstado = time.Now()
+
+	cambiarMetricasEstado(pcb, estadoNuevo)
+
+	utils.LoggerConFormato("## (%d) Pasa del estado %s al estado %s", pcb.Pid, estados_proceso[estadoActual], estados_proceso[estadoNuevo])
 
 	// Cambiar el estado del proceso
-	pcb_a_mover.estado = estadoNuevo
+	pcb.estado = estadoNuevo
 
 	// Agregar el puntero al PCB al nuevo estado
-	k.AgregarAEstado(estadoNuevo, pcb_a_mover)
+	k.AgregarAEstado(estadoNuevo, pcb) //ya sincroniza internamente
+
 }
 
 func (k *Kernel) CrearSJF(pcb *PCB) {
@@ -243,29 +242,31 @@ func (k *Kernel) IniciarProceso(tamanio int, arch_pseudo string) *PCB {
 }
 
 func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, error) {
-	mutex_procesoPorEstado.Lock()
-	defer mutex_procesoPorEstado.Unlock()
+	mutex_procesoPorEstado[EstadoNew].Lock()
+	mutex_procesoPorEstado[EstadoReadySuspended].Lock()
 
 	lista_new := k.procesoPorEstado[EstadoNew]
 	lista_susp_ready := k.procesoPorEstado[EstadoReadySuspended]
 
+	//Caso en en que hay exactamente un proceso en NEW y ninguno en SUSPENDED-READY
 	if len(lista_susp_ready) == 0 && len(lista_new) == 1 {
 		fmt.Println("Soy el primer elemento y no hay procesos en SUSP READY", lista_new[0].Pid)
 		primer_elemento := lista_new[0]
 
 		//hay que desbloquear porque vamos a hacer una peticion http y no da que siga reteniendo el recurso
-		mutex_procesoPorEstado.Unlock()
+		//y ademas como si fuera poco ya no necesita acceder a las listas hasta el mover deestado que tiene su debida sincronizacion
+		mutex_procesoPorEstado[EstadoReadySuspended].Unlock()
+		mutex_procesoPorEstado[EstadoNew].Unlock()
+
 		hay_espacio, err := k.MemoHayEspacio(primer_elemento.Pid, primer_elemento.Tamanio, primer_elemento.Arch_pseudo)
-		mutex_procesoPorEstado.Lock() //recupero el recurso
+
 		if err != nil {
 			log.Printf("Error codificando mensaje: %s", err.Error())
 			return true, err
 		}
 		if hay_espacio {
 			// Cambiar de estado del proceso de NEW a READY
-			k.MoverDeEstado(EstadoNew, EstadoReady)
-
-			//log.Info("## (%d) Pasa del estado NEW al estado READY", *pid)
+			k.MoverDeEstado(EstadoNew, EstadoReady) //aca sincroniza
 		}
 		return true, nil
 	}
@@ -273,24 +274,22 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, error) {
 }
 
 func (k *Kernel) PlanificarLargoPorLista(codLista int) (bool, error) {
-	mutex_procesoPorEstado.Lock()
-	defer mutex_procesoPorEstado.Unlock()
+	mutex_procesoPorEstado[codLista].Lock()
 
-	l_proc := k.procesoPorEstado[codLista]
-
-	if len(l_proc) == 0 {
-		return false, nil //nada para planificar
-	}
 	//si el algoritmo es PCMP, ordenamos antes de tomar el primero
 	if k.ConfigKernel.Ready_ingress_algorithm == "PCMP" {
-		sort.Sort(PorTamanio(l_proc))
+		sort.Sort(PorTamanio(k.procesoPorEstado[codLista]))
 	}
 
-	pcb := l_proc[0]
-	//hay que desbloquear porque vamos a hacer una peticion http y no da que siga reteniendo el recurso
-	mutex_procesoPorEstado.Unlock()
+	mutex_procesoPorEstado[codLista].Unlock()
+
+	pcb := k.QuitarPrimerElemento(codLista)
+
+	if pcb == nil {
+		return false, nil
+	}
+
 	hay_espacio, err := k.MemoHayEspacio(pcb.Pid, pcb.Tamanio, pcb.Arch_pseudo)
-	mutex_procesoPorEstado.Lock()
 
 	if err != nil {
 		return false, err
@@ -304,8 +303,8 @@ func (k *Kernel) PlanificarLargoPorLista(codLista int) (bool, error) {
 }
 
 func (k *Kernel) TieneProcesos(estado int) bool {
-	mutex_procesoPorEstado.Lock()
-	defer mutex_procesoPorEstado.Unlock()
+	mutex_procesoPorEstado[estado].Lock()
+	defer mutex_procesoPorEstado[estado].Unlock()
 	return len(k.procesoPorEstado[estado]) > 0
 }
 
@@ -319,6 +318,9 @@ func (k *Kernel) IntentarEnviarProcesoAReady() (bool, error) {
 
 func (k *Kernel) ObtenerCPULibre() *CPU {
 
+	mutex_cpus_libres.Lock()
+	defer mutex_cpus_libres.Unlock()
+
 	for _, cpu := range k.cpusLibres {
 		if cpu.Esta_libre {
 			return cpu // La primera CPU que esta libre
@@ -328,8 +330,8 @@ func (k *Kernel) ObtenerCPULibre() *CPU {
 }
 
 func (k *Kernel) ChequearSiHayQueDesalojar() {
-	mutex_procesoPorEstado.Lock()
-	defer mutex_procesoPorEstado.Unlock()
+	mutex_procesoPorEstado[EstadoExecute].Lock()
+	defer mutex_procesoPorEstado[EstadoExecute].Unlock()
 
 	mutex_cpus_libres.Lock()
 	defer mutex_cpus_libres.Unlock()
@@ -413,6 +415,10 @@ func EnviarInterrupt(cpu *CPU) int { // yo te hablo por la puerta interrupt y me
 }
 
 func (k *Kernel) BuscarPorPid(estado_actual int, pid_a_buscar int) *PCB {
+
+	mutex_procesoPorEstado[estado_actual].Lock()
+	defer mutex_procesoPorEstado[estado_actual].Unlock()
+
 	// Buscar el puntero al PCB en el estado actual
 	procesos := k.procesoPorEstado[estado_actual]
 	var pcb *PCB
@@ -443,9 +449,6 @@ func (k *Kernel) PlaniCortoPlazo() bool {
 }
 
 func (k *Kernel) IntentarEnviarProcesoAExecute() {
-	mutex_procesoPorEstado.Lock()
-	defer mutex_procesoPorEstado.Unlock()
-
 	if !k.TieneProcesos(EstadoReady) {
 		fmt.Println("No hay procesos en READY")
 		return
@@ -531,44 +534,58 @@ func (k *Kernel) temporizadorSuspension(pid int) {
 func (k *Kernel) registrarNuevaCPU(w http.ResponseWriter, r *http.Request) { // Handshake
 
 	fmt.Println("Al menos, entre a registrar nueva cpu")
-	var cpu_string string
-	if err := json.NewDecoder(r.Body).Decode(&cpu_string); err != nil {
+
+	var mensajeCPU string
+	if err := json.NewDecoder(r.Body).Decode(&mensajeCPU); err != nil {
 		fmt.Println("Error recibiendo la solicitud:", err)
+		http.Error(w, "Error en el formato de la solicitud", http.StatusBadRequest)
 		return
 	}
 
-	aux := strings.Split(cpu_string, " ") //ID IP PUERTO
+	aux := strings.Split(mensajeCPU, " ") //ID IP PUERTO
 
 	if len(aux) != 3 {
 		http.Error(w, "Formato invalido. Esperando: 'ID IP PUERTO'", http.StatusBadRequest)
 		return
 	}
 
-	http.Error(w, "Formato invalido. Esperando: 'ID IP PUERTO'", http.StatusBadRequest)
+	nueva_ID_CPU, err := strconv.Atoi(aux[0])
 
-	nueva_ID_CPU, _ := strconv.Atoi(aux[0])
+	if err != nil {
+		http.Error(w, "ID de CPU inválido", http.StatusBadRequest)
+		return
+	}
+
 	ip := aux[1]
 	puerto := aux[2]
-
 	url := fmt.Sprintf("http://%s:%s/cpu", ip, puerto)
 
 	mutex_cpus_libres.Lock()
-	nueva_cpu := CPU{
-		ID:         nueva_ID_CPU,
-		Url:        url,
-		Pid:        -1,
-		Pc:         0,
-		Esta_libre: true}
-
-	// Agrego y sincronizo el nuevo CPU
 	defer mutex_cpus_libres.Unlock()
 
-	k.cpusLibres[nueva_cpu.ID] = &nueva_cpu
+	if _, existe := k.cpusLibres[nueva_ID_CPU]; existe {
+		http.Error(w, "Ya existe una CPU registrada con ese ID", http.StatusConflict)
+		return
+	}
 
-	fmt.Printf("Se conecto una nueva CPU con ID %d en %s\n", nueva_cpu.ID, url)
+	k.cpusLibres[nueva_ID_CPU] = crearCPU(nueva_ID_CPU, url)
+
+	fmt.Printf("Se conecto una nueva CPU con ID %d en %s\n", nueva_ID_CPU, url)
 
 	//RESPONDER OK
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
+
+}
+
+func crearCPU(id int, url string) *CPU {
+	nueva_cpu := &CPU{
+		ID:         id,
+		Url:        url,
+		Pid:        -1,
+		Pc:         0,
+		Esta_libre: true,
+	}
+	return nueva_cpu
 
 }
