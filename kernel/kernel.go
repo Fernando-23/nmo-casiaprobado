@@ -75,7 +75,7 @@ func main() {
 	fmt.Println("1er Proceso creado: ", pcb.Pid)
 	kernel.AgregarAEstado(EstadoNew, pcb)
 
-	unElemento, err := kernel.ListaNewSoloYo()
+	unElemento, err := kernel.UnicoEnNewYNadaEnSuspReady()
 
 	if err != nil || !unElemento {
 		return

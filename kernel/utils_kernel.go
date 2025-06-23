@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"slices"
+
 	utils "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
@@ -52,7 +54,7 @@ func (k *Kernel) InicializarMapaDeEstados() {
 	k.procesoPorEstado = make(map[int][]*PCB)
 
 	// Inicializamos todos los estados del map
-	for i := 0; i <= EstadoExit; i++ {
+	for i := 0; i < cantEstados; i++ {
 		k.procesoPorEstado[i] = []*PCB{}
 	}
 }
@@ -117,18 +119,23 @@ func cambiarMetricasTiempo(pPcb *PCB, posEstado int) {
 }
 
 func (k *Kernel) AgregarAEstado(estado int, pcb *PCB) {
+	mutex_procesoPorEstado.Lock()
+	defer mutex_procesoPorEstado.Unlock()
 	k.procesoPorEstado[estado] = append(k.procesoPorEstado[estado], pcb)
 }
 
-func (k *Kernel) QuitarDeEstado(estado int, pid int) {
+func (k *Kernel) QuitarYObtenerPCB(estado int, pid int) *PCB {
+	mutex_procesoPorEstado.Lock()
+	defer mutex_procesoPorEstado.Unlock()
 	procesos := k.procesoPorEstado[estado]
 	for i, pcb := range procesos {
 		if pcb.Pid == pid {
 			// Quitar el proceso de la lista del estado
-			k.procesoPorEstado[estado] = append(procesos[:i], procesos[i+1:]...)
-			break
+			k.procesoPorEstado[estado] = slices.Delete(procesos, i, i+1)
+			return pcb
 		}
 	}
+	return nil //no se encontro
 }
 
 func (k *Kernel) MoverDeEstadoPorPid(estadoActual, estadoNuevo int, pid int) {
@@ -141,7 +148,7 @@ func (k *Kernel) MoverDeEstadoPorPid(estadoActual, estadoNuevo int, pid int) {
 		if p.Pid == pid {
 			pcb = p
 			// Eliminar el puntero del estado actual
-			k.procesoPorEstado[estadoActual] = append(procesos[:i], procesos[i+1:]...)
+			k.procesoPorEstado[estadoActual] = slices.Delete(procesos, i, i+1)
 			encontrado = true
 			break
 		}
@@ -235,12 +242,21 @@ func (k *Kernel) IniciarProceso(tamanio int, arch_pseudo string) *PCB {
 	return pcb
 }
 
-func (k *Kernel) ListaNewSoloYo() (bool, error) {
+func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, error) {
+	mutex_procesoPorEstado.Lock()
+	defer mutex_procesoPorEstado.Unlock()
+
 	lista_new := k.procesoPorEstado[EstadoNew]
-	if len(lista_new) == 1 {
-		fmt.Println("Soy el primer elemento", lista_new[0].Pid)
+	lista_susp_ready := k.procesoPorEstado[EstadoReadySuspended]
+
+	if len(lista_susp_ready) == 0 && len(lista_new) == 1 {
+		fmt.Println("Soy el primer elemento y no hay procesos en SUSP READY", lista_new[0].Pid)
 		primer_elemento := lista_new[0]
+
+		//hay que desbloquear porque vamos a hacer una peticion http y no da que siga reteniendo el recurso
+		mutex_procesoPorEstado.Unlock()
 		hay_espacio, err := k.MemoHayEspacio(primer_elemento.Pid, primer_elemento.Tamanio, primer_elemento.Arch_pseudo)
+		mutex_procesoPorEstado.Lock() //recupero el recurso
 		if err != nil {
 			log.Printf("Error codificando mensaje: %s", err.Error())
 			return true, err
@@ -257,58 +273,48 @@ func (k *Kernel) ListaNewSoloYo() (bool, error) {
 }
 
 func (k *Kernel) PlanificarLargoPorLista(codLista int) (bool, error) {
-	if (k.procesoPorEstado[codLista]) != nil {
-		if k.ConfigKernel.Ready_ingress_algorithm == "PCMP" {
-			sort.Sort(PorTamanio(k.procesoPorEstado[codLista]))
-		}
-		pcb := k.procesoPorEstado[codLista][0]
-		hay_espacio, err := k.MemoHayEspacio(pcb.Pid, pcb.Tamanio, pcb.Arch_pseudo)
+	mutex_procesoPorEstado.Lock()
+	defer mutex_procesoPorEstado.Unlock()
 
-		if err != nil {
-			log.Printf("Error codificando mensaje: %s", err.Error())
-			return true, err
-		}
+	l_proc := k.procesoPorEstado[codLista]
 
-		if hay_espacio {
-			// Cambiar de estado del proceso de NEW a READY
-			k.MoverDeEstado(codLista, EstadoReady)
-
-			//log.Info("## (%d) Pasa del estado NEW al estado READY", *pid)
-		}
-		return true, nil
-
+	if len(l_proc) == 0 {
+		return false, nil //nada para planificar
 	}
-	fmt.Println("No hay elementos en Ready Suspended")
+	//si el algoritmo es PCMP, ordenamos antes de tomar el primero
+	if k.ConfigKernel.Ready_ingress_algorithm == "PCMP" {
+		sort.Sort(PorTamanio(l_proc))
+	}
+
+	pcb := l_proc[0]
+	//hay que desbloquear porque vamos a hacer una peticion http y no da que siga reteniendo el recurso
+	mutex_procesoPorEstado.Unlock()
+	hay_espacio, err := k.MemoHayEspacio(pcb.Pid, pcb.Tamanio, pcb.Arch_pseudo)
+	mutex_procesoPorEstado.Lock()
+
+	if err != nil {
+		return false, err
+	}
+
+	if hay_espacio {
+		k.MoverDeEstado(codLista, EstadoReady)
+		return true, nil
+	}
 	return false, nil
 }
 
-func (k *Kernel) PlaniLargoPlazo() error {
-	//fijarte si podes hacer que entre a la cola de new y que prg dsp por el sig
-	// LSR: Lista Suspendido Ready
-	hay_elementosLSR, err := k.PlanificarLargoPorLista(EstadoReadySuspended)
-	if err != nil {
-		return err
-	}
-
-	if !hay_elementosLSR {
-		_, err := k.PlanificarLargoPorLista(EstadoNew)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+func (k *Kernel) TieneProcesos(estado int) bool {
+	mutex_procesoPorEstado.Lock()
+	defer mutex_procesoPorEstado.Unlock()
+	return len(k.procesoPorEstado[estado]) > 0
 }
 
-func (k *Kernel) BolicheMomento(pcb_creado *PCB) { //Plani largo plazo para procesos recien creados
+func (k *Kernel) IntentarEnviarProcesoAReady() (bool, error) {
 
-	if k.ConfigKernel.Ready_ingress_algorithm == "PMCP" || len(k.procesoPorEstado[EstadoNew]) == 1 { //Si es PMCP o soy el primero
-		hay_espacio, _ := k.MemoHayEspacio(pcb_creado.Pid, pcb_creado.Tamanio, pcb_creado.Arch_pseudo)
-		if hay_espacio {
-			k.MoverDeEstadoPorPid(EstadoNew, EstadoReady, pcb_creado.Pid)
-		}
+	if k.TieneProcesos(EstadoReadySuspended) {
+		return k.PlanificarLargoPorLista(EstadoReadySuspended)
 	}
+	return k.PlanificarLargoPorLista(EstadoNew)
 }
 
 func (k *Kernel) ObtenerCPULibre() *CPU {
@@ -322,6 +328,12 @@ func (k *Kernel) ObtenerCPULibre() *CPU {
 }
 
 func (k *Kernel) ChequearSiHayQueDesalojar() {
+	mutex_procesoPorEstado.Lock()
+	defer mutex_procesoPorEstado.Unlock()
+
+	mutex_cpus_libres.Lock()
+	defer mutex_cpus_libres.Unlock()
+
 	primer_elemento := k.procesoPorEstado[EstadoReady][0]
 	estimacion := primer_elemento.SJF.Estimado_actual
 	var maxEstimacionRestante float64 = -1
@@ -413,7 +425,8 @@ func (k *Kernel) BuscarPorPid(estado_actual int, pid_a_buscar int) *PCB {
 	return nil
 }
 
-func (k *Kernel) ReplanificarProceso() bool {
+func (k *Kernel) PlaniCortoPlazo() bool {
+
 	// Para FIFO ya esta preparada la lista
 
 	if k.ConfigKernel.Algoritmo_Plani == "SJF" || k.ConfigKernel.Algoritmo_Plani == "SRT" {
@@ -430,7 +443,10 @@ func (k *Kernel) ReplanificarProceso() bool {
 }
 
 func (k *Kernel) IntentarEnviarProcesoAExecute() {
-	if len(k.procesoPorEstado[EstadoReady]) == 0 {
+	mutex_procesoPorEstado.Lock()
+	defer mutex_procesoPorEstado.Unlock()
+
+	if !k.TieneProcesos(EstadoReady) {
 		fmt.Println("No hay procesos en READY")
 		return
 	}
@@ -438,14 +454,14 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	// intentamos asignarle cpu
 	cpu_seleccionada := k.ObtenerCPULibre()
 
-	chequear_desalojo := k.ReplanificarProceso()
+	hay_que_chequear_desalojo := k.PlaniCortoPlazo()
 
-	//Tomamos el primer PCB tras el sort si era SJF y sino FIFO
+	//Tomamos el primer PCB tras la planificacion
 	indice := 0
 	pcb := k.procesoPorEstado[EstadoReady][indice]
 
 	if cpu_seleccionada == nil { //no hay cpu libre
-		if chequear_desalojo {
+		if hay_que_chequear_desalojo {
 			k.ChequearSiHayQueDesalojar()
 			return
 		}

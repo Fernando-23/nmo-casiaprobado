@@ -18,7 +18,7 @@ type ConfigKernel struct {
 	Ip_kernel               string  `json:"ip_kernel"`
 }
 
-const cantEstados int = 7
+const cantEstados int = 6 //exit es un instante
 
 type PCB struct {
 	Pid                int
@@ -71,9 +71,11 @@ type Kernel struct {
 }
 
 var (
-	mutex_cpus_libres sync.Mutex
-	mutex_ios         sync.Mutex
-	mutex_syscall     sync.Mutex
+	mutex_cpus_libres      sync.Mutex
+	mutex_cpus             sync.Mutex
+	mutex_procesoPorEstado sync.Mutex
+	mutex_ios              sync.Mutex
+	mutex_syscall          sync.Mutex
 )
 
 // PROCESO MAS CHICO PRIMERO
@@ -115,7 +117,6 @@ const (
 	EstadoBlock
 	EstadoBlockSuspended
 	EstadoReadySuspended
-	EstadoExit
 )
 
 const (

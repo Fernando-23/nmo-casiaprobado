@@ -43,8 +43,9 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 		log.Printf("PC invalido: %v", syscall[PC])
 		return
 	}
-
+	mutex_cpus_libres.Lock()
 	cpu_ejecutando := k.cpusLibres[id_cpu]
+	mutex_cpus_libres.Unlock()
 	cod_op := syscall[CodOp]
 
 	utils.LoggerConFormato("## (%d) - Solicitó syscall: %s", cpu_ejecutando.Pid, cod_op)
@@ -85,39 +86,58 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 
 func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int, cpu_ejecutando *CPU) {
 
-	new_pcb := k.IniciarProceso(tamanio, nombre_arch)
-	k.AgregarAEstado(EstadoNew, new_pcb)
-	utils.LoggerConFormato(" (%d) Se crea el proceso - Estado: NEW", cpu_ejecutando.Pid)
+	nuevo_pcb := k.IniciarProceso(tamanio, nombre_arch)
+	k.AgregarAEstado(EstadoNew, nuevo_pcb)
+	utils.LoggerConFormato(" (%d) Se crea el proceso - Estado: NEW", nuevo_pcb.Pid)
 
-	unElemento, err := k.ListaNewSoloYo()
+	unElemento, err := k.UnicoEnNewYNadaEnSuspReady()
 	if err != nil {
 		return
 	}
 	if !unElemento {
-		k.PlaniLargoPlazo()
+		k.IntentarEnviarProcesoAReady()
 	}
 	// cpu_ejecutando.Pc = pc //Actualizar pc para cpu
 }
 
 func (k *Kernel) GestionarEXIT(cpu_ejecutando *CPU) {
-	respuesta, err := k.solicitudEliminarProceso(cpu_ejecutando.Pid)
+	//saco de execute el proceso que esta ejecutando y lo obtengo
+	pcb := k.QuitarYObtenerPCB(EstadoExecute, cpu_ejecutando.Pid)
+
+	//marco la cpu como libre
+	cpu_ejecutando.Esta_libre = true
+
+	//envio solicitud para eliminar proceso
+	k.EliminarProceso(pcb)
+
+}
+
+func (k *Kernel) EliminarProceso(procesoAEliminar *PCB) {
+	respuesta, err := k.solicitudEliminarProceso(procesoAEliminar.Pid)
 	if err != nil {
-		fmt.Println("Error", err)
+		fmt.Println("Error al eliminar proceso en Memoria", err)
+		return
 	}
 
-	if respuesta == "OK" {
-
-		utils.LoggerConFormato("## (%d) - Finaliza el proceso", cpu_ejecutando.Pid)
-		// utils.LoggerConFormato(
-		// 	"## (%d) - Métricas de estado:"+
-		// 		"NEW (%d) (%d), READY (%d) (%d), EXECUTE (%d) (%d)"+
-		// 		",  ", cpu_ejecutando.Pid, k.procesoPorEstado[EstadoNew][cpu_ejecutando.Pid].)
-		k.MoverDeEstadoPorPid(EstadoExecute, EstadoExit, cpu_ejecutando.Pid)
-		k.QuitarDeEstado(cpu_ejecutando.Pid, EstadoExit)
-		//k.EliminarProceso(cpu_ejecutando.Pid)
-		cpu_ejecutando.Esta_libre = true
-		//k.IntentarEnviarProcesoAReady()
+	if respuesta != "OK" {
+		fmt.Println("Memoria no acepto la eliminacion del proceso")
+		return
 	}
+
+	utils.LoggerConFormato("## (%d) - Finaliza el proceso", procesoAEliminar.Pid)
+
+	utils.LoggerConFormato("## (%d) - Métricas de estado: ", procesoAEliminar.Pid)
+
+	for estado := 0; estado < cantEstados; estado++ {
+		utils.LoggerConFormato(
+			"%s (%d) (%s),",
+			estados_proceso[estado],
+			procesoAEliminar.Me[estado],
+			procesoAEliminar.Mt[estado].String(),
+		)
+
+	}
+	k.IntentarEnviarProcesoAReady()
 }
 
 func (k *Kernel) solicitudEliminarProceso(pid int) (string, error) {
