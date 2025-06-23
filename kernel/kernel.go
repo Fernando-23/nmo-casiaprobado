@@ -73,7 +73,7 @@ func main() {
 
 	pcb := kernel.IniciarProceso(tamanio, archivoPseudo)
 	fmt.Println("1er Proceso creado: ", pcb.Pid)
-	kernel.AgregarAEstado(EstadoNew, pcb)
+	kernel.AgregarAEstado(EstadoNew, pcb, true)
 
 	unElemento, err := kernel.UnicoEnNewYNadaEnSuspReady()
 

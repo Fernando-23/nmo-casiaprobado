@@ -39,10 +39,11 @@ type SJF struct {
 }
 
 type CPU struct {
-	ID         int
-	Url        string
-	Pid        int
-	Pc         int
+	ID  int
+	Url string
+	Pid int
+	Pc  int
+	//Esta_reservada bool
 	Esta_libre bool
 }
 

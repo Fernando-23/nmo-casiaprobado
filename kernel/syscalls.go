@@ -18,17 +18,12 @@ func (k *Kernel) RecibirSyscallCPU(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("error creando la solicitud:", err)
 		return
 	}
-
-	syscall := strings.Split(respuesta, " ")
-
-	fmt.Println("PRUEBA, syscall haber como llegas: ", syscall)
-
-	mutex_syscall.Lock()
-	defer mutex_syscall.Unlock()
-	k.GestionarSyscalls(syscall)
+	k.GestionarSyscalls(respuesta)
 }
 
-func (k *Kernel) GestionarSyscalls(syscall []string) {
+func (k *Kernel) GestionarSyscalls(respuesta string) {
+
+	syscall := strings.Split(respuesta, " ")
 
 	id_cpu, err := strconv.Atoi(syscall[IdCPU])
 
@@ -44,8 +39,10 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 		return
 	}
 	mutex_cpus_libres.Lock()
+	defer mutex_cpus_libres.Unlock()
+
 	cpu_ejecutando := k.cpusLibres[id_cpu]
-	mutex_cpus_libres.Unlock()
+
 	cod_op := syscall[CodOp]
 
 	utils.LoggerConFormato("## (%d) - Solicitó syscall: %s", cpu_ejecutando.Pid, cod_op)
@@ -78,8 +75,8 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 		// 2 30 EXIT
 		//finalizarProc
 		k.GestionarEXIT(cpu_ejecutando)
-
 	}
+
 	k.IntentarEnviarProcesoAExecute()
 
 }
@@ -87,7 +84,7 @@ func (k *Kernel) GestionarSyscalls(syscall []string) {
 func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int, cpu_ejecutando *CPU) {
 
 	nuevo_pcb := k.IniciarProceso(tamanio, nombre_arch)
-	k.AgregarAEstado(EstadoNew, nuevo_pcb)
+	k.AgregarAEstado(EstadoNew, nuevo_pcb, true)
 	utils.LoggerConFormato(" (%d) Se crea el proceso - Estado: NEW", nuevo_pcb.Pid)
 
 	unElemento, err := k.UnicoEnNewYNadaEnSuspReady()
@@ -102,7 +99,7 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int, cpu
 
 func (k *Kernel) GestionarEXIT(cpu_ejecutando *CPU) {
 	//saco de execute el proceso que esta ejecutando y lo obtengo
-	pcb := k.QuitarYObtenerPCB(EstadoExecute, cpu_ejecutando.Pid)
+	pcb := k.QuitarYObtenerPCB(EstadoExecute, cpu_ejecutando.Pid, true)
 
 	//marco la cpu como libre
 	cpu_ejecutando.Esta_libre = true

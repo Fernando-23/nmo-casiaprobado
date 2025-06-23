@@ -77,8 +77,8 @@ func (k *Kernel) RecibirFinIO(w http.ResponseWriter, r *http.Request) {
 	pid_io, _ := strconv.Atoi(data[0])
 	nombre_io := data[1]
 
-	k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid_io)
-	k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid_io)
+	k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid_io, true)
+	k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid_io, true)
 
 	k.ActualizarIO(nombre_io, pid_io)
 
@@ -175,9 +175,9 @@ func (k *Kernel) ManejarIO(nombre_io string, cpu_ejecutando *CPU, duracion int) 
 		return
 	}
 
-	pcb := k.BuscarPorPid(EstadoExecute, cpu_ejecutando.Pid)
+	pcb := k.BuscarPorPidSeguro(EstadoExecute, cpu_ejecutando.Pid)
 	pcb.Pc = cpu_ejecutando.Pc
-	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, cpu_ejecutando.Pid)
+	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, cpu_ejecutando.Pid, true)
 	go k.temporizadorSuspension(pcb.Pid) // ta raro
 
 	IO_seleccionada := k.buscarIOLibre(nombre_io)
