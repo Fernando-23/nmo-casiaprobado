@@ -107,6 +107,8 @@ func (k *Kernel) GestionarEXIT(cpu_ejecutando *CPU) {
 	//envio solicitud para eliminar proceso
 	k.EliminarProceso(pcb)
 
+	//marcar cpu como libre
+
 }
 
 func (k *Kernel) EliminarProceso(procesoAEliminar *PCB) {

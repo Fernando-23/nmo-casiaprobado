@@ -72,6 +72,7 @@ type Kernel struct {
 }
 
 var (
+	mutex_pid              sync.Mutex
 	mutex_cpus_libres      sync.Mutex
 	mutex_procesoPorEstado [cantEstados]sync.Mutex
 	mutex_ios              sync.Mutex
