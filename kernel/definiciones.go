@@ -48,35 +48,34 @@ type CPU struct {
 }
 
 type ProcesoEsperandoIO struct {
-	pid       int
-	tiempo_io int
+	Pid      int
+	TiempoIO int
 }
 
-type IOS struct {
-	io                 []*IO
-	procEsperandoPorIO []*ProcesoEsperandoIO
+type InstanciasPorDispositivo struct {
+	Instancias []*DispositivoIO
+	ColaEspera []*ProcesoEsperandoIO
 }
 
-type IO struct {
-	Url        string
-	Pid        int
-	Esta_libre bool
+type DispositivoIO struct {
+	Url         string
+	PidOcupante int
+	Libre       bool
 }
 
 type Kernel struct {
-	procesoPorEstado map[int][]*PCB
-	cpusLibres       map[int]*CPU
-	ios              map[string]*IOS
-	ConfigKernel     *ConfigKernel
-	pidActual        int
+	ProcesoPorEstado map[int][]*PCB
+	CPUsConectadas   map[int]*CPU
+	DispositivosIO   map[string]*InstanciasPorDispositivo
+	Configuracion    *ConfigKernel
+	SiguientePID     int
 }
 
 var (
-	mutex_pid              sync.Mutex
-	mutex_cpus_libres      sync.Mutex
-	mutex_procesoPorEstado [cantEstados]sync.Mutex
-	mutex_ios              sync.Mutex
-	mutex_syscall          sync.Mutex
+	mutex_SiguientePid     sync.Mutex
+	mutex_CPUsConectadas   sync.Mutex
+	mutex_ProcesoPorEstado [cantEstados]sync.Mutex
+	mutex_DispositivosIO   sync.Mutex
 )
 
 // PROCESO MAS CHICO PRIMERO

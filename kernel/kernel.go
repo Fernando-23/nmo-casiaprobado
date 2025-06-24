@@ -16,14 +16,14 @@ func main() {
 	fmt.Printf("Iniciando Kernel...")
 	cliente.ConfigurarLogger("kernel")
 	kernel := &Kernel{
-		cpusLibres:   make(map[int]*CPU),
-		ConfigKernel: new(ConfigKernel),
-		ios:          make(map[string]*IOS),
+		CPUsConectadas: make(map[int]*CPU),
+		Configuracion:  new(ConfigKernel),
+		DispositivosIO: make(map[string]*InstanciasPorDispositivo),
 	}
 
 	kernel.InicializarMapaDeEstados()
 
-	err := IniciarConfiguracion("config.json", kernel.ConfigKernel)
+	err := IniciarConfiguracion("config.json", kernel.Configuracion)
 
 	if err != nil {
 		slog.Info("Error al iniciar config")
@@ -46,14 +46,14 @@ func main() {
 	//Iniciar servidor
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/cpu/registrar_cpu", kernel.llegaNuevaCPU)
+	mux.HandleFunc("/cpu/registrar_cpu", kernel.llegaNuevaCPU) //SINCRO HECHA
 	mux.HandleFunc("/cpu/syscall", kernel.RecibirSyscallCPU)
-	mux.HandleFunc("/kernel/registrar_io", kernel.registrarNuevaIO) // revisado y corregido 20/6
-	mux.HandleFunc("/kernel/desconectar_io", kernel.FinalizarIO)    // revisado y corregido 20/6
-	mux.HandleFunc("/kernel/fin_io", kernel.RecibirFinIO)           // revisado y corregido 20/6
+	mux.HandleFunc("/kernel/registrar_io", kernel.llegaNuevaIO)          // SINCRO HECHA
+	mux.HandleFunc("/kernel/desconectar_io", kernel.llegaDesconeccionIO) // revisado y corregido 20/6
+	mux.HandleFunc("/kernel/fin_io", kernel.llegaFinIO)                  // revisado y corregido 20/6
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
 
-	url_socket := fmt.Sprintf(":%d", kernel.ConfigKernel.Puerto_Kernel)
+	url_socket := fmt.Sprintf(":%d", kernel.Configuracion.Puerto_Kernel)
 
 	go func() {
 		if err := http.ListenAndServe(url_socket, mux); err != nil {

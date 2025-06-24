@@ -27,21 +27,21 @@ func (k *Kernel) GestionarSyscalls(respuesta string) {
 
 	id_cpu, err := strconv.Atoi(syscall[IdCPU])
 
-	if err != nil || id_cpu >= len(k.cpusLibres) { // id_cpu != k.cpusLibres[IdCPU].ID
-		log.Printf("ID de CPU invalido: %v", syscall[IdCPU])
+	if err != nil || id_cpu >= len(k.CPUsConectadas) { // id_cpu != k.cpus[IdCPU].ID
+		log.Printf("[ERROR] ID de CPU invalido: %v", syscall[IdCPU])
 		return
 	}
 
 	pc, err := strconv.Atoi(syscall[PC])
 
 	if err != nil {
-		log.Printf("PC invalido: %v", syscall[PC])
+		log.Printf("[ERROR] PC invalido: %v", syscall[PC])
 		return
 	}
-	mutex_cpus_libres.Lock()
-	defer mutex_cpus_libres.Unlock()
+	mutex_CPUsConectadas.Lock()
+	defer mutex_CPUsConectadas.Unlock()
 
-	cpu_ejecutando := k.cpusLibres[id_cpu]
+	cpu_ejecutando := k.CPUsConectadas[id_cpu]
 
 	cod_op := syscall[CodOp]
 
@@ -141,7 +141,7 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB) {
 
 func (k *Kernel) solicitudEliminarProceso(pid int) (string, error) {
 
-	url := fmt.Sprintf("http://%s:%d/memoria/exit/", k.ConfigKernel.Ip_memoria, k.ConfigKernel.Puerto_Memoria)
+	url := fmt.Sprintf("http://%s:%d/memoria/exit/", k.Configuracion.Ip_memoria, k.Configuracion.Puerto_Memoria)
 	pid_string := strconv.Itoa(pid)
 	respuestaMemo, err := utils.EnviarSolicitudHTTPString("POST", url, pid_string)
 

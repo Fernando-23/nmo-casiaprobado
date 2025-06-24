@@ -51,16 +51,16 @@ func esperarEnter(signalEnter chan struct{}) {
 }
 
 func (k *Kernel) InicializarMapaDeEstados() {
-	k.procesoPorEstado = make(map[int][]*PCB)
+	k.ProcesoPorEstado = make(map[int][]*PCB)
 
 	// Inicializamos todos los estados del map
 	for i := 0; i < cantEstados; i++ {
-		k.procesoPorEstado[i] = []*PCB{}
+		k.ProcesoPorEstado[i] = []*PCB{}
 	}
 }
 
 func (k *Kernel) HandshakeMemoria() error {
-	url := fmt.Sprintf("http://%s:%d/memoria/handshake", k.ConfigKernel.Ip_memoria, k.ConfigKernel.Puerto_Memoria)
+	url := fmt.Sprintf("http://%s:%d/memoria/handshake", k.Configuracion.Ip_memoria, k.Configuracion.Puerto_Memoria)
 	respuesta, err := utils.EnviarSolicitudHTTPString("GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("memoria no responde: %w", err)
@@ -85,10 +85,10 @@ func (k *Kernel) IniciarProceso(tamanio int, arch_pseudo string) *PCB {
 }
 
 func (k *Kernel) CrearPCB(tamanio int, arch_pseudo string) *PCB {
-	mutex_pid.Lock()
-	pidMio := k.pidActual
-	k.pidActual++
-	mutex_pid.Unlock()
+	mutex_SiguientePid.Lock()
+	pidMio := k.SiguientePID
+	k.SiguientePID++
+	mutex_SiguientePid.Unlock()
 
 	pcb := &PCB{
 		Pid:         pidMio,
@@ -97,7 +97,7 @@ func (k *Kernel) CrearPCB(tamanio int, arch_pseudo string) *PCB {
 		Pc:          0,
 	}
 
-	if k.ConfigKernel.Algoritmo_Plani == "SJF" {
+	if k.Configuracion.Algoritmo_Plani == "SJF" {
 		k.CrearSJF(pcb)
 	} else {
 		pcb.SJF = nil
@@ -108,8 +108,8 @@ func (k *Kernel) CrearPCB(tamanio int, arch_pseudo string) *PCB {
 
 func (k *Kernel) CrearSJF(pcb *PCB) {
 	sjf := &SJF{
-		Estimado_anterior: k.ConfigKernel.Estimacion_Inicial,
-		Estimado_actual:   k.ConfigKernel.Estimacion_Inicial,
+		Estimado_anterior: k.Configuracion.Estimacion_Inicial,
+		Estimado_actual:   k.Configuracion.Estimacion_Inicial,
 		Real_anterior:     0, //no ejecuto valor igual a 0
 	}
 	pcb.SJF = sjf
@@ -135,15 +135,15 @@ func (k *Kernel) registrarNuevaCPU(mensajeCPU string) bool {
 	puerto := aux[2]
 	url := fmt.Sprintf("http://%s:%s/cpu", ip, puerto)
 
-	mutex_cpus_libres.Lock()
-	defer mutex_cpus_libres.Unlock()
+	mutex_CPUsConectadas.Lock()
+	defer mutex_CPUsConectadas.Unlock()
 
-	if _, existe := k.cpusLibres[nueva_ID_CPU]; existe {
+	if _, existe := k.CPUsConectadas[nueva_ID_CPU]; existe {
 		fmt.Println("Ya existe una CPU registrada con ese ID")
 		return false
 	}
 
-	k.cpusLibres[nueva_ID_CPU] = crearCPU(nueva_ID_CPU, url)
+	k.CPUsConectadas[nueva_ID_CPU] = crearCPU(nueva_ID_CPU, url)
 
 	fmt.Printf("Se conecto una nueva CPU con ID %d en %s\n", nueva_ID_CPU, url)
 
@@ -178,7 +178,7 @@ func (k *Kernel) actualizarEstimacionSJF(pcb *PCB, tiempoEnExecute time.Duration
 		return
 	}
 	real_anterior := float64(tiempoEnExecute.Milliseconds())
-	alpha := k.ConfigKernel.Alfa
+	alpha := k.Configuracion.Alfa
 	sjf := pcb.SJF
 	aux := sjf.Estimado_actual
 	sjf.Estimado_actual = (alpha * real_anterior) + ((1 - alpha) * sjf.Estimado_anterior)
@@ -188,8 +188,8 @@ func (k *Kernel) actualizarEstimacionSJF(pcb *PCB, tiempoEnExecute time.Duration
 // FUNCIONES PARA BUSQUEDAS
 
 func (k *Kernel) BuscarPorPidSeguro(estado int, pid int) *PCB {
-	mutex_procesoPorEstado[estado].Lock()
-	defer mutex_procesoPorEstado[estado].Unlock()
+	mutex_ProcesoPorEstado[estado].Lock()
+	defer mutex_ProcesoPorEstado[estado].Unlock()
 
 	return k.BuscarPorPidSinLock(estado, pid)
 }
@@ -197,7 +197,7 @@ func (k *Kernel) BuscarPorPidSeguro(estado int, pid int) *PCB {
 func (k *Kernel) BuscarPorPidSinLock(estado int, pid int) *PCB {
 
 	// Buscar el puntero al PCB en el estado actual
-	procesos := k.procesoPorEstado[estado]
+	procesos := k.ProcesoPorEstado[estado]
 	var pcb *PCB
 	for _, proceso := range procesos {
 		if proceso.Pid == pid {
@@ -217,18 +217,18 @@ func duracionEnEstado(pPcb *PCB) time.Duration {
 
 func (k *Kernel) TieneProcesos(estado int) bool {
 
-	return len(k.procesoPorEstado[estado]) > 0
+	return len(k.ProcesoPorEstado[estado]) > 0
 }
 
 func (k *Kernel) ObtenerCPULibre() *CPU {
 
-	mutex_cpus_libres.Lock()
-	defer mutex_cpus_libres.Unlock()
+	mutex_CPUsConectadas.Lock()
+	defer mutex_CPUsConectadas.Unlock()
 
-	for id, cpu := range k.cpusLibres {
+	for id, cpu := range k.CPUsConectadas {
 		if cpu.Esta_libre {
 			//la sacamos para que nadie mas la tome
-			delete(k.cpusLibres, id)
+			delete(k.CPUsConectadas, id)
 			cpu.Esta_libre = false
 			return cpu // La primera CPU que esta libre
 		}
@@ -240,25 +240,25 @@ func (k *Kernel) ObtenerCPULibre() *CPU {
 
 func (k *Kernel) AgregarAEstado(estado int, pcb *PCB, hacerSincro bool) {
 	if hacerSincro {
-		mutex_procesoPorEstado[estado].Lock()
-		defer mutex_procesoPorEstado[estado].Unlock()
+		mutex_ProcesoPorEstado[estado].Lock()
+		defer mutex_ProcesoPorEstado[estado].Unlock()
 	}
 
-	k.procesoPorEstado[estado] = append(k.procesoPorEstado[estado], pcb)
+	k.ProcesoPorEstado[estado] = append(k.ProcesoPorEstado[estado], pcb)
 }
 
 func (k *Kernel) QuitarYObtenerPCB(estado int, pid int, hacerSincro bool) *PCB {
 	if hacerSincro {
-		mutex_procesoPorEstado[estado].Lock()
-		defer mutex_procesoPorEstado[estado].Unlock()
+		mutex_ProcesoPorEstado[estado].Lock()
+		defer mutex_ProcesoPorEstado[estado].Unlock()
 
 	}
 
-	procesos := k.procesoPorEstado[estado]
+	procesos := k.ProcesoPorEstado[estado]
 	for i, pcb := range procesos {
 		if pcb.Pid == pid {
 			// Quitar el proceso de la lista del estado
-			k.procesoPorEstado[estado] = slices.Delete(procesos, i, i+1)
+			k.ProcesoPorEstado[estado] = slices.Delete(procesos, i, i+1)
 			return pcb
 		}
 	}
@@ -267,14 +267,14 @@ func (k *Kernel) QuitarYObtenerPCB(estado int, pid int, hacerSincro bool) *PCB {
 
 func (k *Kernel) QuitarPrimerElemento(estado int) *PCB {
 
-	pcbs := k.procesoPorEstado[estado]
+	pcbs := k.ProcesoPorEstado[estado]
 
 	if len(pcbs) == 0 {
 		return nil
 	}
 
 	primer_elemento := pcbs[0]
-	k.procesoPorEstado[estado] = pcbs[1:]
+	k.ProcesoPorEstado[estado] = pcbs[1:]
 
 	return primer_elemento
 
@@ -338,11 +338,11 @@ func (k *Kernel) MoverDeEstado(estadoActual, estadoNuevo int) {
 // PLANIFICACION
 
 func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, error) {
-	mutex_procesoPorEstado[EstadoNew].Lock()
-	mutex_procesoPorEstado[EstadoReadySuspended].Lock()
+	mutex_ProcesoPorEstado[EstadoNew].Lock()
+	mutex_ProcesoPorEstado[EstadoReadySuspended].Lock()
 
-	lista_new := k.procesoPorEstado[EstadoNew]
-	lista_susp_ready := k.procesoPorEstado[EstadoReadySuspended]
+	lista_new := k.ProcesoPorEstado[EstadoNew]
+	lista_susp_ready := k.ProcesoPorEstado[EstadoReadySuspended]
 
 	//Caso en en que hay exactamente un proceso en NEW y ninguno en SUSPENDED-READY
 	if len(lista_susp_ready) == 0 && len(lista_new) == 1 {
@@ -351,8 +351,8 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, error) {
 
 		//hay que desbloquear porque vamos a hacer una peticion http y no da que siga reteniendo el recurso
 		//y ademas como si fuera poco ya no necesita acceder a las listas hasta el mover deestado que tiene su debida sincronizacion
-		mutex_procesoPorEstado[EstadoReadySuspended].Unlock()
-		mutex_procesoPorEstado[EstadoNew].Unlock()
+		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
+		mutex_ProcesoPorEstado[EstadoNew].Unlock()
 
 		hay_espacio, err := k.MemoHayEspacio(primer_elemento.Pid, primer_elemento.Tamanio, primer_elemento.Arch_pseudo)
 
@@ -370,8 +370,8 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, error) {
 }
 
 func (k *Kernel) IntentarEnviarProcesoAReady() (bool, error) {
-	mutex_procesoPorEstado[EstadoReadySuspended].Lock()
-	mutex_procesoPorEstado[EstadoNew].Lock()
+	mutex_ProcesoPorEstado[EstadoReadySuspended].Lock()
+	mutex_ProcesoPorEstado[EstadoNew].Lock()
 
 	if k.TieneProcesos(EstadoReadySuspended) {
 		return k.PlanificarLargoPorLista(EstadoReadySuspended)
@@ -382,14 +382,14 @@ func (k *Kernel) IntentarEnviarProcesoAReady() (bool, error) {
 func (k *Kernel) PlanificarLargoPorLista(codLista int) (bool, error) {
 
 	//si el algoritmo es PCMP, ordenamos antes de tomar el primero
-	if k.ConfigKernel.Ready_ingress_algorithm == "PCMP" {
-		sort.Sort(PorTamanio(k.procesoPorEstado[codLista]))
+	if k.Configuracion.Ready_ingress_algorithm == "PCMP" {
+		sort.Sort(PorTamanio(k.ProcesoPorEstado[codLista]))
 	}
 
 	pcb := k.QuitarPrimerElemento(codLista)
 
-	mutex_procesoPorEstado[EstadoReadySuspended].Unlock()
-	mutex_procesoPorEstado[EstadoNew].Unlock()
+	mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
+	mutex_ProcesoPorEstado[EstadoNew].Unlock()
 
 	if pcb == nil {
 		return false, nil
@@ -413,13 +413,13 @@ func (k *Kernel) PlaniCortoPlazo() bool {
 
 	// Para FIFO ya esta preparada la lista
 
-	if k.ConfigKernel.Algoritmo_Plani == "SJF" || k.ConfigKernel.Algoritmo_Plani == "SRT" {
-		lista_ready := k.procesoPorEstado[EstadoReady]
+	if k.Configuracion.Algoritmo_Plani == "SJF" || k.Configuracion.Algoritmo_Plani == "SRT" {
+		lista_ready := k.ProcesoPorEstado[EstadoReady]
 		pcb_nuevo_pid := lista_ready[len(lista_ready)-1].Pid
 
-		sort.Sort(PorSJF(k.procesoPorEstado[EstadoReady])) //SJF distinto de nil
+		sort.Sort(PorSJF(k.ProcesoPorEstado[EstadoReady])) //SJF distinto de nil
 
-		if k.ConfigKernel.Algoritmo_Plani == "SRT" && pcb_nuevo_pid == lista_ready[0].Pid { //  10 15 18 31 32 500
+		if k.Configuracion.Algoritmo_Plani == "SRT" && pcb_nuevo_pid == lista_ready[0].Pid { //  10 15 18 31 32 500
 			return true
 		}
 	}
@@ -438,7 +438,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 
 	//Tomamos el primer PCB tras la planificacion
 	indice := 0
-	pcb := k.procesoPorEstado[EstadoReady][indice]
+	pcb := k.ProcesoPorEstado[EstadoReady][indice]
 
 	if cpu_seleccionada == nil { //no hay cpu libre
 		if hay_que_chequear_desalojo {
@@ -462,7 +462,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 }
 
 func (k *Kernel) temporizadorSuspension(pid int) {
-	suspension := time.Duration(k.ConfigKernel.Tiempo_Suspension)
+	suspension := time.Duration(k.Configuracion.Tiempo_Suspension)
 	time.Sleep(suspension)
 
 	pcb := k.BuscarPorPidSeguro(EstadoBlock, pid)
@@ -472,15 +472,15 @@ func (k *Kernel) temporizadorSuspension(pid int) {
 }
 
 func (k *Kernel) ChequearDesalojoPorSRT() {
-	mutex_procesoPorEstado[EstadoExecute].Lock()
-	mutex_procesoPorEstado[EstadoReady].Lock()
-	mutex_cpus_libres.Lock()
+	mutex_ProcesoPorEstado[EstadoExecute].Lock()
+	mutex_ProcesoPorEstado[EstadoReady].Lock()
+	mutex_CPUsConectadas.Lock()
 
-	defer mutex_cpus_libres.Unlock()
-	defer mutex_procesoPorEstado[EstadoReady].Unlock()
-	defer mutex_procesoPorEstado[EstadoExecute].Unlock()
+	defer mutex_CPUsConectadas.Unlock()
+	defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
+	defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 
-	listaReady := k.procesoPorEstado[EstadoReady]
+	listaReady := k.ProcesoPorEstado[EstadoReady]
 
 	if len(listaReady) == 0 {
 		return //no hay procesos en READY, no tiene sentido desalojar
@@ -493,7 +493,7 @@ func (k *Kernel) ChequearDesalojoPorSRT() {
 	var cpuElegida *CPU
 	var procesoEjecutando *PCB
 
-	for _, cpu := range k.cpusLibres {
+	for _, cpu := range k.CPUsConectadas {
 
 		procesoEjecutando = k.BuscarPorPidSinLock(EstadoExecute, cpu.Pid)
 		if procesoEjecutando == nil {
@@ -531,19 +531,20 @@ func (k *Kernel) CambiosEnElPlantel(cpu *CPU, pc_a_actualizar int) {
 	// Debutante
 	// CALIENTA KAROL
 
-	lista_ready := k.procesoPorEstado[EstadoReady]
+	lista_ready := k.ProcesoPorEstado[EstadoReady]
 
 	if len(lista_ready) == 0 {
 		fmt.Printf("Se intento desalojar por SRT pero no hay procesos en ready")
 		return
 	}
 
-	proceso_suplente := k.procesoPorEstado[EstadoReady][0]
+	proceso_suplente := k.ProcesoPorEstado[EstadoReady][0]
 
 	proceso_titular := k.BuscarPorPidSinLock(EstadoExecute, cpu.Pid)
 
 	if proceso_titular == nil {
 		fmt.Printf("Se intentó desalojar por SRT pero no se encontro el proceso a desalojar en execute")
+		return
 	}
 
 	// Actualizamos pc en el pcb del proceso que estaba ejecutando
@@ -598,7 +599,7 @@ func handleDispatch(cpu_seleccionada *CPU) error {
 func (k *Kernel) MemoHayEspacio(pid int, tamanio int, archivoPseudo string) (bool, error) {
 
 	solicitud_memoria := fmt.Sprintf("%d %d %s", pid, tamanio, archivoPseudo)
-	url := fmt.Sprintf("http://%s:%d/memoria/hay_lugar", k.ConfigKernel.Ip_memoria, k.ConfigKernel.Puerto_Memoria)
+	url := fmt.Sprintf("http://%s:%d/memoria/hay_lugar", k.Configuracion.Ip_memoria, k.Configuracion.Puerto_Memoria)
 	respuesta, err := utils.EnviarSolicitudHTTPString("POST", url, solicitud_memoria)
 
 	if err != nil {
@@ -621,8 +622,6 @@ func RegistrarCPUaLibre(cpu_a_liberar *CPU) {
 
 func (k *Kernel) llegaNuevaCPU(w http.ResponseWriter, r *http.Request) { // Handshake
 
-	fmt.Println("Al menos, entre a registrar nueva cpu")
-
 	var mensajeCPU string
 	if err := json.NewDecoder(r.Body).Decode(&mensajeCPU); err != nil {
 		fmt.Println("Error recibiendo la solicitud:", err)
@@ -630,10 +629,12 @@ func (k *Kernel) llegaNuevaCPU(w http.ResponseWriter, r *http.Request) { // Hand
 		return
 	}
 
-	if k.registrarNuevaCPU(mensajeCPU) {
-		//RESPONDER OK
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	}
+	fmt.Printf("CPU recibida con mensaje: %s\n", mensajeCPU)
 
+	if !k.registrarNuevaCPU(mensajeCPU) {
+		http.Error(w, "No se pudo registar la CPU", http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
