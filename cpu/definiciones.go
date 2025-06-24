@@ -46,18 +46,26 @@ var (
 	tlb                     []*EntradaTLB
 	noticiero_metereologico time.Time
 	cache_pags              []*EntradaCachePag
-	url_cpu                 string
-	url_kernel              string
-	url_memo                string
-	hay_interrupcion        bool
-	tlb_activa              bool
-	cache_pags_activa       bool
-	id_cpu                  string
-	pid_ejecutando          *int
-	pc_ejecutando           *int
-	cant_niveles            int
-	cant_entradas_tpag      int
-	tam_pag                 int
-	sem_datos_kernel        sync.Mutex
-	hay_datos               string
+	//url_cpu                 string
+	url_kernel        string
+	url_memo          string
+	hay_interrupcion  bool
+	tlb_activa        bool
+	cache_pags_activa bool
+
+	pid_ejecutando *int
+	pc_ejecutando  *int
+
+	//No hace falta sincronizar
+	id_cpu             string
+	cant_niveles       int
+	cant_entradas_tpag int
+	tam_pag            int
+)
+
+// Mutexs
+// a fer le gustan las bariavlhez glovaldez
+var (
+	ch_esperar_datos       chan struct{}
+	mutex_hay_interrupcion sync.Mutex
 )

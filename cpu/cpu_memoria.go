@@ -15,7 +15,7 @@ func requestWRITE(direccion_logica int, datos string) (string, DireccionFisica) 
 	desplazamiento := int(direccion_logica) % int(tam_pag)
 	nro_pagina := math.Floor(float64(direccion_logica) / float64(tam_pag))
 
-	frame, contenido := busquedaMemoriaFrame(direccion_logica, int(nro_pagina), "WRITE") //el contenido es solo para cache pags activa
+	frame, contenido := busquedaMemoriaFrame(int(nro_pagina), "WRITE") //el contenido es solo para cache pags activa
 
 	dir_fisica := MMU(frame, desplazamiento)
 
@@ -44,7 +44,7 @@ func requestREAD(direccion_logica int, tamanio int) (string, DireccionFisica) {
 	desplazamiento := int(direccion_logica) % int(tam_pag)
 	nro_pagina := math.Floor(float64(direccion_logica) / float64(tam_pag))
 
-	frame, contenido := busquedaMemoriaFrame(direccion_logica, int(nro_pagina), "READ") //el contenido es solo para cache pags activa
+	frame, contenido := busquedaMemoriaFrame(int(nro_pagina), "READ") //el contenido es solo para cache pags activa
 	dir_fisica := MMU(frame, desplazamiento)
 
 	// Encuentro en cache pags
@@ -68,35 +68,36 @@ func requestREAD(direccion_logica int, tamanio int) (string, DireccionFisica) {
 	return respuesta, dir_fisica
 }
 
-func busquedaFrameAMemoria(direccion_logica int, nro_pagina float64) int {
+func busquedaFrameAMemoria(nro_pagina float64) int {
 
 	frame := -1
 
 	for nivel_actual := 1; nivel_actual <= int(cant_niveles); nivel_actual++ {
 		//Santi: Lo mas hardcodeado que vi
 		entrada_nivel_final := int(math.Floor(nro_pagina/math.Pow(float64(cant_entradas_tpag), float64((cant_niveles-nivel_actual))))) % int(cant_entradas_tpag)
-		respuesta := busquedaTabla(*pid_ejecutando, nivel_actual, entrada_nivel_final)
-		// -2 Direccionamiento invalido
-		// -1 Todo bien, sigo al sgte nivel
-		//>=0 Es un frame, lo devuelvo
-		if respuesta >= 0 {
-			utils.LoggerConFormato("PID : %d - OBTENER MARCO - Página: %d - Marco: %d", *pid_ejecutando, int(nro_pagina), respuesta)
-			return frame
 
+		respuesta := busquedaTabla(*pid_ejecutando, nivel_actual, entrada_nivel_final)
+		//    "SEGUI" Todo bien, sigo al sgte nivel
+		// != "SEGUI" Es un frame, lo devuelvo
+		if respuesta != "SEGUI" {
+			frame, _ := strconv.Atoi(respuesta)
+			utils.LoggerConFormato("PID : %d - OBTENER MARCO - Página: %d - Marco: %d", *pid_ejecutando, int(nro_pagina), frame)
+
+			return frame
 		}
+
 	}
 	return frame
 }
 
-func busquedaTabla(pid int, nivel_actual int, entrada_a_acceder int) int {
+func busquedaTabla(pid int, nivel_actual int, entrada_a_acceder int) string {
 	solicitud_acceso_tpaginas := fmt.Sprintf("%d %d %d", pid, nivel_actual, entrada_a_acceder)
 	fullUrl := fmt.Sprintf("http://%s/memoria/busqueda_tabla", url_memo)
-	aux, _ := utils.EnviarSolicitudHTTPString("POST", fullUrl, solicitud_acceso_tpaginas)
-	respuesta, _ := strconv.Atoi(aux)
+	respuesta, _ := utils.EnviarSolicitudHTTPString("POST", fullUrl, solicitud_acceso_tpaginas)
 	return respuesta
 }
 
-func buscarEnTLB(direccion_logica int, nro_pagina int) int {
+func buscarEnTLB(nro_pagina int) int {
 
 	for i := 0; i <= config_CPU.Cant_entradas_TLB; i++ {
 		if tlb[i].pagina == nro_pagina {
@@ -111,7 +112,7 @@ func buscarEnTLB(direccion_logica int, nro_pagina int) int {
 	}
 	// Caso TLB MISS
 	utils.LoggerConFormato("PID: %d - TLB MISS - Pagina: %d", *pid_ejecutando, nro_pagina)
-	frame := busquedaFrameAMemoria(direccion_logica, float64(nro_pagina))
+	frame := busquedaFrameAMemoria(float64(nro_pagina))
 	hayEspacioEnTLB, entrada := chequearEspacioEnTLB()
 
 	if hayEspacioEnTLB {
@@ -123,7 +124,7 @@ func buscarEnTLB(direccion_logica int, nro_pagina int) int {
 	return frame
 }
 
-func buscarEnCachePags(dir_logica int, nro_pagina int, accion string) (int, string) {
+func buscarEnCachePags(nro_pagina int, accion string) (int, string) {
 
 	for i := 0; i <= config_CPU.Cant_entradas_cache; i++ {
 		if cache_pags[i].pagina == nro_pagina {
@@ -142,11 +143,11 @@ func buscarEnCachePags(dir_logica int, nro_pagina int, accion string) (int, stri
 	utils.LoggerConFormato("PID: %d- Cache Miss - Pagina: %d", *pid_ejecutando, nro_pagina)
 
 	if tlb_activa {
-		frame := buscarEnTLB(dir_logica, nro_pagina)
+		frame := buscarEnTLB(nro_pagina)
 		return frame, "NO_ENCONTRE"
 	}
 
-	frame := busquedaFrameAMemoria(dir_logica, float64(nro_pagina))
+	frame := busquedaFrameAMemoria(float64(nro_pagina))
 	return frame, "NO_ENCONTRE"
 
 }
@@ -211,13 +212,13 @@ func chequearEspacioEnTLB() (bool, int) {
 	return false, -1
 }
 
-func busquedaMemoriaFrame(dir_logica int, nro_pagina int, accion string) (int, string) {
+func busquedaMemoriaFrame(nro_pagina int, accion string) (int, string) {
 	/*---------------------------------------------------(frame,contenido,mensaje)
 	frame
 	*/
 
 	if cache_pags_activa {
-		frame, contenido := buscarEnCachePags(dir_logica, nro_pagina, accion)
+		frame, contenido := buscarEnCachePags(nro_pagina, accion)
 		// Caso encontre
 		if contenido != "NO_ENCONTRE" {
 			return frame, contenido
@@ -227,12 +228,12 @@ func busquedaMemoriaFrame(dir_logica int, nro_pagina int, accion string) (int, s
 	}
 
 	if tlb_activa {
-		frame := buscarEnTLB(dir_logica, nro_pagina)
+		frame := buscarEnTLB(nro_pagina)
 		return frame, ""
 
 	}
 
-	frame := busquedaFrameAMemoria(dir_logica, float64(nro_pagina))
+	frame := busquedaFrameAMemoria(float64(nro_pagina))
 
 	return frame, ""
 }

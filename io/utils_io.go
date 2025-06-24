@@ -26,6 +26,7 @@ func RegistrarIO(nombre string) {
 
 func AtenderPeticion(w http.ResponseWriter, r *http.Request) {
 	var peticion_recibida string
+
 	err := json.NewDecoder(r.Body).Decode(&peticion_recibida)
 	if err != nil {
 		log.Println("Error recibiendo datos")
@@ -38,11 +39,19 @@ func AtenderPeticion(w http.ResponseWriter, r *http.Request) {
 
 	utils.LoggerConFormato("## PID: %s - Inicio de IO - Tiempo: %d", pid_recibido, tiempo_recibido)
 
-	time.Sleep(time.Duration(tiempo_recibido) * time.Millisecond)
+	hay_proceso_io = true
+	duracion_en_IO = float64(tiempo_recibido)
+	tiempo_en_IO = time.Now()
 
-	// mandarle el pid
+	select {
+	case <-time.After(time.Duration(tiempo_recibido) * time.Millisecond):
+		utils.LoggerConFormato("Termino correctamente tiempo en io en AtenderPeticion")
 
-	AvisarFinIO(pid_recibido)
+		hay_proceso_io = false
+		AvisarFinIO(pid_recibido)
+	case <-ch_cancelar_IO:
+		utils.LoggerConFormato("IO desconectada en medio de ejecucion de AtenderPeticion")
+	}
 
 }
 
@@ -54,6 +63,14 @@ func AvisarFinIO(pid string) {
 }
 
 func AvisarDesconexionIO() { //gracias que te aviso pa
+
+	if hay_proceso_io {
+		transcurrido := float64(time.Since(tiempo_en_IO).Milliseconds())
+		duracion_en_IO -= transcurrido
+	}
+
 	fullURL := fmt.Sprintf("http://%s:%d/kernel/desconectar_io", config_IO.Ip_kernel, config_IO.Puerto_kernel)
-	utils.EnviarSolicitudHTTPString("POST", fullURL, url_io)
+	peticion := fmt.Sprintf("%s %s %f", nombre_io, url_io, duracion_en_IO)
+	utils.LoggerConFormato("## Avisando desconexion IO: %s", peticion)
+	utils.EnviarSolicitudHTTPString("POST", fullURL, peticion)
 }

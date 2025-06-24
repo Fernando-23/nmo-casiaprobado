@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"slices"
+
 	utils "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
@@ -143,15 +145,33 @@ func (k *Kernel) FinalizarIO(w http.ResponseWriter, r *http.Request) {
 	data := strings.Split(respuesta, " ")
 	nombre_io := data[0]
 	url_io := data[1]
+	tiempo_asociado, err := strconv.Atoi(data[2])
+
+	if err != nil {
+		fmt.Println("Error al convertir:", err)
+		return
+	}
 
 	//mutex IOS
 	mutex_ios.Lock()
 	defer mutex_ios.Unlock()
 
 	ios_del_mismo_nombre := k.ios[nombre_io]
-	for i, valor := range ios_del_mismo_nombre.io {
-		if valor.Url == url_io {
-			ios_del_mismo_nombre.io = append(ios_del_mismo_nombre.io[:i], ios_del_mismo_nombre.io[i+1:]...)
+	for i, instancia := range ios_del_mismo_nombre.io {
+		if instancia.Url == url_io {
+
+			if tiempo_asociado > 0 {
+				aux_a_encolar := &ProcesoEsperandoIO{
+					pid:       instancia.Pid,
+					tiempo_io: tiempo_asociado,
+				}
+
+				ios_del_mismo_nombre.procEsperandoPorIO = append(ios_del_mismo_nombre.procEsperandoPorIO, aux_a_encolar)
+
+			}
+
+			ios_del_mismo_nombre.io = slices.Delete(ios_del_mismo_nombre.io, i, i+1)
+			k.ios[nombre_io] = ios_del_mismo_nombre //actualizo el map
 
 			utils.LoggerConFormato("Una instancia de IO %s fue finalizada", nombre_io)
 			return

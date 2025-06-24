@@ -126,4 +126,4 @@ const (
 	CodOp
 )
 
-var estados_proceso = []string{"NEW", "READY", "EXECUTE", "BLOCKED", "SUSPENDED_BLOCKED", "SUSPENDED_READY", "EXIT"}
+var estados_proceso = []string{"NEW", "READY", "EXECUTE", "BLOCKED", "SUSPENDED_BLOCKED", "SUSPENDED_READY"}

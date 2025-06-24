@@ -23,7 +23,7 @@ func main() {
 	pc_ejecutando = new(int)
 	noticiero_metereologico = time.Now()
 
-	url_cpu = fmt.Sprintf("http://%s:%d", config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
+	//url_cpu = fmt.Sprintf("http://%s:%d", config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
 	url_kernel = fmt.Sprintf("http://%s:%d", config_CPU.Ip_Kernel, config_CPU.Puerto_Kernel)
 	url_memo = fmt.Sprintf("http://%s:%d", config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
 	nombre_logger := fmt.Sprintf("cpu %s", id_cpu)
@@ -63,32 +63,30 @@ func main() {
 	socket_cpu := fmt.Sprintf(":%d", config_CPU.Puerto_CPU)
 	go http.ListenAndServe(socket_cpu, mux)
 	// Ciclo de instruccion
+	ch_esperar_datos = make(chan struct{})
 
 	for {
-		sem_datos_kernel.Lock()
-		if hay_datos != "" {
-			utils.LoggerConFormato("Me unlockee jejeje")
-			time.Sleep(9 * time.Second)
-			for !hay_interrupcion {
-				instruccion = fetch(url_memo)
-				utils.LoggerConFormato("## PID: %d - FETCH - Program Counter: %d", *pid_ejecutando, *pc_ejecutando)
+		<-ch_esperar_datos
 
-				if instruccion == "" {
-					fmt.Printf("No hay una instruccion valida asociado a este Program Counter.")
-					break
-				}
+		for !hay_interrupcion { //consulta el valor en un tiempo t no necesito sincronizar
+			instruccion = fetch(url_memo)
+			utils.LoggerConFormato("## PID: %d - FETCH - Program Counter: %d", *pid_ejecutando, *pc_ejecutando)
 
-				cod_op, operacion := decode(instruccion)
-				fmt.Println("Aca llego la instruccion: ", instruccion)
-				execute(cod_op, operacion, instruccion)
-
+			if instruccion == "" {
+				fmt.Printf("No hay una instruccion valida asociado a este Program Counter.")
+				break
 			}
 
-			actualizarContexto()
-			liberarCaches()
+			cod_op, operacion := decode(instruccion)
+			fmt.Println("Aca llego la instruccion: ", instruccion)
+			execute(cod_op, operacion, instruccion)
 
-			hay_interrupcion = false
 		}
-	}
 
+		actualizarContexto()
+		liberarCaches()
+		HabilitarInterrupt(false)
+
+		utils.LoggerConFormato("## PID: %d - Finaliza la ejecucion", *pid_ejecutando)
+	}
 }

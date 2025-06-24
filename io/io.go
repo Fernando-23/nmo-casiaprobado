@@ -41,7 +41,6 @@ func main() {
 	//Iniciando servidor para peticiones I/O - Kernel
 	mux := http.NewServeMux()
 	mux.HandleFunc("/io/hace_algo", AtenderPeticion)
-
 	url_socket := fmt.Sprintf(":%d", config_IO.Puerto_io)
 
 	go func() {
@@ -53,24 +52,20 @@ func main() {
 
 	//canal peticiones sistema operativo
 	senial_sistema_operativo := make(chan os.Signal, 1)
-	signal.Notify(senial_sistema_operativo, syscall.SIGTERM, syscall.SIGINT)
-
-	//canal para terminar
-
-	signal_ch_terminar_io := make(chan struct{})
-
-	go func() {
-		senial := <-senial_sistema_operativo
-		fmt.Println("Senial desconexion IO recibida:", senial)
-
-		AvisarDesconexionIO()
-
-		signal_ch_terminar_io <- struct{}{}
-	}()
 
 	fmt.Println("Modulo IO esperando seniales (SIGINT o SIGTERM)..")
 
-	<-signal_ch_terminar_io
+	//canal para terminar
+
+	ch_cancelar_IO = make(chan struct{})
+	signal.Notify(senial_sistema_operativo, syscall.SIGTERM, syscall.SIGINT)
+
+	fmt.Println("Modulo IO esperando seniales (SIGINT o SIGTERM)..")
+
+	senial := <-senial_sistema_operativo
+	fmt.Println("Senial desconexion IO recibida:", senial)
+	close(ch_cancelar_IO)
+	AvisarDesconexionIO()
 
 	fmt.Printf("IO %s finalizada.", nombre_io)
 

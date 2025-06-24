@@ -66,26 +66,28 @@ func execute(cod_op string, operacion []string, instruccion_completa string) {
 
 		mensaje_io := fmt.Sprintf("%s %d IO %s %s", id_cpu, *pc_ejecutando, operacion[0], operacion[1])
 		enviarSyscall("IO", mensaje_io)
-		hay_interrupcion = true
+
+		HabilitarInterrupt(true)
+
 	case "INIT_PROC":
 		// ID_CPU PC INIT_PROC proceso1 256
-
 		mensaje_init_proc := fmt.Sprintf("%s %d INIT_PROC %s %s", id_cpu, *pc_ejecutando, operacion[0], operacion[1])
 		enviarSyscall("INIT_PROC", mensaje_init_proc)
-		hay_interrupcion = false
+
+		HabilitarInterrupt(false)
 
 	case "DUMP_MEMORY":
 		// ID_CPU PC DUMP_MEMORY
-
 		mensaje_dump := fmt.Sprintf("%s %d DUMP_MEMORY", id_cpu, *pc_ejecutando)
 		enviarSyscall("DUMP_MEMORY", mensaje_dump)
-		hay_interrupcion = true
+		HabilitarInterrupt(true)
 
 	case "EXIT":
 		// ID_CPU PC DUMP_MEMORY
-		hay_interrupcion = true
 		mensaje_exit := fmt.Sprintf("%s %d EXIT", id_cpu, *pc_ejecutando)
 		enviarSyscall("EXIT", mensaje_exit)
+
+		HabilitarInterrupt(true)
 
 	default:
 		fmt.Println("Error, ingrese una instruccion valida")
@@ -108,7 +110,7 @@ func recibirInterrupt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if respuesta == "OK" {
-		hay_interrupcion = true
+		HabilitarInterrupt(true)
 		return
 	}
 }
@@ -160,4 +162,10 @@ func liberarCaches() {
 	}
 }
 
-var hola int = 0
+func HabilitarInterrupt(valor_vg bool) {
+	mutex_hay_interrupcion.Lock()
+	hay_interrupcion = valor_vg
+	mutex_hay_interrupcion.Unlock()
+}
+
+// var hola int = 0

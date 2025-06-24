@@ -17,7 +17,7 @@ func esperarDatosKernel(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Se produjo un error al deserializar: ", err)
 		return
 	}
-	hay_datos = respuesta
+
 	datos := strings.Split(respuesta, " ")
 	if len(datos) != 2 {
 		http.Error(w, "Se recibio una formato incorrecto", http.StatusBadRequest)
@@ -31,13 +31,14 @@ func esperarDatosKernel(w http.ResponseWriter, r *http.Request) {
 	*pc_ejecutando = pc_aux
 
 	utils.LoggerConFormato("Me llego el proceso con pid %d de kernel", *pid_ejecutando)
-	sem_datos_kernel.Unlock()
+	ch_esperar_datos <- struct{}{}
+
 }
 
-func registrarCpu(url2_kernel string) {
+func registrarCpu(url_kernel string) {
 
 	peticion := fmt.Sprintf("%s %s %d", id_cpu, config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
-	url := fmt.Sprintf("%s/cpu/registrar_cpu", url2_kernel)
+	url := fmt.Sprintf("%s/cpu/registrar_cpu", url_kernel)
 
 	if respuesta, err := utils.EnviarSolicitudHTTPString("POST", url, peticion); err != nil {
 		fmt.Println("Respuesta de Kernel", respuesta)
@@ -64,6 +65,7 @@ func enviarSyscall(cod_op_syscall string, syscall string) {
 func actualizarContexto() {
 
 	url := fmt.Sprintf("%s/cpu/syscall", url_kernel)
+
 	contexto := fmt.Sprintf("%d %d", *pid_ejecutando, *pc_ejecutando)
 	utils.EnviarSolicitudHTTPString("POST", url, contexto)
 

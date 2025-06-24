@@ -1,5 +1,9 @@
 package main
 
+import (
+	"time"
+)
+
 type ConfigIO struct {
 	Ip_kernel     string `json:"ip_kernel"`
 	Puerto_kernel int    `json:"port_kernel"`
@@ -9,7 +13,12 @@ type ConfigIO struct {
 }
 
 var (
-	config_IO *ConfigIO
-	url_io    string
-	nombre_io string
+	config_IO      *ConfigIO
+	url_io         string
+	nombre_io      string
+	hay_proceso_io bool
+
+	duracion_en_IO float64
+	tiempo_en_IO   time.Time
+	ch_cancelar_IO chan struct{}
 )
