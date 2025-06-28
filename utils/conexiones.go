@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 )
 
 func enviarSolicitudHTTP[T any](method string, url string, body interface{}, respuesta *T) error {
@@ -74,6 +75,24 @@ func EnviarSolicitudHTTPString(method string, url string, body interface{}) (str
 	}
 
 	return string(resBody), nil
+}
+
+func EnviarStringSinEsperar(method string, url string, body string) {
+	go func() {
+		req, err := http.NewRequest(method, url, strings.NewReader(body))
+
+		if err != nil {
+			fmt.Printf("ERROR (EnviarSinEsperar) Error creando solicitud HTTP: %v\n", err)
+			return
+		}
+		req.Header.Set("Content-Type", "text/plain")
+
+		client := &http.Client{}
+		_, err = client.Do(req)
+		if err != nil {
+			fmt.Printf("ERROR (EnviarSinEsperar) enviando solicitud HTTP: %v\n", err)
+		}
+	}()
 }
 
 func IniciarConfiguracion[T any](ruta string, estructuraDeConfig *T) error {

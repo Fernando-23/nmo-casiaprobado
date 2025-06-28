@@ -27,21 +27,27 @@ func (k *Kernel) GestionarSyscalls(respuesta string) {
 
 	id_cpu, err := strconv.Atoi(syscall[IdCPU])
 
-	if err != nil || id_cpu >= len(k.CPUsConectadas) { // id_cpu != k.cpus[IdCPU].ID
-		log.Printf("[ERROR] ID de CPU invalido: %v", syscall[IdCPU])
+	mutex_CPUsConectadas.Lock()
+
+	if err != nil {
+		log.Printf("[ERROR] (GestionarSyscalls) ID de CPU no es un número: %v", syscall[IdCPU])
 		return
 	}
 
 	pc, err := strconv.Atoi(syscall[PC])
 
 	if err != nil {
-		log.Printf("[ERROR] PC invalido: %v", syscall[PC])
+		log.Printf("[ERROR] (GestionarSyscalls) PC invalido: %v", syscall[PC])
 		return
 	}
-	mutex_CPUsConectadas.Lock()
-	defer mutex_CPUsConectadas.Unlock()
 
-	cpu_ejecutando := k.CPUsConectadas[id_cpu]
+	mutex_CPUsConectadas.Lock() //pendiente
+	cpu_ejecutando, existe := k.CPUsConectadas[id_cpu]
+	mutex_CPUsConectadas.Unlock()
+	if !existe {
+		log.Printf("[ERROR] (GestionarSyscalls) ID de CPU inexistente: %d", id_cpu)
+		return
+	}
 
 	cod_op := syscall[CodOp]
 
@@ -84,15 +90,14 @@ func (k *Kernel) GestionarSyscalls(respuesta string) {
 func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int, cpu_ejecutando *CPU) {
 
 	nuevo_pcb := k.IniciarProceso(tamanio, nombre_arch)
+	pid := nuevo_pcb.Pid
 	k.AgregarAEstado(EstadoNew, nuevo_pcb, true)
-	utils.LoggerConFormato(" (%d) Se crea el proceso - Estado: NEW", nuevo_pcb.Pid)
+	utils.LoggerConFormato(" (%d) Se crea el proceso - Estado: NEW", pid)
 
-	unElemento, err := k.UnicoEnNewYNadaEnSuspReady()
-	if err != nil {
-		return
-	}
+	unElemento, _ := k.UnicoEnNewYNadaEnSuspReady()
+
 	if !unElemento {
-		k.IntentarEnviarProcesoAReady()
+		k.IntentarEnviarProcesoAReady(EstadoNew, pid)
 	}
 	// cpu_ejecutando.Pc = pc //Actualizar pc para cpu
 }
@@ -136,7 +141,7 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB) {
 		)
 
 	}
-	k.IntentarEnviarProcesoAReady()
+	k.IntentarEnviarProcesosAReady()
 }
 
 func (k *Kernel) solicitudEliminarProceso(pid int) (string, error) {

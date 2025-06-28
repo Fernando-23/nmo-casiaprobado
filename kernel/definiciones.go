@@ -30,6 +30,7 @@ type PCB struct {
 	HoraIngresoAEstado time.Time //revisar a futuro
 	estado             int
 	SJF                *SJF //Estimaciones para planificacion SJF
+	Reservado          bool
 }
 
 type SJF struct {
@@ -64,18 +65,21 @@ type DispositivoIO struct {
 }
 
 type Kernel struct {
-	ProcesoPorEstado map[int][]*PCB
-	CPUsConectadas   map[int]*CPU
-	DispositivosIO   map[string]*InstanciasPorDispositivo
-	Configuracion    *ConfigKernel
-	SiguientePID     int
+	ProcesoPorEstado          map[int][]*PCB
+	ProcesosEsperandoDesalojo map[int]int //cpuID -> pidCandidato
+	CPUsConectadas            map[int]*CPU
+	DispositivosIO            map[string]*InstanciasPorDispositivo
+	Configuracion             *ConfigKernel
+	SiguientePID              int
 }
 
 var (
-	mutex_SiguientePid     sync.Mutex
-	mutex_CPUsConectadas   sync.Mutex
-	mutex_ProcesoPorEstado [cantEstados]sync.Mutex
-	mutex_DispositivosIO   sync.Mutex
+	mutex_desalojos                 sync.Mutex
+	mutex_peticionHayEspacioMemoria sync.Mutex
+	mutex_SiguientePid              sync.Mutex
+	mutex_CPUsConectadas            sync.Mutex
+	mutex_ProcesoPorEstado          [cantEstados]sync.Mutex
+	mutex_DispositivosIO            sync.Mutex
 )
 
 // PROCESO MAS CHICO PRIMERO

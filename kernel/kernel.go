@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 	cliente "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Cliente"
 	servidor "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Servidor"
 )
@@ -16,9 +17,10 @@ func main() {
 	fmt.Printf("Iniciando Kernel...")
 	cliente.ConfigurarLogger("kernel")
 	kernel := &Kernel{
-		CPUsConectadas: make(map[int]*CPU),
-		Configuracion:  new(ConfigKernel),
-		DispositivosIO: make(map[string]*InstanciasPorDispositivo),
+		CPUsConectadas:            make(map[int]*CPU),
+		ProcesosEsperandoDesalojo: make(map[int]int),
+		Configuracion:             new(ConfigKernel),
+		DispositivosIO:            make(map[string]*InstanciasPorDispositivo),
 	}
 
 	kernel.InicializarMapaDeEstados()
@@ -47,6 +49,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/cpu/registrar_cpu", kernel.llegaNuevaCPU) //SINCRO HECHA
+	mux.HandleFunc("/kernel/interrupido", kernel.llegoFinInterrupcion)
 	mux.HandleFunc("/cpu/syscall", kernel.RecibirSyscallCPU)
 	mux.HandleFunc("/kernel/registrar_io", kernel.llegaNuevaIO)          // SINCRO HECHA
 	mux.HandleFunc("/kernel/desconectar_io", kernel.llegaDesconeccionIO) // revisado y corregido 20/6
@@ -72,12 +75,13 @@ func main() {
 	fmt.Println("Empezando con la planificacion (se presionó el ENTER)")
 
 	pcb := kernel.IniciarProceso(tamanio, archivoPseudo)
-	fmt.Println("1er Proceso creado: ", pcb.Pid)
 	kernel.AgregarAEstado(EstadoNew, pcb, true)
+	utils.LoggerConFormato("## (%d) Se crea el proceso - Estado: NEW", pcb.Pid)
 
-	unElemento, err := kernel.UnicoEnNewYNadaEnSuspReady()
+	unElemento, estaEnReady := kernel.UnicoEnNewYNadaEnSuspReady()
 
-	if err != nil || !unElemento {
+	if !estaEnReady || !unElemento {
+		slog.Info("Error: primer proceso no es el unico proceso en el sistema o no paso a ready")
 		return
 	}
 
