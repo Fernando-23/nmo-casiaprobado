@@ -43,7 +43,7 @@ func enviarSolicitudHTTP[T any](method string, url string, body interface{}, res
 	return nil
 }
 
-func EnviarSolicitudHTTPString(method string, url string, body interface{}) (string, error) {
+func EnviarSolicitudHTTPString(method string, url string, body interface{}) (string, error) { //creo que lee mal por el Content-Type application/json del json
 	var requestBody io.Reader
 
 	if body != nil {
@@ -77,6 +77,37 @@ func EnviarSolicitudHTTPString(method string, url string, body interface{}) (str
 	return string(resBody), nil
 }
 
+//Creo dos variantes de EnviarSolicitudHTTPString
+
+// Esta es sincónica o sea se queda esperando el mensaje del server y te lo retorna
+func EnviarStringConEspera(method string, url string, body string) (string, error) {
+	req, err := http.NewRequest(method, url, strings.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("error creando la solicitud: %w", err)
+	}
+	req.Header.Set("Content-Type", "text/plain")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error realizando la solicitud: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		resBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("error servidor: %s", string(resBody))
+	}
+
+	resBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error leyendo la respuesta: %w", err)
+	}
+
+	return string(resBody), nil
+}
+
+// Esta es asincónica o sea se envia el mensaje al server y se las toma (usando una go rutine que esa si espera)
 func EnviarStringSinEsperar(method string, url string, body string) {
 	go func() {
 		req, err := http.NewRequest(method, url, strings.NewReader(body))

@@ -19,31 +19,32 @@ func (k *Kernel) llegaNuevaIO(w http.ResponseWriter, r *http.Request) { // Hands
 		return
 	}
 
-	if !k.registrarNuevaIO(mensajeIO) {
-		http.Error(w, "No se pudo registrar la IO", http.StatusBadRequest)
+	nombre, ip, puerto, err := decodificarMensajeNuevaIO(mensajeIO)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
+
+	go k.registrarNuevaIO(nombre, ip, puerto)
+
+	utils.LoggerConFormato("Fin de registrarNuevaIO, nombre io: %s", nombre)
 }
 
-func (k *Kernel) registrarNuevaIO(mensajeIO string) bool { // Handshake
-	partes := strings.Split(mensajeIO, " ") // Esperado: NOMBRE IP PUERTO
-
+func decodificarMensajeNuevaIO(mensaje string) (nombre, ip, puerto string, err error) {
+	partes := strings.Split(mensaje, " ")
 	if len(partes) != 3 {
-		fmt.Println("Formato invalido, se espera: NOMBRE IP PUERTO")
-		return false
+		return "", "", "", fmt.Errorf("se espera formato: NOMBRE IP PUERTO")
 	}
-
-	nombre := partes[0]
-	ip := partes[1]
-	puerto := partes[2]
-
+	nombre, ip, puerto = partes[0], partes[1], partes[2]
 	if nombre == "" || ip == "" || puerto == "" {
-		fmt.Println("Error: Algunos campos están vacíos")
-		return false
+		return "", "", "", fmt.Errorf("campos vacíos en mensaje")
 	}
+	return nombre, ip, puerto, nil
+}
+
+func (k *Kernel) registrarNuevaIO(nombre, ip, puerto string) { // Handshake
 
 	url := fmt.Sprintf("http://%s:%s", ip, puerto)
 
@@ -70,9 +71,6 @@ func (k *Kernel) registrarNuevaIO(mensajeIO string) bool { // Handshake
 		k.DispositivosIO[nombre].Instancias = append(k.DispositivosIO[nombre].Instancias, nuevaInstancia)
 		fmt.Printf("Se agregó nueva instancia de IO '%s' conectada en %s\n", nombre, url)
 	}
-
-	return true
-
 }
 
 func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {
