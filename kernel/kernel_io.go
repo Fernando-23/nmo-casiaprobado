@@ -179,14 +179,14 @@ func (k *Kernel) ActualizarIO(nombre_io string, pid_asociado_io int) bool {
 	return true
 }
 
-func enviarProcesoAIO(io_seleccionada *DispositivoIO, duracion int) {
+func enviarProcesoAIO(dispositivo *DispositivoIO, duracion int) {
 
-	fullURL := fmt.Sprintf("%s/io/hace_algo", io_seleccionada.Url)
-	datos := fmt.Sprintf("%d %d", io_seleccionada.PidOcupante, duracion)
+	fullURL := fmt.Sprintf("%s/io/hace_algo", dispositivo.Url)
+	datos := fmt.Sprintf("%d %d", dispositivo.PidOcupante, duracion)
 
 	utils.EnviarStringSinEsperar("POST", fullURL, datos)
 
-	utils.LoggerConFormato("## (%d) - Se envió proceso a IO en %s", io_seleccionada.PidOcupante, io_seleccionada.Url)
+	utils.LoggerConFormato("## (%d) - Se envió proceso a IO en %s", dispositivo.PidOcupante, dispositivo.Url)
 }
 
 func (k *Kernel) buscarIOLibre(nombre string) *DispositivoIO {
@@ -265,8 +265,7 @@ func (k *Kernel) FinalizarIO(mensaje_IO string) {
 	fmt.Printf("No se encontro para desconectar una instancia %s de IO pedida", nombreIO)
 }
 
-func (k *Kernel) ManejarIO(nombre_io string, cpu_ejecutando *CPU, duracion int) {
-	defer RegistrarCPUaLibre(cpu_ejecutando)
+func (k *Kernel) ManejarIO(nombre_io string, pid, pc, duracion int) {
 
 	//mutex IOs
 	mutex_DispositivosIO.Lock()
@@ -275,30 +274,46 @@ func (k *Kernel) ManejarIO(nombre_io string, cpu_ejecutando *CPU, duracion int) 
 	iosMismoNombre, existeIO := k.DispositivosIO[nombre_io]
 
 	if !existeIO {
-		k.GestionarEXIT(cpu_ejecutando)
+		utils.LoggerConFormato("ERROR (IO) - No existe el dispositivo: %s", nombre_io)
+		k.GestionarEXIT(pid)
 		return
 	}
 
-	pcb := k.BuscarPorPidSeguro(EstadoExecute, cpu_ejecutando.Pid)
-	pcb.Pc = cpu_ejecutando.Pc
-	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, cpu_ejecutando.Pid, true)
+	mutex_ProcesoPorEstado[EstadoBlock].Lock()
+	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 
-	go k.temporizadorSuspension(pcb.Pid) // ta raro
+	pcb := k.BuscarPorPidSinLock(EstadoExecute, pid)
+	if pcb == nil {
+		utils.LoggerConFormato("ERROR (IO) - No se encontró el PCB del proceso %d en EXECUTE", pid)
+		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+		mutex_ProcesoPorEstado[EstadoBlock].Unlock()
+		return
+	}
+
+	pcb.Pc = pc
+
+	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, false)
+
+	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+	mutex_ProcesoPorEstado[EstadoBlock].Unlock()
+
+	go k.temporizadorSuspension(pid)
 
 	IO_seleccionada := k.buscarIOLibre(nombre_io)
 
 	if IO_seleccionada == nil { //no hay io libre
 		nuevo_proc_esperando := &ProcesoEsperandoIO{
-			Pid:      cpu_ejecutando.Pid,
+			Pid:      pid,
 			TiempoIO: duracion,
 		}
 		iosMismoNombre.ColaEspera = append(iosMismoNombre.ColaEspera, nuevo_proc_esperando)
+		utils.LoggerConFormato("## (%d) - Encolado en espera de IO: %s", pid, nombre_io)
 		return
 	}
 	// si hay io libre
-	IO_seleccionada.PidOcupante = cpu_ejecutando.Pid
-	//enviar a io
+	IO_seleccionada.PidOcupante = pid
 	IO_seleccionada.Libre = false
-	utils.LoggerConFormato("## (%d) - Bloqueado por IO: %s", IO_seleccionada.PidOcupante, nombre_io)
+
+	utils.LoggerConFormato("## (%d) - Bloqueado por IO: %s", pid, nombre_io)
 	enviarProcesoAIO(IO_seleccionada, duracion)
 }

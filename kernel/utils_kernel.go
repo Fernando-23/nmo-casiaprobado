@@ -495,7 +495,6 @@ func (k *Kernel) PlanificarLargoPorLista(codLista int) {
 	if k.Configuracion.Ready_ingress_algorithm == "PCMP" {
 		sort.Sort(PorTamanio(k.ProcesoPorEstado[codLista]))
 	}
-	return
 }
 
 func (k *Kernel) gestionarAccesoAReady(pid int, tamanio int, arch_pseudo string, estadoOrigen int) bool {
@@ -650,13 +649,29 @@ func actualizarCPU(cpu *CPU, pid int, pc int, liberar bool) {
 }
 
 func (k *Kernel) temporizadorSuspension(pid int) {
-	suspension := time.Duration(k.Configuracion.Tiempo_Suspension)
+	suspension := time.Duration(k.Configuracion.Tiempo_Suspension) * time.Millisecond
+	utils.LoggerConFormato("## (%d) - Temporizador de suspensión iniciado por %v", pid, suspension)
+
 	time.Sleep(suspension)
 
-	pcb := k.BuscarPorPidSeguro(EstadoBlock, pid)
+	mutex_ProcesoPorEstado[EstadoBlock].Lock()
+	defer mutex_ProcesoPorEstado[EstadoBlock].Unlock()
+
+	pcb := k.BuscarPorPidSinLock(EstadoBlock, pid)
 	if pcb != nil {
-		k.MoverDeEstadoPorPid(EstadoBlock, EstadoBlockSuspended, pid, true)
+
+		utils.LoggerConFormato("## (%d) - Tiempo de suspensión cumplido, moviendo a SUSPENDED_BLOCKED", pid)
+
+		mutex_ProcesoPorEstado[EstadoBlockSuspended].Lock()
+		defer mutex_ProcesoPorEstado[EstadoBlockSuspended].Unlock()
+
+		k.MoverDeEstadoPorPid(EstadoBlock, EstadoBlockSuspended, pid, false)
+
+		return
+
 	}
+	utils.LoggerConFormato("## (%d) - Proceso ya no está en BLOCKED, no se suspende", pid)
+
 }
 
 func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) {

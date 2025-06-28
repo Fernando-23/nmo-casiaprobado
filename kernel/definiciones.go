@@ -28,8 +28,7 @@ type PCB struct {
 	Tamanio            int                        //revisar a futuro
 	Arch_pseudo        string
 	HoraIngresoAEstado time.Time //revisar a futuro
-	estado             int
-	SJF                *SJF //Estimaciones para planificacion SJF
+	SJF                *SJF      //Estimaciones para planificacion SJF
 	Reservado          bool
 }
 
