@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"slices"
 	"time"
 
@@ -56,7 +57,9 @@ func (k *Kernel) MoverDeEstadoPorPid(estadoActual, estadoNuevo int, pid int, hac
 	pcb := k.QuitarYObtenerPCB(estadoActual, pid, hacerSincro) //aca sincroniza
 
 	if pcb == nil {
-		utils.LoggerConFormato("## ERROR (MoverDeEstadoPorPid) Proceso %d no encontrado en el estado %d\n", pid, estadoActual)
+		slog.Error("Error -(MoverDeEstadoPorPid) - No se encontró  proceso para mover de estado",
+			"pid", pid,
+			"estado_actual", estadoActual)
 		return false
 	}
 

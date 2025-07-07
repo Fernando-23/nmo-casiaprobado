@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -45,6 +47,39 @@ func esperarEnter(signalEnter chan struct{}) {
 }
 
 // ===========================
+// Funciones del Logger
+// ===========================
+
+func ConfigurarLogger(nombre string, nivel string) error {
+	logFile, err := os.OpenFile(nombre+".log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	if err != nil {
+		return fmt.Errorf("no se pudo abrir el archivo de log: %w", err)
+	}
+
+	mw := io.MultiWriter(os.Stdout, logFile)
+
+	var level slog.Level
+	switch strings.ToLower(nivel) {
+	case "debug":
+		level = slog.LevelDebug
+	case "info":
+		level = slog.LevelInfo
+	default:
+		fmt.Println("[WAR][Configurar Logger] se ingresó un logLevel rarito, se usará INFO por defecto")
+		level = slog.LevelInfo
+	}
+
+	handler := slog.NewTextHandler(mw, &slog.HandlerOptions{
+		Level: level,
+	})
+
+	logger := slog.New(handler).With("modulo", nombre)
+	slog.SetDefault(logger)
+
+	return nil
+}
+
+// ===========================
 // Decodificadores de mensajes
 // ===========================
 
@@ -75,20 +110,42 @@ func decodificarMensajeNuevaIO(mensaje string) (nombre, ip, puerto string, err e
 }
 
 func decodificarMensajeFinIO(mensaje string) (pid int, nombre string, err error) {
-	parts := strings.Split(mensaje, " ")
-	if len(parts) < 2 {
+	partes := strings.Split(mensaje, " ")
+	if len(partes) < 2 {
 		return 0, "", fmt.Errorf("formato inválido, se espera 'PID NOMBRE_IO'")
 	}
 
-	pid, err = strconv.Atoi(parts[0])
+	pid, err = strconv.Atoi(partes[0])
 	if err != nil {
 		return 0, "", fmt.Errorf("PID inválido: %v", err)
 	}
 
-	nombre = parts[1]
+	nombre = partes[1]
 	if nombre == "" {
 		return 0, "", fmt.Errorf("nombre de IO vacío")
 	}
 
 	return pid, nombre, nil
+}
+
+func decodificarMensajeDesconeccionIO(mensaje string) (nombre, url string, tiempo int, err error) {
+	partes := strings.Split(mensaje, " ") // Esperado: "NOMBRE_IO URL_IO TIEMPO_IO"
+
+	if len(partes) < 3 {
+		return "", "", 0, fmt.Errorf("formato inválido, se espera 'NOMBRE_IO URL_IO TIEMPO_IO'")
+	}
+
+	nombre = partes[0]
+	if nombre == "" {
+		return "", "", 0, fmt.Errorf("nombre de IO vacío")
+	}
+	url = partes[1]
+	tiempo, err = strconv.Atoi(partes[2])
+
+	if err != nil {
+		return "", "", 0, fmt.Errorf("tiempo inválido: %v", err)
+	}
+
+	return nombre, url, tiempo, nil
+
 }

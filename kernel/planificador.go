@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"sort"
 	"time"
 
@@ -38,13 +39,16 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, bool) { //el primero es si 
 		fmt.Println("Soy el primer elemento y no hay procesos en SUSP READY", lista_new[0].Pid)
 		procCandidatoAReady := k.PrimerElementoSinSacar(EstadoNew)
 
+		slog.Debug("Único proceso de new y no hay procesos en SUSP READY",
+			"pid", procCandidatoAReady.Pid,
+		)
+
 		// me clono los datos por las dudas no vaya ser que el puntero apunte a otro lado
 		pid := procCandidatoAReady.Pid
 		tamanio := procCandidatoAReady.Tamanio
 		arch_pseudo := procCandidatoAReady.Arch_pseudo
 
-		//Liberamos recursos por peticion http pero reservo el proceso
-		MarcarProcesoReservado(procCandidatoAReady, true)
+		//Liberamos recursos por peticion http
 		mutex_ProcesoPorEstado[EstadoNew].Unlock()
 		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
 
@@ -100,9 +104,6 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 	tamanio := procCandidatoAReady.Tamanio
 	arch_pseudo := procCandidatoAReady.Arch_pseudo
 
-	//Resevo el proceso
-	MarcarProcesoReservado(procCandidatoAReady, true)
-
 	//Libero los mutex antes de hacer la peticion HTTP (que puede tardar)
 	mutex_ProcesoPorEstado[EstadoNew].Unlock()
 	mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
@@ -126,8 +127,6 @@ func (k *Kernel) IntentarEnviarProcesosAReady() {
 		pid := procCandidatoAReady.Pid
 		tamanio := procCandidatoAReady.Tamanio
 		arch_pseudo := procCandidatoAReady.Arch_pseudo
-
-		MarcarProcesoReservado(procCandidatoAReady, true)
 
 		mutex_ProcesoPorEstado[EstadoNew].Unlock()
 		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
@@ -154,8 +153,6 @@ func (k *Kernel) IntentarEnviarProcesosAReady() {
 			pid := procCandidatoAReady.Pid
 			tamanio := procCandidatoAReady.Tamanio
 			arch_pseudo := procCandidatoAReady.Arch_pseudo
-
-			MarcarProcesoReservado(procCandidatoAReady, true)
 
 			mutex_ProcesoPorEstado[EstadoNew].Unlock()
 			mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
@@ -186,51 +183,68 @@ func (k *Kernel) PlanificarLargoPorLista(codLista int) {
 func (k *Kernel) gestionarAccesoAReady(pid int, tamanio int, arch_pseudo string, estadoOrigen int) bool {
 
 	//Consultamos memoria ...
-	hay_espacio, err := k.MemoHayEspacio(pid, tamanio, arch_pseudo)
+	hayEspacio, err := k.MemoHayEspacio(pid, tamanio, arch_pseudo)
 
-	if err != nil {
-		mutex_ProcesoPorEstado[estadoOrigen].Lock()
-		defer mutex_ProcesoPorEstado[estadoOrigen].Unlock()
-		utils.LoggerConFormato("MemoHayEspacio retorno el error:  %e", err)
-		utils.LoggerConFormato("Intento deslockear el proceso %d", pid)
-		pcb := k.BuscarPorPidSinLock(estadoOrigen, pid)
-		if pcb == nil {
-			utils.LoggerConFormato("No pude deslockear al proceso %d ya que no estaba en la lista %s", pid, estados_proceso[estadoOrigen])
-			return false
+	mutex_ProcesoPorEstado[estadoOrigen].Lock()
+	defer mutex_ProcesoPorEstado[estadoOrigen].Unlock()
 
-		}
-		MarcarProcesoReservado(pcb, false)
+	pcb := k.BuscarPorPidSinLock(estadoOrigen, pid)
+	if pcb == nil {
+		slog.Error("Error - (gestionarAccesoAReady) - No se encontró el proceso para liberar reserva",
+			"pid", pid,
+			"estado_origen", estados_proceso[estadoOrigen],
+		)
 		return false
 	}
-	if hay_espacio {
-		//Pedimos mutex para intentar pasar al procCandidato de NEW a READY
-		mutex_ProcesoPorEstado[estadoOrigen].Lock()
+
+	if err != nil {
+
+		slog.Error("Error - (gestionarAccesoAReady) - Peticion espacio en memoria",
+			"pid", pid,
+			"estado_origen", estados_proceso[estadoOrigen],
+			"error", err,
+		)
+		return false
+	}
+	if hayEspacio {
+
+		slog.Debug("Hay espacio en memoria, intentando mover proceso a READY",
+			"pid", pid,
+			"estado_origen", estados_proceso[estadoOrigen],
+		)
 		mutex_ProcesoPorEstado[EstadoReady].Lock()
 		defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
-		defer mutex_ProcesoPorEstado[estadoOrigen].Unlock()
 
 		//Checkeo por las dudas que sigue en la misma posicion de memoria
 		procVerificadoAReady := k.QuitarYObtenerPCB(estadoOrigen, pid, false)
 
 		if procVerificadoAReady == nil {
-			utils.LoggerConFormato("## ERROR (gestionarAccesoAReady), el proceso no esta en la lista %s", estados_proceso[estadoOrigen])
+			slog.Error("Error - (gestionarAccesoAReady) - El proceso no está en la lista",
+				"pid", pid,
+				"estado", estados_proceso[estadoOrigen],
+			)
 			return false
 		}
 
-		MarcarProcesoReservado(procVerificadoAReady, false)
 		k.AgregarAEstado(EstadoReady, procVerificadoAReady, false)
 
 		utils.LoggerConFormato("(%d) Pasa del estado <%s> al estado <%s>", pid, estados_proceso[estadoOrigen], estados_proceso[EstadoReady])
 
 		return true
 	}
+
+	slog.Debug("No hay espacio en memoria para mover el proceso a READY",
+		"pid", pid,
+		"estado_origen", estados_proceso[estadoOrigen],
+	)
+
 	return false
 }
 
 func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	mutex_ProcesoPorEstado[EstadoReady].Lock()
 	if !k.TieneProcesos(EstadoReady) {
-		fmt.Println("No hay procesos en READY")
+		slog.Debug("(IntentarEnviarProcesoAExecute) No hay procesos en READY")
 		mutex_ProcesoPorEstado[EstadoReady].Unlock()
 		return
 	}
@@ -239,7 +253,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	//Tomamos el primer PCB "NO" reservado tras la planificacion
 	var pcb *PCB
 	listaReady := k.ProcesoPorEstado[EstadoReady]
-	for i := 0; i < len(listaReady); i++ {
+	for i := range listaReady {
 		candidato := k.ElementoNSinSacar(EstadoReady, i)
 		if !EstaReservado(candidato) {
 			pcb = candidato
@@ -247,38 +261,36 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 		}
 	}
 	if pcb == nil {
-		utils.LoggerConFormato("No hay procesos disponibles en READY que no estén reservados")
+		slog.Debug("(IntentarEnviarProcesoAExecute) No hay procesos disponibles en READY todos reservados")
 		mutex_ProcesoPorEstado[EstadoReady].Unlock()
 		return
 	}
 
-	MarcarProcesoReservado(pcb, true)
+	MarcarProcesoReservado(pcb, "ESPERANDO CPU")
 
 	pid := pcb.Pid
 	pc := pcb.Pc
-
 	mutex_ProcesoPorEstado[EstadoReady].Unlock()
 
 	// intentamos asignarle cpu
 	mutex_CPUsConectadas.Lock()
-
 	cpu_seleccionada := k.ObtenerCPULibre()
 
 	if cpu_seleccionada == nil { //no hay cpu libre
 		if hay_que_chequear_desalojo {
-			mutex_CPUsConectadas.Unlock()
+			slog.Debug("No hay CPU libre, intentando desalojo por SRT", "pid", pid)
 			k.IntentarDesalojoSRT(pid)
 
 		} else {
-			mutex_CPUsConectadas.Unlock()
+			slog.Debug("No hay CPU libre y no se requiere desalojo", "pid", pid)
 		}
+		mutex_CPUsConectadas.Unlock()
 		return
 	}
-
-	actualizarCPU(cpu_seleccionada, pid, pc, false)
+	//voy a liberar la cpu, la reservo
+	reservarCPU(cpu_seleccionada, pid)
 
 	idCPU := cpu_seleccionada.ID
-
 	url := cpu_seleccionada.Url
 
 	mutex_CPUsConectadas.Unlock()
@@ -286,21 +298,24 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	handleDispatch(pid, pc, url)
 
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
+	defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+
 	mutex_ProcesoPorEstado[EstadoReady].Lock()
 	defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
-	defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 
 	//Checkeo por las dudas que sigue en la misma posicion de memoria
 	procVerificadoAExecute := k.QuitarYObtenerPCB(EstadoReady, pid, false)
 
 	if procVerificadoAExecute == nil {
-		utils.LoggerConFormato("## ERROR (IntentarEnviarProcvesoAExecute), el proceso no esta en la lista %s", estados_proceso[EstadoReady])
+		slog.Error("Error - (IntentarEnviarProcesoAExecute) - El proceso no esta en la lista Ready")
 		return
 	}
-	MarcarProcesoReservado(procVerificadoAExecute, false)
+	actualizarCPU(cpu_seleccionada, pid, pc, false)
+
+	MarcarProcesoReservado(procVerificadoAExecute, "NO")
 	k.AgregarAEstado(EstadoExecute, procVerificadoAExecute, false)
 
-	fmt.Printf("Proceso %d a Execute en CPU %d\n", pid, idCPU)
+	slog.Debug("Proceso enviado a EXECUTE", "pid", pid, "cpu_id", idCPU)
 }
 
 func (k *Kernel) PlaniCortoPlazo() bool {
@@ -311,7 +326,7 @@ func (k *Kernel) PlaniCortoPlazo() bool {
 		lista_ready := k.ProcesoPorEstado[EstadoReady]
 		pcb_nuevo_pid := lista_ready[len(lista_ready)-1].Pid
 
-		sort.Sort(PorSJF(k.ProcesoPorEstado[EstadoReady])) //SJF distinto de nil
+		sort.Sort(PorSJF(lista_ready)) //SJF distinto de nil
 
 		if k.Configuracion.Algoritmo_Plani == "SRT" && pcb_nuevo_pid == lista_ready[0].Pid { //  10 15 18 31 32 500
 			return true

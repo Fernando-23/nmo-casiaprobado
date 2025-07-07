@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
@@ -34,8 +35,6 @@ func (k *Kernel) llegaFinInterrupcion(w http.ResponseWriter, r *http.Request) {
 }
 
 func (k *Kernel) antenderFinInterrupcion(idCPU, pidDesalojado, pcActualizado int) {
-	mutex_desalojos.Lock()
-	defer mutex_desalojos.Unlock()
 	mutex_CPUsConectadas.Lock()
 	defer mutex_CPUsConectadas.Unlock()
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
@@ -46,39 +45,42 @@ func (k *Kernel) antenderFinInterrupcion(idCPU, pidDesalojado, pcActualizado int
 	cpu := k.BuscarCPUPorID(idCPU)
 
 	if cpu == nil {
-		utils.LoggerConFormato("ERROR (antenderFinInterrupcion) NO se encontró la CPU con ID %d\n",
-			idCPU)
+		slog.Error("Error - (antenderFinInterrupcion) - NO se encontró la CPU",
+			"id_cpu", idCPU,
+		)
 		return
 	}
-	cpu.Pc = pcActualizado
+
+	if cpu.Pid != pidDesalojado {
+		slog.Error("Error - (antenderFinInterrupcion) - NO coincide el pid recibido con el registrado",
+			"pid_recibido", pidDesalojado,
+			"pid_registrado", cpu.Pid,
+		)
+	}
 
 	procesoEjecutando := k.BuscarPorPidSinLock(EstadoExecute, pidDesalojado)
 
 	if procesoEjecutando == nil {
-		utils.LoggerConFormato("ERROR (antenderFinInterrupcion) NO se encontró el proceso %d en Execute\n",
-			pidDesalojado)
+		slog.Error("Error - (antenderFinInterrupcion) - NO se encontró el proceso en Execute",
+			"pid", cpu.ADesalojarPor,
+		)
 		return
 	}
-	pidQuiereEjecutar, hayEsperando := k.ProcesosEsperandoDesalojo[idCPU]
-
-	if !hayEsperando {
-		utils.LoggerConFormato("ERROR (antenderFinInterrupcion) No hay proceso esperando desalojo para CPU %d\n", idCPU)
-		return
-	}
-	delete(k.ProcesosEsperandoDesalojo, idCPU)
-
-	procesoQuiereEjecutar := k.BuscarPorPidSinLock(EstadoReady, pidQuiereEjecutar)
+	procesoQuiereEjecutar := k.BuscarPorPidSinLock(EstadoReady, cpu.ADesalojarPor)
 
 	if procesoQuiereEjecutar == nil {
-		utils.LoggerConFormato("ERROR (antenderFinInterrupcion) NO se encontró el proceso %d en Ready\n",
-			pidQuiereEjecutar)
+		slog.Error("Error - (antenderFinInterrupcion) - NO se encontró el proceso a ejecutar",
+			"pid", cpu.ADesalojarPor,
+		)
 		return
 	}
 
 	if !k.CambiosEnElPlantel(cpu, procesoEjecutando, procesoQuiereEjecutar) {
-		utils.LoggerConFormato("ERROR (antenderFinInterrupcion) NO se pudo realizar los cambiosEnElPLantel\n")
+		slog.Error("Error - (antenderFinInterrupcion) - NO se pudo realizar los cambiosEnElPLantel")
 		return
 	}
+
+	actualizarCPU(cpu, cpu.ADesalojarPor, pcActualizado, false)
 }
 
 // -----------Informa el Club Atletico Velez Sarsfield------------
@@ -96,7 +98,7 @@ func (k *Kernel) CambiosEnElPlantel(cpuPosicion *CPU, procesoTitular *PCB, proce
 	utils.LoggerConFormato("## (%d) - Desalojado por algoritmo SJF/SRT", cpuPosicion.Pid)
 
 	if !k.MoverDeEstadoPorPid(EstadoExecute, EstadoReady, procesoTitular.Pid, false) {
-		utils.LoggerConFormato("## ERROR (CambiosEnElPlantel) el procesoEjecutando no esta en la lista EXECUTE")
+		slog.Error("Error - (CambiosEnElPlantel) el procesoEjecutando no esta en la lista EXECUTE")
 		return false
 	}
 
@@ -111,21 +113,23 @@ func (k *Kernel) CambiosEnElPlantel(cpuPosicion *CPU, procesoTitular *PCB, proce
 	procVerificadoAExecute := k.QuitarYObtenerPCB(EstadoReady, procesoSuplente.Pid, false)
 
 	if procVerificadoAExecute == nil {
-		utils.LoggerConFormato("## ERROR (CambiosEnElPlantel) el procesoQuiereEjecutar no esta en la lista READY")
+		slog.Error("Error - (CambiosEnElPlantel) el procesoQuiereEjecutar no esta en la lista READY")
 		return false
 	}
 
-	MarcarProcesoReservado(procVerificadoAExecute, false)
+	MarcarProcesoReservado(procVerificadoAExecute, "NO")
 	k.AgregarAEstado(EstadoExecute, procVerificadoAExecute, false)
 
 	utils.LoggerConFormato("(%d) Pasa del estado <%s> al estado <%s>",
 		procesoSuplente.Pid,
 		estados_proceso[EstadoReady],
-		estados_proceso[EstadoExecute])
+		estados_proceso[EstadoExecute],
+	)
 
 	fmt.Printf("CAMBIO: Sale %d (est. %.2f), entra %d (est. %.2f)\n", // Leer con voz de gangoso
 		procesoTitular.Pid, procesoTitular.SJF.Estimado_actual,
-		procesoSuplente.Pid, procesoSuplente.SJF.Estimado_actual)
+		procesoSuplente.Pid, procesoSuplente.SJF.Estimado_actual,
+	)
 	return true
 }
 
@@ -135,24 +139,21 @@ func EnviarInterrupt(cpu *CPU) { // yo te hablo por la puerta interrupt y me des
 }
 
 func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) {
-	mutex_CPUsConectadas.Lock()
+
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
-	mutex_ProcesoPorEstado[EstadoReady].Lock()
-
-	defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
 	defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
-	defer mutex_CPUsConectadas.Unlock()
 
-	listaReady := k.ProcesoPorEstado[EstadoReady]
+	mutex_ProcesoPorEstado[EstadoReady].Lock()
+	defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
 
-	if len(listaReady) == 0 {
+	if !k.TieneProcesos(EstadoReady) {
 		return //no hay procesos en READY, no tiene sentido desalojar
 	}
 
 	procesoCandidato := k.BuscarPorPidSinLock(EstadoReady, pidQuiereDesalojar)
 
 	if procesoCandidato == nil {
-		utils.LoggerConFormato("ERROR: proceso %d ya no está en READY", pidQuiereDesalojar)
+		slog.Error("Error - (IntentarDesalojoSRT) - Proceso ya no está en READY", "pid", pidQuiereDesalojar)
 		return
 	}
 	estimacionReady := procesoCandidato.SJF.Estimado_actual
@@ -161,15 +162,22 @@ func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) {
 	var cpuElegida *CPU
 
 	for _, cpu := range k.CPUsConectadas {
-
+		if cpu.ADesalojarPor != -1 { //si esta a la espera de ser desalojada
+			continue
+		}
 		procesoEjecutando := k.BuscarPorPidSinLock(EstadoExecute, cpu.Pid)
+
 		if procesoEjecutando == nil {
-			fmt.Println("ERROR: el proceso no esta en la lista execute, incosistencia interna")
+			slog.Error("Error - (IntentarDesalojoSRT) - El proceso no esta en la lista execute, incosistencia interna")
 			return
 		}
 
 		tiempoEjecutando := duracionEnEstado(procesoEjecutando)
 		estimacionRestante := procesoEjecutando.SJF.Estimado_actual - float64(tiempoEjecutando.Milliseconds())
+
+		if estimacionRestante < 0 { //por si ejecuto mas de lo que espero
+			estimacionRestante = 0
+		}
 
 		if estimacionRestante > estimacionReady && estimacionRestante > estimacionMaxRestante {
 			estimacionMaxRestante = estimacionRestante
@@ -178,19 +186,16 @@ func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) {
 	}
 
 	if cpuElegida != nil {
-		utils.LoggerConFormato("Peticion de desalojo del proceso %d de la CPU %d (estimacion restante: %.2f) para ejecutar el proceso %d (estimacion: %.2f)",
-			cpuElegida.Pid,
-			cpuElegida.ID,
-			estimacionMaxRestante,
-			procesoCandidato.Pid,
-			estimacionReady)
+		slog.Debug("Petición de desalojo por planificación SRT",
+			"pid_desalojado", cpuElegida.Pid,
+			"cpu_id", cpuElegida.ID,
+			"estimacion_restante_desalojado", estimacionMaxRestante,
+			"pid_candidato", procesoCandidato.Pid,
+			"estimacion_restante_candidato", estimacionReady,
+		)
 
-		mutex_desalojos.Lock()
-		k.ProcesosEsperandoDesalojo[cpuElegida.ID] = procesoCandidato.Pid
-		mutex_desalojos.Unlock()
-
+		reservarCPU(cpuElegida, pidQuiereDesalojar)
 		EnviarInterrupt(cpuElegida)
-		return
 	}
 
 }

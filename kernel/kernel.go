@@ -8,19 +8,17 @@ import (
 	"strconv"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
-	cliente "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Cliente"
 	servidor "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Servidor"
 )
 
 func main() {
 
 	fmt.Printf("Iniciando Kernel...")
-	cliente.ConfigurarLogger("kernel")
+	//cliente.ConfigurarLogger("kernel")
 	kernel := &Kernel{
-		CPUsConectadas:            make(map[int]*CPU),
-		ProcesosEsperandoDesalojo: make(map[int]int),
-		Configuracion:             new(ConfigKernel),
-		DispositivosIO:            make(map[string]*InstanciasPorDispositivo),
+		CPUsConectadas: make(map[int]*CPU),
+		Configuracion:  new(ConfigKernel),
+		DispositivosIO: make(map[string]*InstanciasPorDispositivo),
 	}
 
 	kernel.InicializarMapaDeEstados()
@@ -28,22 +26,26 @@ func main() {
 	err := IniciarConfiguracion("config.json", kernel.Configuracion)
 
 	if err != nil {
-		slog.Info("Error al iniciar config")
+		fmt.Println("[main] Error al iniciar config")
 		return
 	}
 
-	if len(os.Args) < 3 { // ruta archivo-pseudo tamanio
-		fmt.Println("Cantidad de argumentos incorrecta. Uso: ruta <archivo-pseudo> <tamanio>")
+	err = ConfigurarLogger("kernel", kernel.Configuracion.Log_leveL)
+	if err != nil {
+		fmt.Println("[main] Error al configurar logger:", err)
 		os.Exit(1)
 	}
 
+	if len(os.Args) < 3 { // ruta archivo-pseudo tamanio
+		slog.Error("[main] Cantidad de argumentos incorrecta. Uso: ruta <archivo-pseudo> <tamanio>")
+		os.Exit(1)
+	}
 	args := os.Args
 
 	archivoPseudo := args[1]
 	tamanio, _ := strconv.Atoi(args[2])
 
-	fmt.Println("Archivo de pseudocodigo ", args[1])
-	fmt.Println("Tamanio de proceso", args[2])
+	slog.Debug("Parámetros iniciales", "archivo", archivoPseudo, "tamanio", tamanio)
 
 	//Iniciar servidor
 	mux := http.NewServeMux()
@@ -60,10 +62,12 @@ func main() {
 
 	go func() {
 		if err := http.ListenAndServe(url_socket, mux); err != nil {
-			fmt.Println("Error al iniciar el servidor HTTP", err)
+			slog.Error("Error al iniciar el servidor HTTP", "error", err)
 			os.Exit(1)
 		}
 	}()
+
+	slog.Info("Estado inicial del planificador largo plazo", "estado", "STOP")
 
 	waitEnter := make(chan struct{}, 1)
 
@@ -72,35 +76,22 @@ func main() {
 	// Esperamos hasta que la gorutine avise que el ENTER fue presionado (queda bloqueada la main rutine)
 	<-waitEnter
 
-	fmt.Println("Empezando con la planificacion (se presionó el ENTER)")
+	slog.Info("Comenzando la planificación", "evento", "ENTER presionado por el usuario")
+	slog.Info("Estado actual del planificador largo plazo", "estado", "RUNNING")
 
 	pcb := kernel.IniciarProceso(tamanio, archivoPseudo)
+	pid := pcb.Pid
 	kernel.AgregarAEstado(EstadoNew, pcb, true)
-	utils.LoggerConFormato("## (%d) Se crea el proceso - Estado: NEW", pcb.Pid)
+	utils.LoggerConFormato("## (%d) Se crea el proceso - Estado: NEW", pid)
 
 	unElemento, estaEnReady := kernel.UnicoEnNewYNadaEnSuspReady()
 
 	if !estaEnReady || !unElemento {
-		slog.Info("Error: primer proceso no es el unico proceso en el sistema o no paso a ready")
+		slog.Error("Condición inválida al iniciar planificación", "motivo", "primer proceso y no es único del sistema")
 		return
 	}
 
-	//kernel.BolicheMomento(pcb) //punchi punchi
-
 	kernel.IntentarEnviarProcesoAExecute()
 
-	slog.Debug("Iniciando Servidor de KERNEL")
-
-	//cliente.EnviarMensaje(kernel.ConfigKernel.Ip_memoria, kernel.ConfigKernel.Puerto_Memoria, "Hola soy modulo Kernel")
-
 	select {}
-	//2d0 proc
-	//enviamos msg a memoria funcion (tamanio pid)
-
-	// Detener kERNEL para esperar las conexiones de CPU y despues iniciar la PLANIFICACION
-
-	//estados := [cantEstados]string{"NEW", "READY", "EXECUTE", "BLOCK", "BLOCK-SUSPENDED", "BLOCK-READY", "EXIT"}
-
-	//sort.Sort(PorTamanio(l_new))
-
 }

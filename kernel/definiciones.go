@@ -29,7 +29,7 @@ type PCB struct {
 	Arch_pseudo        string
 	HoraIngresoAEstado time.Time //revisar a futuro
 	SJF                *SJF      //Estimaciones para planificacion SJF
-	Reservado          bool
+	Reservado          string
 }
 
 type SJF struct {
@@ -39,12 +39,12 @@ type SJF struct {
 }
 
 type CPU struct {
-	ID  int
-	Url string
-	Pid int
-	Pc  int
-	//Esta_reservada bool
-	Esta_libre bool
+	ID            int
+	Url           string
+	Pid           int
+	Pc            int
+	ADesalojarPor int
+	Esta_libre    bool
 }
 
 type ProcesoEsperandoIO struct {
@@ -64,12 +64,11 @@ type DispositivoIO struct {
 }
 
 type Kernel struct {
-	ProcesoPorEstado          map[int][]*PCB
-	ProcesosEsperandoDesalojo map[int]int //cpuID -> pidCandidato
-	CPUsConectadas            map[int]*CPU
-	DispositivosIO            map[string]*InstanciasPorDispositivo
-	Configuracion             *ConfigKernel
-	SiguientePID              int
+	ProcesoPorEstado map[int][]*PCB
+	CPUsConectadas   map[int]*CPU
+	DispositivosIO   map[string]*InstanciasPorDispositivo
+	Configuracion    *ConfigKernel
+	SiguientePID     int
 }
 
 var (

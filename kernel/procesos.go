@@ -22,6 +22,7 @@ func (k *Kernel) CrearPCB(tamanio int, arch_pseudo string) *PCB {
 		Tamanio:     tamanio,
 		Arch_pseudo: arch_pseudo,
 		Pc:          0,
+		Reservado:   "NO",
 	}
 
 	if k.Configuracion.Algoritmo_Plani == "SJF" || k.Configuracion.Algoritmo_Plani == "SRT" {
@@ -82,11 +83,11 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB) {
 	k.IntentarEnviarProcesosAReady()
 }
 
-func MarcarProcesoReservado(pcb *PCB, reservado bool) {
+func MarcarProcesoReservado(pcb *PCB, reservado string) {
 	pcb.Reservado = reservado
 }
 func EstaReservado(pcb *PCB) bool {
-	return pcb.Reservado
+	return pcb.Reservado != "NO"
 }
 
 func (k *Kernel) esProcesoMasChico(pid int, estadoOrigen int) bool {

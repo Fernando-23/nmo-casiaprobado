@@ -81,7 +81,7 @@ func crearCPU(id int, url string) *CPU {
 func (k *Kernel) ObtenerCPULibre() *CPU {
 
 	for _, cpu := range k.CPUsConectadas {
-		if cpu.Esta_libre {
+		if cpu.Esta_libre && cpu.Pid == -1 {
 			return cpu // La primera CPU que esta libre
 		}
 	}
@@ -102,6 +102,7 @@ func actualizarCPU(cpu *CPU, pid int, pc int, liberar bool) {
 	cpu.Esta_libre = liberar
 	cpu.Pid = pid
 	cpu.Pc = pc
+	cpu.ADesalojarPor = -1
 }
 
 func RegistrarCPUaLibre(cpu_a_liberar *CPU) {
@@ -115,4 +116,8 @@ func handleDispatch(pid int, pc int, url string) {
 
 	datos := fmt.Sprintf("%d %d", pid, pc)
 	utils.EnviarStringSinEsperar("POST", fullURL, datos)
+}
+
+func reservarCPU(cpu *CPU, pid int) {
+	cpu.ADesalojarPor = pid
 }

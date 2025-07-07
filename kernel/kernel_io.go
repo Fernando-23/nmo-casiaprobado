@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
-	"strings"
 
 	"slices"
 
@@ -17,47 +15,41 @@ func (k *Kernel) llegaDesconeccionIO(w http.ResponseWriter, r *http.Request) {
 
 	var mensaje_IO string
 	if err := json.NewDecoder(r.Body).Decode(&mensaje_IO); err != nil {
-		utils.LoggerConFormato("[ERROR] FinalizarIO - Error al decodificar cuerpo: %v", err)
+		slog.Error("Error - (FinalizarIO) - Error al decodificar cuerpo", "error", err)
 		return
 	}
-	k.FinalizarIO(mensaje_IO)
-}
-
-func (k *Kernel) FinalizarIO(mensaje_IO string) {
-
-	partes := strings.Split(mensaje_IO, " ") // Esperado: "NOMBRE_IO URL_IO TIEMPO_IO"
-
-	if len(partes) != 3 {
-		utils.LoggerConFormato("[ERROR] FinalizarIO - Formato inválido: %s -Esperado: NOMBRE_IO URL_IO TIEMPO_IO", mensaje_IO)
-		return
-	}
-
-	nombreIO := partes[0]
-	urlIO := partes[1]
-	tiempoIO, err := strconv.Atoi(partes[2])
+	nombre, url, tiempo, err := decodificarMensajeDesconeccionIO(mensaje_IO)
 
 	if err != nil {
-		utils.LoggerConFormato("[ERROR] FinalizarIO - Tiempo inválido: %s", partes[2])
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+
+	go k.FinalizarIO(nombre, url, tiempo)
+}
+
+func (k *Kernel) FinalizarIO(nombre, url string, tiempo int) {
 
 	//mutex IOS
 	mutex_DispositivosIO.Lock()
 	defer mutex_DispositivosIO.Unlock()
 
-	iosMismoNombre, ok := k.DispositivosIO[nombreIO]
+	iosMismoNombre, ok := k.DispositivosIO[nombre]
 
 	if !ok {
-		utils.LoggerConFormato("[WARN] FinalizarIO - No existe el dispositivo IO con nombre %s", nombreIO)
+		utils.LoggerConFormato("[WARN] FinalizarIO - No existe el dispositivo IO con nombre %s", nombre)
 		return
 	}
 
 	for i, instancia := range iosMismoNombre.Instancias {
-		if instancia.Url == urlIO {
+		if instancia.Url == url {
 
-			if tiempoIO > 0 {
+			if tiempo > 0 {
 				aux_a_encolar := &ProcesoEsperandoIO{
 					Pid:      instancia.PidOcupante,
-					TiempoIO: tiempoIO,
+					TiempoIO: tiempo,
 				}
 
 				iosMismoNombre.ColaEspera = append(iosMismoNombre.ColaEspera, aux_a_encolar)
@@ -65,14 +57,14 @@ func (k *Kernel) FinalizarIO(mensaje_IO string) {
 			}
 
 			iosMismoNombre.Instancias = slices.Delete(iosMismoNombre.Instancias, i, i+1)
-			k.DispositivosIO[nombreIO] = iosMismoNombre //actualizo el map
+			k.DispositivosIO[nombre] = iosMismoNombre //actualizo el map
 
-			utils.LoggerConFormato("Una instancia de IO %s fue finalizada", nombreIO)
+			utils.LoggerConFormato("Una instancia de IO %s fue finalizada", nombre)
 			return
 		}
 	}
 
-	fmt.Printf("No se encontro para desconectar una instancia %s de IO pedida", nombreIO)
+	fmt.Printf("No se encontro para desconectar una instancia %s de IO pedida", nombre)
 }
 
 func (k *Kernel) llegaNuevaIO(w http.ResponseWriter, r *http.Request) { // Handshake
