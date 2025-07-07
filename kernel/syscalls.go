@@ -11,7 +11,7 @@ import (
 	utils "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-func (k *Kernel) RecibirSyscallCPU(w http.ResponseWriter, r *http.Request) {
+func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
 	var respuesta string
 
 	if err := json.NewDecoder(r.Body).Decode(&respuesta); err != nil {
@@ -58,7 +58,7 @@ func (k *Kernel) GestionarSyscalls(respuesta string) {
 
 		nombre := syscall[3]
 		tiempo, _ := strconv.Atoi(syscall[4])
-		k.ManejarIO(nombre, pid, pc, tiempo)
+		k.GestionarIO(nombre, pid, pc, tiempo)
 		//manejarIO
 		//validar que exista la io
 		//enviar mensaje a io
@@ -93,6 +93,59 @@ func (k *Kernel) GestionarSyscalls(respuesta string) {
 
 }
 
+func (k *Kernel) GestionarIO(nombre_io string, pid, pc, duracion int) {
+
+	//mutex IOs
+	mutex_DispositivosIO.Lock()
+	defer mutex_DispositivosIO.Unlock()
+
+	iosMismoNombre, existeIO := k.DispositivosIO[nombre_io]
+
+	if !existeIO {
+		utils.LoggerConFormato("ERROR (IO) - No existe el dispositivo: %s", nombre_io)
+		k.GestionarEXIT(pid)
+		return
+	}
+
+	mutex_ProcesoPorEstado[EstadoBlock].Lock()
+	mutex_ProcesoPorEstado[EstadoExecute].Lock()
+
+	pcb := k.BuscarPorPidSinLock(EstadoExecute, pid)
+	if pcb == nil {
+		utils.LoggerConFormato("ERROR (IO) - No se encontró el PCB del proceso %d en EXECUTE", pid)
+		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+		mutex_ProcesoPorEstado[EstadoBlock].Unlock()
+		return
+	}
+
+	pcb.Pc = pc
+
+	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, false)
+
+	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+	mutex_ProcesoPorEstado[EstadoBlock].Unlock()
+
+	go k.temporizadorSuspension(pid)
+
+	IO_seleccionada := k.buscarIOLibre(nombre_io)
+
+	if IO_seleccionada == nil { //no hay io libre
+		nuevo_proc_esperando := &ProcesoEsperandoIO{
+			Pid:      pid,
+			TiempoIO: duracion,
+		}
+		iosMismoNombre.ColaEspera = append(iosMismoNombre.ColaEspera, nuevo_proc_esperando)
+		utils.LoggerConFormato("## (%d) - Encolado en espera de IO: %s", pid, nombre_io)
+		return
+	}
+	// si hay io libre
+	IO_seleccionada.PidOcupante = pid
+	IO_seleccionada.Libre = false
+
+	utils.LoggerConFormato("## (%d) - Bloqueado por IO: %s", pid, nombre_io)
+	enviarProcesoAIO(IO_seleccionada, duracion)
+}
+
 func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int) {
 
 	nuevo_pcb := k.IniciarProceso(tamanio, nombre_arch)
@@ -107,6 +160,7 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int) {
 	}
 	// cpu_ejecutando.Pc = pc //Actualizar pc para cpu
 }
+
 func (k *Kernel) GestionarDUMP_MEMORY(pid int) {
 
 	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, true)
@@ -136,48 +190,4 @@ func (k *Kernel) GestionarEXIT(pid int) {
 	}
 	//envio solicitud para eliminar proceso
 	go k.EliminarProceso(pcb)
-}
-
-func (k *Kernel) EliminarProceso(procesoAEliminar *PCB) {
-	respuesta, err := k.solicitudEliminarProceso(procesoAEliminar.Pid)
-	if err != nil {
-		utils.LoggerConFormato("ERROR (EliminarProceso), solicitud a memoria con error: %e", err)
-		return
-	}
-
-	if respuesta != "OK" {
-		utils.LoggerConFormato("ERROR (EliminarProceso) Memoria no mandó el OK (mandó otra cosa)")
-		return
-	}
-
-	utils.LoggerConFormato("## (%d) - Finaliza el proceso", procesoAEliminar.Pid)
-
-	utils.LoggerConFormato("## (%d) - Métricas de estado: ", procesoAEliminar.Pid)
-
-	for estado := range cantEstados {
-		utils.LoggerConFormato(
-			"%s (%d) (%s),",
-			estados_proceso[estado],
-			procesoAEliminar.Me[estado],
-			procesoAEliminar.Mt[estado].String(),
-		)
-
-	}
-	k.IntentarEnviarProcesosAReady()
-}
-
-func (k *Kernel) solicitudEliminarProceso(pid int) (string, error) {
-
-	url := fmt.Sprintf("http://%s:%d/memoria/exit/", k.Configuracion.Ip_memoria, k.Configuracion.Puerto_Memoria)
-	pid_string := strconv.Itoa(pid)
-	respuestaMemo, err := utils.EnviarSolicitudHTTPString("POST", url, pid_string)
-
-	if err != nil {
-		log.Printf("Error codificando mensaje: %s", err.Error())
-		return "", err
-	}
-
-	//Deberia responder "OK"
-	return respuestaMemo, err
-
 }

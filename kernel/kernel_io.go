@@ -13,196 +13,6 @@ import (
 	utils "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-func (k *Kernel) llegaNuevaIO(w http.ResponseWriter, r *http.Request) { // Handshake
-	var mensajeIO string
-	if err := json.NewDecoder(r.Body).Decode(&mensajeIO); err != nil {
-		fmt.Println("Error recibiendo la solicitud:", err)
-		return
-	}
-
-	nombre, ip, puerto, err := decodificarMensajeNuevaIO(mensajeIO)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
-
-	go func() {
-		k.registrarNuevaIO(nombre, ip, puerto)
-		utils.LoggerConFormato("Fin de registrarNuevaIO, nombre io: %s", nombre)
-	}()
-
-}
-
-func decodificarMensajeNuevaIO(mensaje string) (nombre, ip, puerto string, err error) {
-	partes := strings.Split(mensaje, " ")
-	if len(partes) != 3 {
-		return "", "", "", fmt.Errorf("se espera formato: NOMBRE IP PUERTO")
-	}
-	nombre, ip, puerto = partes[0], partes[1], partes[2]
-	if nombre == "" || ip == "" || puerto == "" {
-		return "", "", "", fmt.Errorf("campos vacíos en mensaje")
-	}
-	return nombre, ip, puerto, nil
-}
-
-func (k *Kernel) registrarNuevaIO(nombre, ip, puerto string) { // Handshake
-
-	url := fmt.Sprintf("http://%s:%s", ip, puerto)
-
-	nuevaInstancia := &DispositivoIO{
-		Url:         url,
-		PidOcupante: -1,
-		Libre:       true,
-	}
-
-	//mutex IOS
-	mutex_DispositivosIO.Lock()
-	defer mutex_DispositivosIO.Unlock()
-
-	// Si no existe una io con ese nombre, lo agrego nuevito
-	if _, existe := k.DispositivosIO[nombre]; !existe {
-		// Agrego y sincronizo el nuevo dispositivo io
-		k.DispositivosIO[nombre] = &InstanciasPorDispositivo{
-			Instancias: []*DispositivoIO{nuevaInstancia},
-			ColaEspera: []*ProcesoEsperandoIO{},
-		}
-		fmt.Printf("Nueva IO registrada: %s en %s\n", nombre, url)
-	} else {
-		// Sino, actualizo los valores en esa posicion
-		k.DispositivosIO[nombre].Instancias = append(k.DispositivosIO[nombre].Instancias, nuevaInstancia)
-		utils.LoggerConFormato("Se agregó nueva instancia de IO '%s' conectada en %s\n", nombre, url)
-
-	}
-}
-
-func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {
-	var mensajeIO string
-	if err := json.NewDecoder(r.Body).Decode(&mensajeIO); err != nil {
-		slog.Error("Error recibiendo la solicitud", "error", err)
-		http.Error(w, "Error en el formato de la solicitud", http.StatusBadRequest)
-		return
-	}
-	pid, nombre, err := decodificarMensajeFinIO(mensajeIO)
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
-
-	go func() {
-		k.liberarInstanciaIO(pid, nombre)
-		utils.LoggerConFormato("Fin de ejecución de liberarInstanciaIO para PID %d (%s)", pid, nombre)
-	}()
-}
-
-func decodificarMensajeFinIO(mensaje string) (pid int, nombre string, err error) {
-	parts := strings.Split(mensaje, " ")
-	if len(parts) < 2 {
-		return 0, "", fmt.Errorf("formato inválido, se espera 'PID NOMBRE_IO'")
-	}
-
-	pid, err = strconv.Atoi(parts[0])
-	if err != nil {
-		return 0, "", fmt.Errorf("PID inválido: %v", err)
-	}
-
-	nombre = parts[1]
-	if nombre == "" {
-		return 0, "", fmt.Errorf("nombre de IO vacío")
-	}
-
-	return pid, nombre, nil
-}
-
-func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
-
-	if !k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, true) {
-		if !k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid, true) {
-			utils.LoggerConFormato("ERROR (liberarInstanciaIO) PID %d no estaba en BLOCK ni BLOCK_SUSP", pid)
-			return //no estaba en ninguno de los estados posibles
-		}
-	}
-
-	if !k.ActualizarIO(nombre, pid) {
-		utils.LoggerConFormato("ERROR (liberarInstanciaIO) Falló la actualización de IO para %s y PID %d", nombre, pid)
-		return
-	}
-
-	utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY", pid)
-}
-
-func (k *Kernel) ActualizarIO(nombre_io string, pid_asociado_io int) bool {
-	//mutex IOS
-	mutex_DispositivosIO.Lock()
-	defer mutex_DispositivosIO.Unlock()
-
-	ios, existe := k.DispositivosIO[nombre_io]
-
-	if !existe {
-		utils.LoggerConFormato("ERROR (ActualizarIO) No existe dispositivo IO con nombre %s\n", nombre_io)
-		return false
-	}
-
-	//Actualizar IO actual
-	var io_usada *DispositivoIO
-	for _, io := range ios.Instancias {
-		if io.PidOcupante == pid_asociado_io {
-			io_usada = io
-			break
-		}
-	}
-
-	if io_usada == nil {
-		utils.LoggerConFormato(" ERROR (liberarInstanciaIO) No se encontró IO en uso con PID %d en %s\n", pid_asociado_io, nombre_io)
-		return false
-	}
-
-	io_usada.PidOcupante = -1
-	io_usada.Libre = true //la io termino ahora esta libre
-
-	if len(ios.ColaEspera) != 0 {
-		//desencolar el 1ro
-		proceso_sgte := ios.ColaEspera[0]
-		ios.ColaEspera = ios.ColaEspera[1:]
-
-		io_usada.PidOcupante = proceso_sgte.Pid
-		io_usada.Libre = false
-
-		// mandarlo a io
-		enviarProcesoAIO(io_usada, proceso_sgte.TiempoIO)
-	}
-	return true
-}
-
-func enviarProcesoAIO(dispositivo *DispositivoIO, duracion int) {
-
-	fullURL := fmt.Sprintf("%s/io/hace_algo", dispositivo.Url)
-	datos := fmt.Sprintf("%d %d", dispositivo.PidOcupante, duracion)
-
-	utils.EnviarStringSinEsperar("POST", fullURL, datos)
-
-	utils.LoggerConFormato("## (%d) - Se envió proceso a IO en %s", dispositivo.PidOcupante, dispositivo.Url)
-}
-
-func (k *Kernel) buscarIOLibre(nombre string) *DispositivoIO {
-
-	if iosDispo, ok := k.DispositivosIO[nombre]; ok {
-		for _, instancia := range iosDispo.Instancias {
-			if instancia.Libre {
-				return instancia
-			}
-		}
-	}
-
-	return nil
-
-}
-
 func (k *Kernel) llegaDesconeccionIO(w http.ResponseWriter, r *http.Request) {
 
 	var mensaje_IO string
@@ -265,55 +75,161 @@ func (k *Kernel) FinalizarIO(mensaje_IO string) {
 	fmt.Printf("No se encontro para desconectar una instancia %s de IO pedida", nombreIO)
 }
 
-func (k *Kernel) ManejarIO(nombre_io string, pid, pc, duracion int) {
+func (k *Kernel) llegaNuevaIO(w http.ResponseWriter, r *http.Request) { // Handshake
+	var mensajeIO string
+	if err := json.NewDecoder(r.Body).Decode(&mensajeIO); err != nil {
+		fmt.Println("Error recibiendo la solicitud:", err)
+		return
+	}
 
-	//mutex IOs
+	nombre, ip, puerto, err := decodificarMensajeNuevaIO(mensajeIO)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+
+	go func() {
+		k.registrarNuevaIO(nombre, ip, puerto)
+		utils.LoggerConFormato("Fin de registrarNuevaIO, nombre io: %s", nombre)
+	}()
+
+}
+
+func (k *Kernel) registrarNuevaIO(nombre, ip, puerto string) { // Handshake
+
+	url := fmt.Sprintf("http://%s:%s", ip, puerto)
+
+	nuevaInstancia := &DispositivoIO{
+		Url:         url,
+		PidOcupante: -1,
+		Libre:       true,
+	}
+
+	//mutex IOS
 	mutex_DispositivosIO.Lock()
 	defer mutex_DispositivosIO.Unlock()
 
-	iosMismoNombre, existeIO := k.DispositivosIO[nombre_io]
-
-	if !existeIO {
-		utils.LoggerConFormato("ERROR (IO) - No existe el dispositivo: %s", nombre_io)
-		k.GestionarEXIT(pid)
-		return
-	}
-
-	mutex_ProcesoPorEstado[EstadoBlock].Lock()
-	mutex_ProcesoPorEstado[EstadoExecute].Lock()
-
-	pcb := k.BuscarPorPidSinLock(EstadoExecute, pid)
-	if pcb == nil {
-		utils.LoggerConFormato("ERROR (IO) - No se encontró el PCB del proceso %d en EXECUTE", pid)
-		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
-		mutex_ProcesoPorEstado[EstadoBlock].Unlock()
-		return
-	}
-
-	pcb.Pc = pc
-
-	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, false)
-
-	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
-	mutex_ProcesoPorEstado[EstadoBlock].Unlock()
-
-	go k.temporizadorSuspension(pid)
-
-	IO_seleccionada := k.buscarIOLibre(nombre_io)
-
-	if IO_seleccionada == nil { //no hay io libre
-		nuevo_proc_esperando := &ProcesoEsperandoIO{
-			Pid:      pid,
-			TiempoIO: duracion,
+	// Si no existe una io con ese nombre, lo agrego nuevito
+	if _, existe := k.DispositivosIO[nombre]; !existe {
+		// Agrego y sincronizo el nuevo dispositivo io
+		k.DispositivosIO[nombre] = &InstanciasPorDispositivo{
+			Instancias: []*DispositivoIO{nuevaInstancia},
+			ColaEspera: []*ProcesoEsperandoIO{},
 		}
-		iosMismoNombre.ColaEspera = append(iosMismoNombre.ColaEspera, nuevo_proc_esperando)
-		utils.LoggerConFormato("## (%d) - Encolado en espera de IO: %s", pid, nombre_io)
+		fmt.Printf("Nueva IO registrada: %s en %s\n", nombre, url)
+	} else {
+		// Sino, actualizo los valores en esa posicion
+		k.DispositivosIO[nombre].Instancias = append(k.DispositivosIO[nombre].Instancias, nuevaInstancia)
+		utils.LoggerConFormato("Se agregó nueva instancia de IO '%s' conectada en %s\n", nombre, url)
+
+	}
+}
+
+func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {
+	var mensajeIO string
+	if err := json.NewDecoder(r.Body).Decode(&mensajeIO); err != nil {
+		slog.Error("Error recibiendo la solicitud", "error", err)
+		http.Error(w, "Error en el formato de la solicitud", http.StatusBadRequest)
 		return
 	}
-	// si hay io libre
-	IO_seleccionada.PidOcupante = pid
-	IO_seleccionada.Libre = false
+	pid, nombre, err := decodificarMensajeFinIO(mensajeIO)
 
-	utils.LoggerConFormato("## (%d) - Bloqueado por IO: %s", pid, nombre_io)
-	enviarProcesoAIO(IO_seleccionada, duracion)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+
+	go func() {
+		k.liberarInstanciaIO(pid, nombre)
+		utils.LoggerConFormato("Fin de ejecución de liberarInstanciaIO para PID %d (%s)", pid, nombre)
+	}()
+}
+
+func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
+
+	if !k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, true) {
+		if !k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid, true) {
+			utils.LoggerConFormato("ERROR (liberarInstanciaIO) PID %d no estaba en BLOCK ni BLOCK_SUSP", pid)
+			return //no estaba en ninguno de los estados posibles
+		}
+	}
+
+	if !k.ActualizarIO(nombre, pid) {
+		utils.LoggerConFormato("ERROR (liberarInstanciaIO) Falló la actualización de IO para %s y PID %d", nombre, pid)
+		return
+	}
+
+	utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY", pid)
+}
+
+func (k *Kernel) ActualizarIO(nombre_io string, pid_asociado_io int) bool {
+	//mutex IOS
+	mutex_DispositivosIO.Lock()
+	defer mutex_DispositivosIO.Unlock()
+
+	ios, existe := k.DispositivosIO[nombre_io]
+
+	if !existe {
+		utils.LoggerConFormato("ERROR (ActualizarIO) No existe dispositivo IO con nombre %s\n", nombre_io)
+		return false
+	}
+
+	//Actualizar IO actual
+	var io_usada *DispositivoIO
+	for _, io := range ios.Instancias {
+		if io.PidOcupante == pid_asociado_io {
+			io_usada = io
+			break
+		}
+	}
+
+	if io_usada == nil {
+		utils.LoggerConFormato(" ERROR (liberarInstanciaIO) No se encontró IO en uso con PID %d en %s\n", pid_asociado_io, nombre_io)
+		return false
+	}
+
+	io_usada.PidOcupante = -1
+	io_usada.Libre = true //la io termino ahora esta libre
+
+	if len(ios.ColaEspera) != 0 {
+		//desencolar el 1ro
+		proceso_sgte := ios.ColaEspera[0]
+		ios.ColaEspera = ios.ColaEspera[1:]
+
+		io_usada.PidOcupante = proceso_sgte.Pid
+		io_usada.Libre = false
+
+		// mandarlo a io
+		enviarProcesoAIO(io_usada, proceso_sgte.TiempoIO)
+	}
+	return true
+}
+
+func (k *Kernel) buscarIOLibre(nombre string) *DispositivoIO {
+
+	if iosDispo, ok := k.DispositivosIO[nombre]; ok {
+		for _, instancia := range iosDispo.Instancias {
+			if instancia.Libre {
+				return instancia
+			}
+		}
+	}
+
+	return nil
+
+}
+
+func enviarProcesoAIO(dispositivo *DispositivoIO, duracion int) {
+
+	fullURL := fmt.Sprintf("%s/io/hace_algo", dispositivo.Url)
+	datos := fmt.Sprintf("%d %d", dispositivo.PidOcupante, duracion)
+
+	utils.EnviarStringSinEsperar("POST", fullURL, datos)
+
+	utils.LoggerConFormato("## (%d) - Se envió proceso a IO en %s", dispositivo.PidOcupante, dispositivo.Url)
 }
