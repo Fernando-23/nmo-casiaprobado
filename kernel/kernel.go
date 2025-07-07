@@ -53,9 +53,9 @@ func main() {
 	mux.HandleFunc("/cpu/registrar_cpu", kernel.llegaNuevaCPU) //SINCRO HECHA
 	mux.HandleFunc("/kernel/interrupido", kernel.llegaFinInterrupcion)
 	mux.HandleFunc("/cpu/syscall", kernel.llegaSyscallCPU)
-	mux.HandleFunc("/kernel/registrar_io", kernel.llegaNuevaIO)          // SINCRO HECHA
-	mux.HandleFunc("/kernel/desconectar_io", kernel.llegaDesconeccionIO) // revisado y corregido 20/6
-	mux.HandleFunc("/kernel/fin_io", kernel.llegaFinIO)                  // revisado y corregido 20/6
+	mux.HandleFunc("/kernel/registrar_io", kernel.llegaNuevaIO)         // SINCRO HECHA
+	mux.HandleFunc("/kernel/desconectar_io", kernel.llegaDesconexionIO) // revisado y corregido 20/6
+	mux.HandleFunc("/kernel/fin_io", kernel.llegaFinIO)                 // revisado y corregido 20/6
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
 
 	url_socket := fmt.Sprintf(":%d", kernel.Configuracion.Puerto_Kernel)

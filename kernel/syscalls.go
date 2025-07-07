@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,24 +26,27 @@ func (k *Kernel) GestionarSyscalls(respuesta string) {
 
 	syscall := strings.Split(respuesta, " ")
 
-	id_cpu, err := strconv.Atoi(syscall[IdCPU])
+	idCPU, err := strconv.Atoi(syscall[IdCPU])
 
 	if err != nil {
-		log.Printf("[ERROR] (GestionarSyscalls) ID de CPU no es un número: %v", syscall[IdCPU])
+		slog.Error("Error - (GestionarSyscalls) - ID de CPU no es un número",
+			"id_cpu", syscall[IdCPU])
 		return
 	}
 
 	pc, err := strconv.Atoi(syscall[PC])
 
 	if err != nil {
-		log.Printf("[ERROR] (GestionarSyscalls) PC invalido: %v", syscall[PC])
+		slog.Error("Error - (GestionarSyscalls) - PC invalido",
+			"pc", syscall[PC])
 		return
 	}
 
 	mutex_CPUsConectadas.Lock()
-	cpu_ejecutando, existe := k.CPUsConectadas[id_cpu]
+	cpu_ejecutando, existe := k.CPUsConectadas[idCPU]
 	if !existe {
-		log.Printf("[ERROR] (GestionarSyscalls) ID de CPU inexistente: %d", id_cpu)
+		slog.Error("Error - (GestionarSyscalls) - ID de CPU inexistente",
+			"id_cpu", idCPU)
 		mutex_CPUsConectadas.Unlock()
 		return
 	}
@@ -58,7 +62,7 @@ func (k *Kernel) GestionarSyscalls(respuesta string) {
 
 		nombre := syscall[3]
 		tiempo, _ := strconv.Atoi(syscall[4])
-		k.GestionarIO(nombre, pid, pc, tiempo)
+		k.GestionarIO(nombre, pid, pc, tiempo, idCPU)
 		//manejarIO
 		//validar que exista la io
 		//enviar mensaje a io
@@ -71,18 +75,22 @@ func (k *Kernel) GestionarSyscalls(respuesta string) {
 
 	case "DUMP_MEMORY":
 		// 2 30 DUMP_MEMORY
-		k.GestionarDUMP_MEMORY(pid)
+		k.GestionarDUMP_MEMORY(pid, idCPU)
 
 	case "EXIT":
 		// 2 30 EXIT
 		//finalizarProc
-		k.GestionarEXIT(pid)
+		k.GestionarEXIT(pid, idCPU)
+		//return false
+		//default:
+		//	return fmt.Errorf("syscall no reconocida %s", cod_op)
 	}
 
+	// liberar CPU y actualizar
 	mutex_CPUsConectadas.Lock()
-	cpu_ejecutando, existe = k.CPUsConectadas[id_cpu]
+	cpu_ejecutando, existe = k.CPUsConectadas[idCPU]
 	if !existe {
-		log.Printf("[ERROR] (GestionarSyscalls) ID de CPU inexistente: %d", id_cpu)
+		log.Printf("[ERROR] (GestionarSyscalls) ID de CPU inexistente: %d", idCPU)
 		mutex_CPUsConectadas.Unlock()
 		return
 	}
@@ -93,17 +101,18 @@ func (k *Kernel) GestionarSyscalls(respuesta string) {
 
 }
 
-func (k *Kernel) GestionarIO(nombre_io string, pid, pc, duracion int) {
+func (k *Kernel) GestionarIO(nombreIO string, pid, pc, duracion, idCPU int) {
 
 	//mutex IOs
 	mutex_DispositivosIO.Lock()
 	defer mutex_DispositivosIO.Unlock()
 
-	iosMismoNombre, existeIO := k.DispositivosIO[nombre_io]
+	iosMismoNombre, existeIO := k.DispositivosIO[nombreIO]
 
 	if !existeIO {
-		utils.LoggerConFormato("ERROR (IO) - No existe el dispositivo: %s", nombre_io)
-		k.GestionarEXIT(pid)
+		slog.Error("Error - (GestionarIO) - No existe el dispositivo",
+			"nombre_io", nombreIO)
+		k.GestionarEXIT(pid, idCPU)
 		return
 	}
 
@@ -112,7 +121,8 @@ func (k *Kernel) GestionarIO(nombre_io string, pid, pc, duracion int) {
 
 	pcb := k.BuscarPorPidSinLock(EstadoExecute, pid)
 	if pcb == nil {
-		utils.LoggerConFormato("ERROR (IO) - No se encontró el PCB del proceso %d en EXECUTE", pid)
+		slog.Error("Error - (GestionarIO) - No se encontró el PCB del proceso en EXECUTE",
+			"pid", pid)
 		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 		mutex_ProcesoPorEstado[EstadoBlock].Unlock()
 		return
@@ -127,7 +137,7 @@ func (k *Kernel) GestionarIO(nombre_io string, pid, pc, duracion int) {
 
 	go k.temporizadorSuspension(pid)
 
-	IO_seleccionada := k.buscarIOLibre(nombre_io)
+	IO_seleccionada := k.buscarIOLibre(nombreIO)
 
 	if IO_seleccionada == nil { //no hay io libre
 		nuevo_proc_esperando := &ProcesoEsperandoIO{
@@ -135,14 +145,14 @@ func (k *Kernel) GestionarIO(nombre_io string, pid, pc, duracion int) {
 			TiempoIO: duracion,
 		}
 		iosMismoNombre.ColaEspera = append(iosMismoNombre.ColaEspera, nuevo_proc_esperando)
-		utils.LoggerConFormato("## (%d) - Encolado en espera de IO: %s", pid, nombre_io)
+		utils.LoggerConFormato("## (%d) - Encolado en espera de IO: %s", pid, nombreIO)
 		return
 	}
 	// si hay io libre
 	IO_seleccionada.PidOcupante = pid
 	IO_seleccionada.Libre = false
 
-	utils.LoggerConFormato("## (%d) - Bloqueado por IO: %s", pid, nombre_io)
+	utils.LoggerConFormato("## (%d) - Bloqueado por IO: %s", pid, nombreIO)
 	enviarProcesoAIO(IO_seleccionada, duracion)
 }
 
@@ -161,33 +171,54 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int) {
 	// cpu_ejecutando.Pc = pc //Actualizar pc para cpu
 }
 
-func (k *Kernel) GestionarDUMP_MEMORY(pid int) {
+func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 
-	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, true)
-	go func() {
+	if !k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, true) {
+		slog.Error("GestionarDUMP_MEMORY: no se pudo mover a BLOCK",
+			"pid", pid)
+		return
+	}
+
+	go func(pid int) {
+
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("panic en GestionarDUMP_MEMORY goroutine", "pid", pid, "panic", r)
+			}
+		}()
+
 		fullURL := fmt.Sprintf("http://%s:%d/memoria/MEMORY_DUMP", k.Configuracion.Ip_memoria, k.Configuracion.Puerto_Memoria)
 		respuesta, err := utils.EnviarStringConEspera("POST", fullURL, strconv.Itoa(pid))
 
 		if err != nil || respuesta != "OK" {
-			utils.LoggerConFormato("ERROR (GestionarDUMP_MEMORY) en la respuesta de Memoria")
-			k.GestionarEXIT(pid)
+			slog.Error("Error - (GestionarDUMP_MEMORY) - Dump fallido o respuesta inesperada",
+				"pid", pid,
+				"error", err,
+				"respuesta", respuesta,
+			)
+			k.GestionarEXIT(pid, idCpu)
 			return
 		}
 		if !k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, true) {
-			utils.LoggerConFormato("ERROR (GestionarDUMP_MEMORY) no se encontó el proceso %d", pid)
+			slog.Error("Error - (GestionarDUMP_MEMORY) - No se encontó el proceso",
+				"pid", pid)
+			return
 		}
 		utils.LoggerConFormato("## (%d) - DumpMemory finalizado correctamente", pid)
-	}()
+	}(pid)
 
 }
 
-func (k *Kernel) GestionarEXIT(pid int) {
+func (k *Kernel) GestionarEXIT(pid int, idCPU int) {
 	//saco de execute el proceso que esta ejecutando y lo obtengo
 	pcb := k.QuitarYObtenerPCB(EstadoExecute, pid, true)
 	if pcb == nil {
-		utils.LoggerConFormato("ERROR (GestionarEXIT) no se encontró el pid () asociado a la cpu () en Execute")
+		slog.Error("Error - (GestionarEXIT) - No se encontró el pid asociado a la cpu en Execute",
+			"pid", pid,
+			"cpu", idCPU,
+		)
 		return
 	}
 	//envio solicitud para eliminar proceso
-	go k.EliminarProceso(pcb)
+	go k.EliminarProceso(pcb, true)
 }

@@ -128,24 +128,19 @@ func decodificarMensajeFinIO(mensaje string) (pid int, nombre string, err error)
 	return pid, nombre, nil
 }
 
-func decodificarMensajeDesconeccionIO(mensaje string) (nombre, url string, tiempo int, err error) {
+func decodificarMensajeDesconeccionIO(mensaje string) (nombre, url string, err error) {
 	partes := strings.Split(mensaje, " ") // Esperado: "NOMBRE_IO URL_IO TIEMPO_IO"
 
 	if len(partes) < 3 {
-		return "", "", 0, fmt.Errorf("formato inválido, se espera 'NOMBRE_IO URL_IO TIEMPO_IO'")
+		return "", "", fmt.Errorf("formato inválido, se espera 'NOMBRE_IO URL_IO TIEMPO_IO'")
 	}
 
 	nombre = partes[0]
 	if nombre == "" {
-		return "", "", 0, fmt.Errorf("nombre de IO vacío")
+		return "", "", fmt.Errorf("nombre de IO vacío")
 	}
 	url = partes[1]
-	tiempo, err = strconv.Atoi(partes[2])
 
-	if err != nil {
-		return "", "", 0, fmt.Errorf("tiempo inválido: %v", err)
-	}
-
-	return nombre, url, tiempo, nil
+	return nombre, url, nil
 
 }

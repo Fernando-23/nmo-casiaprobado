@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
@@ -55,15 +56,16 @@ func (k *Kernel) actualizarEstimacionSJF(pcb *PCB, tiempoEnExecute time.Duration
 	sjf.Estimado_anterior = aux
 }
 
-func (k *Kernel) EliminarProceso(procesoAEliminar *PCB) {
+func (k *Kernel) EliminarProceso(procesoAEliminar *PCB, liberaMemoria bool) {
 	respuesta, err := k.solicitudEliminarProceso(procesoAEliminar.Pid)
 	if err != nil {
-		utils.LoggerConFormato("ERROR (EliminarProceso), solicitud a memoria con error: %e", err)
+		slog.Error("Error -(EliminarProceso) - Solicitud a memoria con error",
+			"error", err)
 		return
 	}
 
 	if respuesta != "OK" {
-		utils.LoggerConFormato("ERROR (EliminarProceso) Memoria no mandó el OK (mandó otra cosa)")
+		slog.Error("Error - (EliminarProceso) - Memoria no mandó el OK (mandó otra cosa)")
 		return
 	}
 
@@ -80,7 +82,10 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB) {
 		)
 
 	}
-	k.IntentarEnviarProcesosAReady()
+
+	if liberaMemoria {
+		k.IntentarEnviarProcesosAReady()
+	}
 }
 
 func MarcarProcesoReservado(pcb *PCB, reservado string) {
