@@ -25,7 +25,7 @@ func main() {
 	nombre_io = args[1]
 	config_IO = &ConfigIO{}
 
-	err := utils.IniciarConfiguracion("config.json", config_IO)
+	err := utils.IniciarConfiguracion("io.json", config_IO)
 
 	if err != nil {
 		slog.Info("Error al iniciar config")

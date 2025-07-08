@@ -40,32 +40,46 @@ func CargarArchivoPseudocodigo(path string) []string {
 func (memo *Memo) Fetch(w http.ResponseWriter, r *http.Request) {
 	var request string
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		fmt.Println("error al recibir fetch de cpu")
+		slog.Error("Error - (Fetch) - Recibiendo fetch de cpu")
 	}
 
 	aux := strings.Split(request, " ")
-	pid, _ := strconv.Atoi(aux[0])
-	pc, _ := strconv.Atoi(aux[1])
+
+	pid, err := strconv.Atoi(aux[0])
+	if err != nil {
+		slog.Error("Error - (Fetch) - Transformando pid",
+			"pid", pid)
+		w.Write([]byte("TODO MAL"))
+		return
+	}
+
+	pc, err := strconv.Atoi(aux[1])
+	if err != nil {
+		slog.Error("Error - (Fetch) - Transformando pc",
+			"pc", pc)
+		w.Write([]byte("TODO MAL"))
+		return
+	}
 
 	elemento_en_memo_sistema, ok := memo.memoria_sistema[pid]
+
 	if !ok || len(elemento_en_memo_sistema) == 0 {
-		fmt.Println("No hay mas instrucciones")
+		slog.Debug("No hay mas instrucciones")
+		w.Write([]byte("TODO MAL")) //la ultima deberia ser un exit
 		return
 	}
 
 	//para pruebas nomas
 	for _, linea_a_leer := range elemento_en_memo_sistema {
-		fmt.Println(linea_a_leer)
+		slog.Debug(linea_a_leer)
 	}
 
 	instruccion := elemento_en_memo_sistema[pc]
-	//memo.memoria_sistema[pid] = elemento_en_memo_sistema[1:]
-	// if !ok {
-	// 	fmt.Println("No se encontro un proceso")
-	// 	return
-	// }
 
-	fmt.Println("La instruccion a enviar es:", instruccion)
+	slog.Debug("Instruccion a enviar",
+		"instruccion", instruccion,
+	)
+
 	memo.IncrementarMetrica(pid, Cant_instr_solicitadas)
 	utils.LoggerConFormato("## PID: %d - Obtener instrucción: %d - Instrucción: %s", pid, pc, instruccion)
 	w.WriteHeader(http.StatusOK)
@@ -76,7 +90,9 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 	var request string
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		fmt.Println("error al recibir los datos desde kernel")
+		slog.Error("Error - (VerificarHayLugar) - Solicitud invalida")
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	aux := strings.Split(request, " ")
@@ -86,16 +102,16 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 	arch_pseudo := aux[2]
 
 	// Lock tam_memo_actual
-	if tamanio >= tam_memo_actual { //config_memo.Tamanio_memoria va a volar, hay que chequear en memoria_usuario
+	if !HayEspacio(tamanio) {
 		// Unlock tam_memo_actual
-		fmt.Println("No hay espacio suficiente para crear el proceso pedido por kernel")
+		slog.Debug("No hay espacio suficiente para crear el proceso pedido por kernel")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("NO_OK"))
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Si kernel, hay espacio"))
+	w.Write([]byte("OK"))
 
 	memo.CrearNuevoProceso(pid, tamanio, arch_pseudo)
 	// Lock tam_memo_actual
@@ -103,10 +119,15 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 	// Unlock tam_memo_actual
 }
 
+func HayEspacio(tamanio int) bool {
+	return tamanio >= tam_memo_actual
+}
+
 func (memo *Memo) CrearNuevoProceso(pid int, tamanio int, arch_pseudo string) {
 	_, ok := memo.memoria_sistema[pid]
 	if ok {
-		fmt.Println("Ya se encuentra creado un proceso")
+		slog.Error("Error - (CrearNuevoProceso) - Ya se encuentra creado este proceso",
+			"pid", pid)
 		return
 	}
 
@@ -129,7 +150,8 @@ func (memo *Memo) InicializarMetricasPor(pid int) {
 func Hanshake(w http.ResponseWriter, r *http.Request) {
 	var request string
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		fmt.Println("error al recibir los datos desde kernel")
+		slog.Error("Error - (Handshake) - Recibiendo los datos desde kernel")
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -139,13 +161,16 @@ func Hanshake(w http.ResponseWriter, r *http.Request) {
 }
 
 func (memo *Memo) InicializarTablaPunterosAsociadosA(pid int, tamanio int) {
-	nuevo_puntero_de_tablas := memo.ptrs_raiz_tpag[pid]
-	nuevo_puntero_de_tablas = &NivelTPag{
+
+	memo.ptrs_raiz_tpag[pid] = &NivelTPag{
 		lv_tabla:   0,
 		sgte_nivel: nil,
 	}
 
+	nuevo_puntero_de_tablas := memo.ptrs_raiz_tpag[pid]
+
 	if config_memo.Cant_niveles == 0 {
+		nuevo_puntero_de_tablas.entradas = make([]*int, config_memo.Cant_entradasXpag)
 		memo.AsignarFramesAProceso(nuevo_puntero_de_tablas, tamanio, pid)
 		return
 	}
@@ -170,9 +195,11 @@ func (memo *Memo) AsignarFramesAProceso(tpags_final *NivelTPag, tamanio int, pid
 		frames_a_reservar := memo.LaCuentitaMaestro(tamanio, config_memo.Tamanio_pag)
 		memo.ModificarEstadoFrames(frames_a_reservar, pid)
 
-		utils.LoggerConFormato("Se asigno correctamente frames a un proceso")
+		slog.Debug("Debug - (AsignarFramesAProceso) -  Se asigno correctamente frames al proceso",
+			"pid", pid,
+		)
 	}
-	utils.LoggerConFormato("No se pudo asignar frames a un proceso")
+	slog.Error("Error - (AsignarFramesAProceso) - No se pudo asignar frames a un proceso")
 }
 
 // Traeme la dolorosa, la juguetona pa
@@ -200,8 +227,7 @@ func (memo *Memo) ModificarEstadoFrames(frames_a_reservar int, pid int) {
 	}
 
 	if frames_a_reservar != 0 {
-		slog.Error("Se intento asignar mas frames de los que habia diponibles") //poner pid que pide mucho si queres
-		fmt.Println("Se intento asignar mas frames de los que habia diponibles, hicimo algo mal")
+		slog.Error("Error - (ModificarEstadoFrames) - Se intento asignar mas frames de los que habia diponibles") //poner pid que pide mucho si queres
 		return
 	}
 }
@@ -240,7 +266,8 @@ func (memo *Memo) EscribirEnSwap(w http.ResponseWriter, r *http.Request) {
 	var request string
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		fmt.Println("error al recibir los datos desde kernel")
+		slog.Error("Error - (EscribirEnSwap) - Error al recibir los datos desde kernel")
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -249,7 +276,7 @@ func (memo *Memo) EscribirEnSwap(w http.ResponseWriter, r *http.Request) {
 	file, err := os.OpenFile(config_memo.Path_swap, os.O_RDWR|os.O_CREATE, 0666)
 
 	if err != nil {
-		fmt.Println("Error en abrir swapfile")
+		slog.Error("Error - (EscribirEnSwap) - Error en abrir swapfile")
 		return
 	}
 	defer file.Close()
@@ -272,6 +299,10 @@ func (memo *Memo) EscribirEnSwap(w http.ResponseWriter, r *http.Request) {
 	memo.l_proc[pid].ptr_a_frames_asignados = memo.l_proc[pid].ptr_a_frames_asignados[:0]
 
 	memo.IncrementarMetrica(pid, Bajadas_de_swap)
+
+	// lock mutex_tamanioMemoActual.Lock()
+	tam_memo_actual += tamanio
+	// unlock mutex_tamanioMemoActual.Unlock()
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
@@ -279,47 +310,97 @@ func (memo *Memo) EscribirEnSwap(w http.ResponseWriter, r *http.Request) {
 func (memo *Memo) QuitarDeSwap(w http.ResponseWriter, r *http.Request) {
 	var request string
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		fmt.Println("error al recibir los datos desde kernel")
+		slog.Error("Error - (QuitarDeSwap) - Error al recibir los datos desde kernel")
+		http.Error(w, "Solicitud Invalida", http.StatusBadRequest)
 		return
 	}
 
-	pid, _ := strconv.Atoi(request)
+	pid, err := strconv.Atoi(request)
+
+	if err != nil {
+		slog.Error("Error - (QuitarDeSwap) - Conversion request sin PID",
+			"valor", request,
+			"error", err,
+		)
+	}
+	proceso_en_swap, existe := memo.swap.espacio_contiguo[pid]
+	if !existe {
+		slog.Error("Error - (QuitarDeSwap) - NO existe el proceso en swap", "pid", pid)
+		http.Error(w, "Proceso no encontrado en swap", http.StatusNotFound)
+		return
+	}
+
+	inicio_proceso := proceso_en_swap.inicio
+	tamanio := proceso_en_swap.tamanio
+
+	if !HayEspacio(tamanio) {
+		slog.Debug("Debug - (QuitarDeSwap) - No hay espacio en memoria para sacar un proceso de swap")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("NO_OK"))
+		return
+	}
 
 	file, err := os.Open(config_memo.Path_swap)
 
 	if err != nil {
-		fmt.Println("Error en abrir swapfile")
+		slog.Error("Error - (QuitarDeSwap) - Error en abrir swapfile")
+		http.Error(w, "Error accediendo al archivo swap", http.StatusBadGateway)
 		return
 	}
 
-	inicio_proceso := memo.swap.espacio_contiguo[pid].inicio
-	tamanio := memo.swap.espacio_contiguo[pid].tamanio
-	file.Seek(int64(inicio_proceso), 1)
-	contenido_proc := make([]byte, tamanio)
+	defer file.Close()
 
-	bytes_leidos, _ := file.Read(contenido_proc)
-
-	if bytes_leidos != tamanio { //leyamal yo leyo tu leyes el leye
-		//fmt.Errorf("no leo bien necesito gafas")
-		fmt.Println("no leo bien necesito gafas")
+	if _, err := file.Seek(int64(inicio_proceso), 1); err != nil {
+		slog.Error("Error - (QuitarDeSwap) - Fallo al hacer seek en swap", "error", err)
+		http.Error(w, "Error de lectura", http.StatusInternalServerError)
+		return
 	}
 
-	fmt.Println(string(contenido_proc[:bytes_leidos]))
+	contenido_proc := make([]byte, tamanio)
+	bytes_leidos, err := file.Read(contenido_proc)
+
+	if err != nil {
+		slog.Error("Error - (QuitarDeSwap) - Fallo al leer de swap", "error", err)
+		http.Error(w, "Error leyendo swap", http.StatusInternalServerError)
+		return
+	}
+
+	if bytes_leidos != tamanio { //leyamal yo leyo tu leyes el leye
+		slog.Error("Error - (QuitarDeSwap) - No leo bien necesito gafas")
+		http.Error(w, "Error leyendo swap", http.StatusInternalServerError)
+		return
+	}
+
+	slog.Debug("Debug - (QuitarDeSwap) - Contenido leido de swap",
+		"pid", pid,
+		"bytes", bytes_leidos,
+	)
 
 	file.Seek(0, 0)
 	file.Close()
 	// compromiso de copactar para el segundo cuatri
 	//segurisimo
 
+	//TEMA ASIGNAR FRAMES AL PROCESO SACADO DE SWAP
 	ptr_tpag_del_pid := memo.ptrs_raiz_tpag[pid]
 	if config_memo.Cant_niveles == 0 {
-		memo.AsignarFramesAProceso(ptr_tpag_del_pid, tamanio, pid)
+		//lock memoria_principal
+		memo.EscribirDeSwapAMemoriaPrincipal(pid, tamanio, ptr_tpag_del_pid, w)
+		//unlock memoria_principal
 		return
 	}
 
 	for i := 1; i < config_memo.Cant_niveles; i++ {
 		ptr_tpag_del_pid = ptr_tpag_del_pid.sgte_nivel
 	}
+
+	//lock memoria_principal
+	memo.EscribirDeSwapAMemoriaPrincipal(pid, tamanio, ptr_tpag_del_pid, w)
+	//unlock memoria_principal
+
+}
+
+func (memo *Memo) EscribirDeSwapAMemoriaPrincipal(pid int, tamanio int, ptr_tpag_del_pid *NivelTPag, w http.ResponseWriter) {
 
 	memo.AsignarFramesAProceso(ptr_tpag_del_pid, tamanio, pid)
 
@@ -339,14 +420,13 @@ func (memo *Memo) QuitarDeSwap(w http.ResponseWriter, r *http.Request) {
 
 		copy(memoria_principal[inicio_memo:fin_memo], pagina_a_escribir)
 	}
-
 	memo.IncrementarMetrica(pid, Subidas_a_memoria)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
 
 func (memo *Memo) InicializarTablaFramesGlobal(cant_frames_memo int) {
-	for i := 0; i <= cant_frames_memo; i++ {
+	for i := range cant_frames_memo {
 		memo.tabla_frames[i] = -1
 	}
 }
@@ -555,7 +635,9 @@ func (memo *Memo) EliminarProcesoDeSwap(pid int) {
 func (memo *Memo) FinalizarProceso(w http.ResponseWriter, r *http.Request) {
 	var request string
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		fmt.Println("error al recibir peticion de WRITE")
+		slog.Error("Error - (FinalizarProceso) - Error al recibir peticion de WRITE")
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	pid, _ := strconv.Atoi(request)

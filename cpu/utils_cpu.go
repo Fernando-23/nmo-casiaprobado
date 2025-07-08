@@ -11,12 +11,9 @@ import (
 )
 
 func fetch(url_memo string) string {
-
-	peticion := fmt.Sprintf("%d %d", *pid_ejecutando, *pc_ejecutando)
-	fullUrl := fmt.Sprintf("%s/memoria/fetch", url_memo)
-
-	instruccion, _ := utils.EnviarSolicitudHTTPString("POST", fullUrl, peticion)
-
+	// peticion := fmt.Sprintf("%d %d", *pid_ejecutando, *pc_ejecutando)
+	// fullUrl := fmt.Sprintf("%s/fetch", url_memo)
+	instruccion, _ := utils.FormatearUrlYEnviar(url_memo, "/fetch", true, "%d %d", *pid_ejecutando, *pc_ejecutando)
 	return instruccion
 }
 
@@ -111,6 +108,7 @@ func recibirInterrupt(w http.ResponseWriter, r *http.Request) {
 
 	if respuesta == "OK" {
 		HabilitarInterrupt(true)
+		utils.FormatearUrlYEnviar(url_kernel, "/interrumpido", false, "%s %d %d", id_cpu, *pid_ejecutando, *pc_ejecutando)
 		return
 	}
 }
@@ -132,7 +130,7 @@ func liberarTLB() {
 }
 
 func inicializarTLB() {
-	for i := 0; i <= config_CPU.Cant_entradas_cache; i++ {
+	for i := range config_CPU.Cant_entradas_cache {
 		cache_pags[i].pagina = -1
 		cache_pags[i].contenido = ""
 	}

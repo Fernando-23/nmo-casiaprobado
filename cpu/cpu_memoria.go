@@ -25,10 +25,8 @@ func requestWRITE(direccion_logica int, datos string) (string, DireccionFisica) 
 		return contenido, dir_fisica
 	}
 
-	peticion_WRITE := fmt.Sprintf("%d %d %d %s", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, datos)
-	fullUrl := fmt.Sprintf("http://%s/memoria/WRITE", url_memo)
+	respuesta, _ := utils.FormatearUrlYEnviar(url_memo, "/WRITE", true, "%d %d %d %s", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, datos)
 
-	respuesta, _ := utils.EnviarSolicitudHTTPString("POST", fullUrl, peticion_WRITE)
 	if cache_pags_activa {
 		aplicarAlgoritmoCachePags(int(nro_pagina), frame, dir_fisica.offset, respuesta, "WRITE")
 	}
@@ -53,10 +51,7 @@ func requestREAD(direccion_logica int, tamanio int) (string, DireccionFisica) {
 		return contenido, dir_fisica
 	}
 
-	peticion_READ := fmt.Sprintf("%d %d %d %d", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, tamanio)
-	fullUrl := fmt.Sprintf("http://%s/memoria/READ", url_memo)
-
-	respuesta, _ := utils.EnviarSolicitudHTTPString("POST", fullUrl, peticion_READ)
+	respuesta, _ := utils.FormatearUrlYEnviar(url_memo, "/READ", true, "%d %d %d %d", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, tamanio)
 
 	if cache_pags_activa {
 		aplicarAlgoritmoCachePags(int(nro_pagina), frame, dir_fisica.offset, respuesta, "READ")
@@ -91,9 +86,7 @@ func busquedaFrameAMemoria(nro_pagina float64) int {
 }
 
 func busquedaTabla(pid int, nivel_actual int, entrada_a_acceder int) string {
-	solicitud_acceso_tpaginas := fmt.Sprintf("%d %d %d", pid, nivel_actual, entrada_a_acceder)
-	fullUrl := fmt.Sprintf("http://%s/memoria/busqueda_tabla", url_memo)
-	respuesta, _ := utils.EnviarSolicitudHTTPString("POST", fullUrl, solicitud_acceso_tpaginas)
+	respuesta, _ := utils.FormatearUrlYEnviar(url_memo, "/busqueda_tabla", true, "%d %d %d", pid, nivel_actual, entrada_a_acceder)
 	return respuesta
 }
 
@@ -314,6 +307,7 @@ func cicloCLockM(sector_extra int, valor_uso int, valor_modificado int, nro_pagi
 	}
 
 }
+
 func actualizarEntradaCache(posicion int, nro_pagina int, frame int, offset int, contenido string, accion string) {
 	cache_pags[posicion].contenido = contenido
 	cache_pags[posicion].frame = frame
@@ -337,9 +331,7 @@ func MMU(frame int, offset int) DireccionFisica {
 }
 
 func actualizarPagCompleta(entrada_a_actualizar *EntradaCachePag) {
-	fullUrl := fmt.Sprintf("http://%s/memoria/actualizar_entrada_cache", url_memo)
-	peticion := fmt.Sprintf("%d %d", *pid_ejecutando, entrada_a_actualizar.frame)
-	utils.EnviarSolicitudHTTPString("POST", fullUrl, peticion)
+	utils.FormatearUrlYEnviar(url_memo, "/actualizar_entrada_cache", false, "%d %d", *pid_ejecutando, entrada_a_actualizar.frame)
 	utils.LoggerConFormato("PID: %d - Memory Update - Página: %d - Frame: %d",
 		*pid_ejecutando, entrada_a_actualizar.pagina, entrada_a_actualizar.frame)
 }

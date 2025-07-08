@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -9,25 +10,25 @@ import (
 	"time"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
-	cliente "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Cliente"
 )
 
 func main() {
 	fmt.Println("Iniciando CPU...")
 	// Preparacion incial
-	config_CPU = &ConfigCPU{}
-	utils.IniciarConfiguracion("config.json", config_CPU)
 	args := os.Args
 	id_cpu = args[1]
+	config_CPU = &ConfigCPU{}
+	path_config_cpu := fmt.Sprintf("cpu%s.json", id_cpu)
+	utils.IniciarConfiguracion(path_config_cpu, config_CPU)
 	pid_ejecutando = new(int)
 	pc_ejecutando = new(int)
 	noticiero_metereologico = time.Now()
 
 	//url_cpu = fmt.Sprintf("http://%s:%d", config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
-	url_kernel = fmt.Sprintf("http://%s:%d", config_CPU.Ip_Kernel, config_CPU.Puerto_Kernel)
-	url_memo = fmt.Sprintf("http://%s:%d", config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
-	nombre_logger := fmt.Sprintf("cpu %s", id_cpu)
-	cliente.ConfigurarLogger(nombre_logger)
+	url_kernel = fmt.Sprintf("http://%s:%d/kernel", config_CPU.Ip_Kernel, config_CPU.Puerto_Kernel)
+	url_memo = fmt.Sprintf("http://%s:%d/memoria", config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
+	nombre_logger := fmt.Sprintf("cpu%s", id_cpu)
+	utils.ConfigurarLogger(nombre_logger, config_CPU.Log_level)
 
 	chequarTLBActiva()
 	chequearCachePagsActiva()
@@ -42,16 +43,21 @@ func main() {
 		reiniciarCachePags()
 	}
 
-	cliente.EnviarMensaje(config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria, "Conexion hecha con modulo CPU")
-	handshake_memoria, _ := utils.EnviarSolicitudHTTPString("GET", url_memo, nil)
+	// cliente.EnviarMensaje(config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria, "Conexion hecha con modulo CPU")
+	handshake_memoria, _ := utils.EnviarStringConEspera("GET", url_memo, "")
 	aux_datos_mmu := strings.Split(handshake_memoria, " ")
 	cant_niveles, _ = strconv.Atoi(aux_datos_mmu[0])
 	cant_entradas_tpag, _ = strconv.Atoi(aux_datos_mmu[1])
 	tam_pag, _ = strconv.Atoi(aux_datos_mmu[2])
 
 	// Conexion con Kernel
-	fmt.Println("Iniciando handshake con kernel")
-	registrarCpu(url_kernel)
+	slog.Debug("Iniciando handshake con kernel")
+	if err := registrarCpu(url_kernel); err != nil {
+		slog.Error("Error registrando cpu - Me muero",
+			"error", err,
+		)
+		return
+	}
 
 	var instruccion string
 
@@ -70,10 +76,16 @@ func main() {
 
 		for !hay_interrupcion { //consulta el valor en un tiempo t no necesito sincronizar
 			instruccion = fetch(url_memo)
+
+			if instruccion == "TODO MAL" {
+				slog.Error("Error - (Fetch) - Instruccion invalida")
+				return
+			}
+
 			utils.LoggerConFormato("## PID: %d - FETCH - Program Counter: %d", *pid_ejecutando, *pc_ejecutando)
 
 			if instruccion == "" {
-				fmt.Printf("No hay una instruccion valida asociado a este Program Counter.")
+				slog.Error("No hay una instruccion valida asociado a este Program Counter.")
 				break
 			}
 

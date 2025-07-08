@@ -13,17 +13,16 @@ import (
 
 func main() {
 
-	fmt.Printf("Iniciando Kernel...")
+	fmt.Println("Iniciando Kernel...")
 	//cliente.ConfigurarLogger("kernel")
 	kernel := &Kernel{
 		CPUsConectadas: make(map[int]*CPU),
 		Configuracion:  new(ConfigKernel),
 		DispositivosIO: make(map[string]*InstanciasPorDispositivo),
 	}
-
+	err := IniciarConfiguracion("kernel.json", kernel.Configuracion)
+	url_memo = fmt.Sprintf("http://%s:%d/memoria", kernel.Configuracion.Ip_memoria, kernel.Configuracion.Puerto_Memoria)
 	kernel.InicializarMapaDeEstados()
-
-	err := IniciarConfiguracion("config.json", kernel.Configuracion)
 
 	if err != nil {
 		fmt.Println("[main] Error al iniciar config")

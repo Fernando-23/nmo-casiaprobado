@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,39 +36,27 @@ func esperarDatosKernel(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func registrarCpu(url_kernel string) {
+func registrarCpu(url_kernel string) error {
 
-	peticion := fmt.Sprintf("%s %s %d", id_cpu, config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
-	url := fmt.Sprintf("%s/cpu/registrar_cpu", url_kernel)
-
-	if respuesta, err := utils.EnviarSolicitudHTTPString("POST", url, peticion); err != nil {
-		fmt.Println("Respuesta de Kernel", respuesta)
-		log.Println("No se pudo registrar la cpu")
-		return
+	respuesta, err := utils.FormatearUrlYEnviar(url_kernel, "/registrar_cpu", true, "%s %s %d", id_cpu, config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
+	if respuesta != "OK" || err != nil {
+		return fmt.Errorf("no se puede registar la cpu %s", id_cpu)
 	}
 
-	log.Println("CPU registrada correctamente!")
+	slog.Debug("CPU registrada correctamente!")
+	return nil
 
 }
 
 func enviarSyscall(cod_op_syscall string, syscall string) {
 
-	url := fmt.Sprintf("%s/cpu/syscall", url_kernel)
+	utils.FormatearUrlYEnviar(url_kernel, "/syscall", false, "%s", syscall)
 
-	fmt.Println("Intento enviar la syscall...")
-	fmt.Println(syscall)
-	utils.EnviarSolicitudHTTPString("POST", url, syscall)
-	fmt.Println("Che aca le pase la syscall a kernel y soy un genio ;)")
-
-	log.Println("Se envio correctamente la Syscall: ", cod_op_syscall)
+	slog.Debug("Debug - (enviarSyscall) - Syscall enviado correctamente",
+		"syscall", cod_op_syscall)
 }
 
 func actualizarContexto() {
-
-	url := fmt.Sprintf("%s/cpu/syscall", url_kernel)
-
-	contexto := fmt.Sprintf("%d %d", *pid_ejecutando, *pc_ejecutando)
-	utils.EnviarSolicitudHTTPString("POST", url, contexto)
-
+	utils.FormatearUrlYEnviar(url_kernel, "/syscall", false, "%d %d", *pid_ejecutando, *pc_ejecutando)
 	log.Println("Se envio el contexto por interrupcion correctamente")
 }

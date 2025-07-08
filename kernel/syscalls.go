@@ -219,18 +219,10 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 			}
 		}()
 
-		fullURL := fmt.Sprintf("http://%s:%d/memoria/MEMORY_DUMP", k.Configuracion.Ip_memoria, k.Configuracion.Puerto_Memoria)
-		respuesta, err := utils.EnviarStringConEspera("POST", fullURL, strconv.Itoa(pid))
-
-		if err != nil || respuesta != "OK" {
-			slog.Error("Error - (GestionarDUMP_MEMORY) - Dump fallido o respuesta inesperada",
-				"pid", pid,
-				"error", err,
-				"respuesta", respuesta,
-			)
+		if !EnviarMemoryDump(pid) {
 			k.GestionarEXIT(pid, idCpu)
-			return
 		}
+
 		if !k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, true) {
 			slog.Error("Error - (GestionarDUMP_MEMORY) - No se encontó el proceso",
 				"pid", pid)
