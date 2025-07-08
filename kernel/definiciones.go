@@ -72,7 +72,6 @@ type Kernel struct {
 }
 
 var (
-	mutex_desalojos                 sync.Mutex
 	mutex_peticionHayEspacioMemoria sync.Mutex
 	mutex_SiguientePid              sync.Mutex
 	mutex_CPUsConectadas            sync.Mutex

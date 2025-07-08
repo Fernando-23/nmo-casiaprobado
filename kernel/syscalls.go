@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -12,43 +11,68 @@ import (
 	utils "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
-	var respuesta string
+func (k *Kernel) liberarCPU(idCPU int) {
+	mutex_CPUsConectadas.Lock()
+	defer mutex_CPUsConectadas.Unlock()
 
-	if err := json.NewDecoder(r.Body).Decode(&respuesta); err != nil {
-		fmt.Println("error creando la solicitud:", err)
+	cpu, ok := k.CPUsConectadas[idCPU]
+	if !ok {
+		slog.Error("No se encontró CPU al liberar", "idCPU", idCPU)
 		return
 	}
-	k.GestionarSyscalls(respuesta)
+	actualizarCPU(cpu, -1, 0, true)
 }
 
-func (k *Kernel) GestionarSyscalls(respuesta string) {
+func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
+	var mensaje string
+
+	if err := json.NewDecoder(r.Body).Decode(&mensaje); err != nil {
+		slog.Error("Error al decodificar syscall", "error", err)
+		http.Error(w, "Formato inválido", http.StatusBadRequest)
+		return
+	}
+
+	debeContinuar, err := k.GestionarSyscalls(mensaje)
+	if err != nil {
+		slog.Error("Error al gestionar syscall", "detalle", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if debeContinuar {
+		w.Write([]byte("SEGUI"))
+	} else {
+		k.IntentarEnviarProcesoAExecute()
+		w.Write([]byte("REPLANIFICAR"))
+	}
+
+}
+
+func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 
 	syscall := strings.Split(respuesta, " ")
+
+	if len(syscall) < 3 {
+		return false, fmt.Errorf("error - syscall incompleta: %v", respuesta)
+	}
 
 	idCPU, err := strconv.Atoi(syscall[IdCPU])
 
 	if err != nil {
-		slog.Error("Error - (GestionarSyscalls) - ID de CPU no es un número",
-			"id_cpu", syscall[IdCPU])
-		return
+		return false, fmt.Errorf("error - ID de CPU inválido: %s", syscall[IdCPU])
 	}
 
 	pc, err := strconv.Atoi(syscall[PC])
 
 	if err != nil {
-		slog.Error("Error - (GestionarSyscalls) - PC invalido",
-			"pc", syscall[PC])
-		return
+		return false, fmt.Errorf("error - PC inválido: %s", syscall[PC])
 	}
 
 	mutex_CPUsConectadas.Lock()
 	cpu_ejecutando, existe := k.CPUsConectadas[idCPU]
 	if !existe {
-		slog.Error("Error - (GestionarSyscalls) - ID de CPU inexistente",
-			"id_cpu", idCPU)
 		mutex_CPUsConectadas.Unlock()
-		return
+		return false, fmt.Errorf("error - CPU no registrada: %d", idCPU)
 	}
 	pid := cpu_ejecutando.Pid
 	mutex_CPUsConectadas.Unlock()
@@ -59,45 +83,53 @@ func (k *Kernel) GestionarSyscalls(respuesta string) {
 	switch cod_op {
 	case "IO":
 		// 2 20 IO AURICULARES 9000
+		if len(syscall) < 5 {
+			return false, fmt.Errorf("error - syscall IO mal formada")
+		}
 
 		nombre := syscall[3]
-		tiempo, _ := strconv.Atoi(syscall[4])
+		tiempo, err := strconv.Atoi(syscall[4])
+		if err != nil {
+			return false, fmt.Errorf("error - syscall IO - tiempo inválido: %s", syscall[4])
+		}
 		k.GestionarIO(nombre, pid, pc, tiempo, idCPU)
-		//manejarIO
-		//validar que exista la io
-		//enviar mensaje a io
+		k.liberarCPU(idCPU)
+		return false, nil // la CPU debe replanificar
 
 	case "INIT_PROC":
 		// 2 20 INIT_PROC proceso1 256
+		if len(syscall) < 5 {
+			return false, fmt.Errorf("error - syscall INIT_PROC mal formada")
+		}
+
 		nombre_arch := syscall[3]
-		tamanio, _ := strconv.Atoi(syscall[4])
+		tamanio, err := strconv.Atoi(syscall[4])
+
+		if err != nil {
+			return false, fmt.Errorf("error - syscall IO - tamaño inválido: %s", syscall[4])
+		}
+
 		k.GestionarINIT_PROC(nombre_arch, tamanio, pc)
+
+		return true, nil // la CPU debe seguir con el proceso
 
 	case "DUMP_MEMORY":
 		// 2 30 DUMP_MEMORY
 		k.GestionarDUMP_MEMORY(pid, idCPU)
+		k.liberarCPU(idCPU)
+
+		return false, nil // la CPU debe replanificar
 
 	case "EXIT":
 		// 2 30 EXIT
-		//finalizarProc
 		k.GestionarEXIT(pid, idCPU)
-		//return false
-		//default:
-		//	return fmt.Errorf("syscall no reconocida %s", cod_op)
-	}
+		k.liberarCPU(idCPU)
 
-	// liberar CPU y actualizar
-	mutex_CPUsConectadas.Lock()
-	cpu_ejecutando, existe = k.CPUsConectadas[idCPU]
-	if !existe {
-		log.Printf("[ERROR] (GestionarSyscalls) ID de CPU inexistente: %d", idCPU)
-		mutex_CPUsConectadas.Unlock()
-		return
-	}
-	actualizarCPU(cpu_ejecutando, -1, 0, true)
-	mutex_CPUsConectadas.Unlock()
+		return false, nil // la CPU debe replanificar
 
-	k.IntentarEnviarProcesoAExecute()
+	default:
+		return false, fmt.Errorf("error - syscall no reconocida %s", cod_op)
+	}
 
 }
 
