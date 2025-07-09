@@ -49,7 +49,7 @@ func main() {
 	//Iniciar servidor
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/cpu/registrar_cpu", kernel.llegaNuevaCPU) //SINCRO HECHA
+	mux.HandleFunc("/cpu/registrar_cpu", kernel.LlegaNuevaCPU) //SINCRO HECHA
 	mux.HandleFunc("/kernel/interrupido", kernel.llegaFinInterrupcion)
 	mux.HandleFunc("/cpu/syscall", kernel.llegaSyscallCPU)
 	mux.HandleFunc("/kernel/registrar_io", kernel.llegaNuevaIO)         // SINCRO HECHA

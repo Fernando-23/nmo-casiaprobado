@@ -19,7 +19,11 @@ func main() {
 		memoria_sistema: make(map[int][]string),
 		ptrs_raiz_tpag:  make(map[int]*NivelTPag),
 		tabla_frames:    make([]int, cant_frames_totales),
-		metricas:        make(map[int][]int),
+		swap: &DataSwap{
+			espacio_contiguo: make(map[int]*ProcesoEnSwap),
+			espacio_libre:    []*EspacioLibre{},
+		},
+		metricas: make(map[int][]int),
 	}
 
 	tam_memo_actual = config_memo.Tamanio_memoria

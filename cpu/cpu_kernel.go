@@ -1,8 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"net/http"
@@ -12,12 +12,17 @@ import (
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-func esperarDatosKernel(w http.ResponseWriter, r *http.Request) {
+func (cpu *CPU) EsperarDatosKernel(w http.ResponseWriter, r *http.Request) {
 	var respuesta string
-	if err := json.NewDecoder(r.Body).Decode(&respuesta); err != nil {
-		fmt.Println("Se produjo un error al deserializar: ", err)
+
+	body_bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		fmt.Println("Error leyendo la solicitud:", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+
+	respuesta = string(body_bytes)
 
 	datos := strings.Split(respuesta, " ")
 	if len(datos) != 2 {
@@ -28,19 +33,21 @@ func esperarDatosKernel(w http.ResponseWriter, r *http.Request) {
 	pid_aux, _ := strconv.Atoi(datos[0])
 	pc_aux, _ := strconv.Atoi(datos[1])
 
-	*pid_ejecutando = pid_aux
-	*pc_ejecutando = pc_aux
+	cpu.Proc_ejecutando.Pid = pid_aux
+	cpu.Proc_ejecutando.Pc = pc_aux
 
-	utils.LoggerConFormato("Me llego el proceso con pid %d de kernel", *pid_ejecutando)
+	utils.LoggerConFormato("Me llego el proceso con pid %d de kernel", cpu.Proc_ejecutando.Pid)
 	ch_esperar_datos <- struct{}{}
 
 }
 
-func registrarCpu(url_kernel string) error {
+func (cpu *CPU) RegistrarCpu() error {
 
-	respuesta, err := utils.FormatearUrlYEnviar(url_kernel, "/registrar_cpu", true, "%s %s %d", id_cpu, config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
+	respuesta, err := utils.FormatearUrlYEnviar(cpu.Url_kernel, "/registrar_cpu", true, "%s %s %d", cpu.Id, cpu.Config_CPU.Ip_CPU, cpu.Config_CPU.Puerto_CPU)
+	fmt.Println(respuesta)
+
 	if respuesta != "OK" || err != nil {
-		return fmt.Errorf("no se puede registar la cpu %s", id_cpu)
+		return fmt.Errorf("no se puede registar la cpu %s", cpu.Id)
 	}
 
 	slog.Debug("CPU registrada correctamente!")
@@ -48,15 +55,15 @@ func registrarCpu(url_kernel string) error {
 
 }
 
-func enviarSyscall(cod_op_syscall string, syscall string) {
+func (cpu *CPU) EnviarSyscall(cod_op_syscall string, syscall string) {
 
-	utils.FormatearUrlYEnviar(url_kernel, "/syscall", false, "%s", syscall)
+	utils.FormatearUrlYEnviar(cpu.Url_kernel, "/syscall", false, "%s", syscall)
 
 	slog.Debug("Debug - (enviarSyscall) - Syscall enviado correctamente",
 		"syscall", cod_op_syscall)
 }
 
-func actualizarContexto() {
-	utils.FormatearUrlYEnviar(url_kernel, "/syscall", false, "%d %d", *pid_ejecutando, *pc_ejecutando)
+func (cpu *CPU) ActualizarContexto() {
+	utils.FormatearUrlYEnviar(cpu.Url_kernel, "/syscall", false, "%d %d", cpu.Proc_ejecutando.Pid, cpu.Proc_ejecutando.Pc)
 	log.Println("Se envio el contexto por interrupcion correctamente")
 }

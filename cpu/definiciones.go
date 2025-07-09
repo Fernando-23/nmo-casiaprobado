@@ -41,23 +41,29 @@ type EntradaCachePag struct {
 	bit_modificado int
 }
 
+type CPU struct {
+	Id              string
+	Url_memoria     string
+	Url_kernel      string
+	Proc_ejecutando *Proceso
+	Tlb             []*EntradaTLB
+	Cache_pags      []*EntradaCachePag
+	Config_CPU      *ConfigCPU
+}
+
+type Proceso struct {
+	Pid int
+	Pc  int
+}
+
 var (
-	config_CPU              *ConfigCPU
-	tlb                     []*EntradaTLB
 	noticiero_metereologico time.Time
-	cache_pags              []*EntradaCachePag
-	//url_cpu                 string
-	url_kernel        string
-	url_memo          string
+
 	hay_interrupcion  bool
 	tlb_activa        bool
 	cache_pags_activa bool
 
-	pid_ejecutando *int
-	pc_ejecutando  *int
-
 	//No hace falta sincronizar
-	id_cpu             string
 	cant_niveles       int
 	cant_entradas_tpag int
 	tam_pag            int

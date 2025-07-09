@@ -18,7 +18,7 @@ type ConfigMemo struct {
 
 type Memo struct {
 	memoria_sistema map[int][]string
-	swap            DataSwap
+	swap            *DataSwap
 	l_proc          map[int]*Proceso
 	ptrs_raiz_tpag  map[int]*NivelTPag
 	tabla_frames    []int //sincronizacion

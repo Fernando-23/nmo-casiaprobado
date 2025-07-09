@@ -1,8 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,14 +11,16 @@ import (
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-func (k *Kernel) llegaNuevaCPU(w http.ResponseWriter, r *http.Request) { // Handshake
+func (k *Kernel) LlegaNuevaCPU(w http.ResponseWriter, r *http.Request) { // Handshake
 
-	var mensajeCPU string
-	if err := json.NewDecoder(r.Body).Decode(&mensajeCPU); err != nil {
-		fmt.Println("Error recibiendo la solicitud:", err)
-		http.Error(w, "Error en el formato de la solicitud", http.StatusBadRequest)
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (LlegaNuevaCPU) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+
+	mensajeCPU := string(body_Bytes)
 
 	utils.LoggerConFormato("(llegaNuevaCPU) con mensaje: %s\n", mensajeCPU)
 
@@ -30,7 +33,7 @@ func (k *Kernel) llegaNuevaCPU(w http.ResponseWriter, r *http.Request) { // Hand
 }
 
 func (k *Kernel) registrarNuevaCPU(mensajeCPU string) bool {
-
+	fmt.Println(mensajeCPU)
 	aux := strings.Split(mensajeCPU, " ") //ID IP PUERTO
 
 	if len(aux) != 3 {

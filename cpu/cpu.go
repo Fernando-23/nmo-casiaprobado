@@ -14,37 +14,41 @@ import (
 
 func main() {
 	fmt.Println("Iniciando CPU...")
+
+	if len(os.Args) < 2 {
+		fmt.Println("Falta el identificador de la CPU como argumento")
+		os.Exit(1)
+	}
+
 	// Preparacion incial
-	args := os.Args
-	id_cpu = args[1]
-	config_CPU = &ConfigCPU{}
+	id_cpu := os.Args[1]
+
 	path_config_cpu := fmt.Sprintf("cpu%s.json", id_cpu)
-	utils.IniciarConfiguracion(path_config_cpu, config_CPU)
-	pid_ejecutando = new(int)
-	pc_ejecutando = new(int)
 	noticiero_metereologico = time.Now()
 
-	//url_cpu = fmt.Sprintf("http://%s:%d", config_CPU.Ip_CPU, config_CPU.Puerto_CPU)
-	url_kernel = fmt.Sprintf("http://%s:%d/kernel", config_CPU.Ip_Kernel, config_CPU.Puerto_Kernel)
-	url_memo = fmt.Sprintf("http://%s:%d/memoria", config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria)
-	nombre_logger := fmt.Sprintf("cpu%s", id_cpu)
-	utils.ConfigurarLogger(nombre_logger, config_CPU.Log_level)
+	cpu := crearCPU(id_cpu, path_config_cpu)
 
-	chequarTLBActiva()
-	chequearCachePagsActiva()
+	cpu.ChequarTLBActiva()
+	cpu.ChequearCachePagsActiva()
 
 	if tlb_activa {
-		tlb = make([]*EntradaTLB, config_CPU.Cant_entradas_TLB)
-		inicializarTLB()
+		cpu.InicializarTLB()
 	}
 
 	if cache_pags_activa {
-		cache_pags = make([]*EntradaCachePag, config_CPU.Cant_entradas_cache)
-		reiniciarCachePags()
+		cpu.IniciarCachePags()
 	}
 
 	// cliente.EnviarMensaje(config_CPU.Ip_Memoria, config_CPU.Puerto_Memoria, "Conexion hecha con modulo CPU")
-	handshake_memoria, _ := utils.EnviarStringConEspera("GET", url_memo, "")
+
+	handshake_memoria, err := utils.FormatearUrlYEnviar(cpu.Url_memoria, "/handshake", true, "CPU")
+	fmt.Println(handshake_memoria)
+	if handshake_memoria == "NO_OK" || err != nil {
+		slog.Error("Error - (main) - NO se pudo establecen conexion con memoria")
+		return
+	}
+	slog.Debug("(handshake_memoria)")
+
 	aux_datos_mmu := strings.Split(handshake_memoria, " ")
 	cant_niveles, _ = strconv.Atoi(aux_datos_mmu[0])
 	cant_entradas_tpag, _ = strconv.Atoi(aux_datos_mmu[1])
@@ -52,7 +56,7 @@ func main() {
 
 	// Conexion con Kernel
 	slog.Debug("Iniciando handshake con kernel")
-	if err := registrarCpu(url_kernel); err != nil {
+	if err := cpu.RegistrarCpu(); err != nil {
 		slog.Error("Error registrando cpu - Me muero",
 			"error", err,
 		)
@@ -63,10 +67,10 @@ func main() {
 
 	hay_interrupcion = false
 	mux := http.NewServeMux()
-	mux.HandleFunc("/cpu/dispatch", esperarDatosKernel)
-	mux.HandleFunc("/cpu/interrupt", recibirInterrupt)
+	mux.HandleFunc("/cpu/dispatch", cpu.EsperarDatosKernel)
+	mux.HandleFunc("/cpu/interrupt", cpu.RecibirInterrupt)
 
-	socket_cpu := fmt.Sprintf(":%d", config_CPU.Puerto_CPU)
+	socket_cpu := fmt.Sprintf(":%d", cpu.Config_CPU.Puerto_CPU)
 	go http.ListenAndServe(socket_cpu, mux)
 	// Ciclo de instruccion
 	ch_esperar_datos = make(chan struct{})
@@ -75,30 +79,31 @@ func main() {
 		<-ch_esperar_datos
 
 		for !hay_interrupcion { //consulta el valor en un tiempo t no necesito sincronizar
-			instruccion = fetch(url_memo)
+			instruccion = cpu.Fetch()
 
 			if instruccion == "TODO MAL" {
 				slog.Error("Error - (Fetch) - Instruccion invalida")
 				return
 			}
 
-			utils.LoggerConFormato("## PID: %d - FETCH - Program Counter: %d", *pid_ejecutando, *pc_ejecutando)
+			utils.LoggerConFormato("## PID: %d - FETCH - Program Counter: %d",
+				cpu.Proc_ejecutando.Pid, cpu.Proc_ejecutando.Pc)
 
 			if instruccion == "" {
 				slog.Error("No hay una instruccion valida asociado a este Program Counter.")
 				break
 			}
 
-			cod_op, operacion := decode(instruccion)
+			cod_op, operacion := cpu.Decode(instruccion)
 			fmt.Println("Aca llego la instruccion: ", instruccion)
-			execute(cod_op, operacion, instruccion)
+			cpu.Execute(cod_op, operacion, instruccion)
 
 		}
 
-		actualizarContexto()
-		liberarCaches()
+		cpu.ActualizarContexto()
+		cpu.LiberarCaches()
 		HabilitarInterrupt(false)
 
-		utils.LoggerConFormato("## PID: %d - Finaliza la ejecucion", *pid_ejecutando)
+		utils.LoggerConFormato("## PID: %d - Finaliza la ejecucion", cpu.Proc_ejecutando.Pid)
 	}
 }

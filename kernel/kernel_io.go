@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -13,12 +14,15 @@ import (
 
 func (k *Kernel) llegaDesconexionIO(w http.ResponseWriter, r *http.Request) {
 
-	var mensaje_IO string
-	if err := json.NewDecoder(r.Body).Decode(&mensaje_IO); err != nil {
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		slog.Error("Error - (FinalizarIO) - Error al decodificar cuerpo", "error", err)
 		return
 	}
-	nombre, url, err := decodificarMensajeDesconeccionIO(mensaje_IO)
+
+	mensajeIO := string(bodyBytes)
+	nombre, url, err := decodificarMensajeDesconeccionIO(mensajeIO)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -106,12 +110,14 @@ func (k *Kernel) EliminarProcesoDeIO(pid int) bool {
 }
 
 func (k *Kernel) llegaNuevaIO(w http.ResponseWriter, r *http.Request) { // Handshake
-	var mensajeIO string
-	if err := json.NewDecoder(r.Body).Decode(&mensajeIO); err != nil {
-		fmt.Println("Error recibiendo la solicitud:", err)
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
+		slog.Error("Error - (llegaNuevaIO) - Error al decodificar cuerpo", "error", err)
 		return
 	}
 
+	mensajeIO := string(bodyBytes)
 	nombre, ip, puerto, err := decodificarMensajeNuevaIO(mensajeIO)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

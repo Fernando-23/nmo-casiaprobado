@@ -10,60 +10,60 @@ import (
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-func requestWRITE(direccion_logica int, datos string) (string, DireccionFisica) {
+func (cpu *CPU) RequestWRITE(direccion_logica int, datos string) (string, DireccionFisica) {
 
 	desplazamiento := int(direccion_logica) % int(tam_pag)
 	nro_pagina := math.Floor(float64(direccion_logica) / float64(tam_pag))
 
-	frame, contenido := busquedaMemoriaFrame(int(nro_pagina), "WRITE") //el contenido es solo para cache pags activa
+	frame, contenido := cpu.BusquedaMemoriaFrame(int(nro_pagina), "WRITE") //el contenido es solo para cache pags activa
 
-	dir_fisica := MMU(frame, desplazamiento)
+	dir_fisica := cpu.MMU(frame, desplazamiento)
 
 	//Encuentro en cache pags
 	if contenido != "NO_ENCONTRE" {
-		utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", *pid_ejecutando, int(nro_pagina), frame)
+		utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", cpu.Proc_ejecutando.Pid, int(nro_pagina), frame)
 		return contenido, dir_fisica
 	}
 
-	respuesta, _ := utils.FormatearUrlYEnviar(url_memo, "/WRITE", true, "%d %d %d %s", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, datos)
+	respuesta, _ := utils.FormatearUrlYEnviar(cpu.Url_memoria, "/WRITE", true, "%d %d %d %s", cpu.Proc_ejecutando.Pid, dir_fisica.frame, dir_fisica.offset, datos)
 
 	if cache_pags_activa {
-		aplicarAlgoritmoCachePags(int(nro_pagina), frame, dir_fisica.offset, respuesta, "WRITE")
+		cpu.AplicarAlgoritmoCachePags(int(nro_pagina), frame, dir_fisica.offset, respuesta, "WRITE")
 	}
 
-	utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", *pid_ejecutando, int(nro_pagina), frame)
+	utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", cpu.Proc_ejecutando.Pid, int(nro_pagina), frame)
 
 	log.Printf("Se esta intentando escribir en la direccion fisica [ %d | %d ]", dir_fisica.frame, dir_fisica.offset)
 	return respuesta, dir_fisica
 }
 
-func requestREAD(direccion_logica int, tamanio int) (string, DireccionFisica) {
+func (cpu *CPU) RequestREAD(direccion_logica int, tamanio int) (string, DireccionFisica) {
 
 	desplazamiento := int(direccion_logica) % int(tam_pag)
 	nro_pagina := math.Floor(float64(direccion_logica) / float64(tam_pag))
 
-	frame, contenido := busquedaMemoriaFrame(int(nro_pagina), "READ") //el contenido es solo para cache pags activa
-	dir_fisica := MMU(frame, desplazamiento)
+	frame, contenido := cpu.BusquedaMemoriaFrame(int(nro_pagina), "READ") //el contenido es solo para cache pags activa
+	dir_fisica := cpu.MMU(frame, desplazamiento)
 
 	// Encuentro en cache pags
 	if contenido != "NO_ENCONTRE" {
-		utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", *pid_ejecutando, int(nro_pagina), frame)
+		utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", cpu.Proc_ejecutando.Pid, int(nro_pagina), frame)
 		return contenido, dir_fisica
 	}
 
-	respuesta, _ := utils.FormatearUrlYEnviar(url_memo, "/READ", true, "%d %d %d %d", *pid_ejecutando, dir_fisica.frame, dir_fisica.offset, tamanio)
+	respuesta, _ := utils.FormatearUrlYEnviar(cpu.Url_memoria, "/READ", true, "%d %d %d %d", cpu.Proc_ejecutando.Pid, dir_fisica.frame, dir_fisica.offset, tamanio)
 
 	if cache_pags_activa {
-		aplicarAlgoritmoCachePags(int(nro_pagina), frame, dir_fisica.offset, respuesta, "READ")
+		cpu.AplicarAlgoritmoCachePags(int(nro_pagina), frame, dir_fisica.offset, respuesta, "READ")
 	}
 
-	utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", *pid_ejecutando, int(nro_pagina), frame)
+	utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", cpu.Proc_ejecutando.Pid, int(nro_pagina), frame)
 	log.Printf("Se esta intentando leer en la direccion fisica [ %d | %d ]", dir_fisica.frame, dir_fisica.offset)
 
 	return respuesta, dir_fisica
 }
 
-func busquedaFrameAMemoria(nro_pagina float64) int {
+func (cpu *CPU) BusquedaFrameAMemoria(nro_pagina float64) int {
 
 	frame := -1
 
@@ -71,117 +71,118 @@ func busquedaFrameAMemoria(nro_pagina float64) int {
 		//Santi: Lo mas hardcodeado que vi
 		entrada_nivel_final := int(math.Floor(nro_pagina/math.Pow(float64(cant_entradas_tpag), float64((cant_niveles-nivel_actual))))) % int(cant_entradas_tpag)
 
-		respuesta := busquedaTabla(*pid_ejecutando, nivel_actual, entrada_nivel_final)
+		respuesta := cpu.BusquedaTabla(cpu.Proc_ejecutando.Pid, nivel_actual, entrada_nivel_final)
 		//    "SEGUI" Todo bien, sigo al sgte nivel
 		// != "SEGUI" Es un frame, lo devuelvo
 		if respuesta != "SEGUI" {
 			frame, _ := strconv.Atoi(respuesta)
-			utils.LoggerConFormato("PID : %d - OBTENER MARCO - Página: %d - Marco: %d", *pid_ejecutando, int(nro_pagina), frame)
+			utils.LoggerConFormato("PID : %d - OBTENER MARCO - Página: %d - Marco: %d", cpu.Proc_ejecutando.Pid, int(nro_pagina), frame)
 
 			return frame
 		}
-
 	}
 	return frame
 }
 
-func busquedaTabla(pid int, nivel_actual int, entrada_a_acceder int) string {
-	respuesta, _ := utils.FormatearUrlYEnviar(url_memo, "/busqueda_tabla", true, "%d %d %d", pid, nivel_actual, entrada_a_acceder)
+func (cpu *CPU) BusquedaTabla(pid int, nivel_actual int, entrada_a_acceder int) string {
+	respuesta, _ := utils.FormatearUrlYEnviar(cpu.Url_memoria, "/busqueda_tabla", true, "%d %d %d", pid, nivel_actual, entrada_a_acceder)
 	return respuesta
 }
 
-func buscarEnTLB(nro_pagina int) int {
+func (cpu *CPU) BuscarEnTLB(nro_pagina int) int {
 
-	for i := 0; i <= config_CPU.Cant_entradas_TLB; i++ {
-		if tlb[i].pagina == nro_pagina {
+	for i := 0; i <= cpu.Config_CPU.Cant_entradas_TLB; i++ {
+		if cpu.Tlb[i].pagina == nro_pagina {
 			// Caso TLB HIT
-			utils.LoggerConFormato("PID: %d - TLB HIT - Pagina: %d", *pid_ejecutando, nro_pagina)
+			utils.LoggerConFormato("PID: %d - TLB HIT - Pagina: %d", cpu.Proc_ejecutando.Pid, nro_pagina)
 			if tlb_activa {
-				tlb[i].last_recently_used = time.Now()
+				cpu.Tlb[i].last_recently_used = time.Now()
 			}
 
-			return tlb[i].frame
+			return cpu.Tlb[i].frame
 		}
 	}
 	// Caso TLB MISS
-	utils.LoggerConFormato("PID: %d - TLB MISS - Pagina: %d", *pid_ejecutando, nro_pagina)
-	frame := busquedaFrameAMemoria(float64(nro_pagina))
-	hayEspacioEnTLB, entrada := chequearEspacioEnTLB()
+	utils.LoggerConFormato("PID: %d - TLB MISS - Pagina: %d", cpu.Proc_ejecutando.Pid, nro_pagina)
+	frame := cpu.BusquedaFrameAMemoria(float64(nro_pagina))
+	hayEspacioEnTLB, entrada := cpu.ChequearEspacioEnTLB()
 
 	if hayEspacioEnTLB {
-		cambiarEstadoMarco(nro_pagina, frame, entrada)
+		cpu.CambiarEstadoMarco(nro_pagina, frame, entrada)
 		return frame
 	}
 
-	aplicarAlgoritmoTLB()
+	cpu.AplicarAlgoritmoTLB()
 	return frame
 }
 
-func buscarEnCachePags(nro_pagina int, accion string) (int, string) {
+func (cpu *CPU) BuscarEnCachePags(nro_pagina int, accion string) (int, string) {
 
-	for i := 0; i <= config_CPU.Cant_entradas_cache; i++ {
-		if cache_pags[i].pagina == nro_pagina {
-			utils.LoggerConFormato("PID: %d- Cache Hit - Pagina: %d", *pid_ejecutando, nro_pagina)
+	for i := 0; i <= cpu.Config_CPU.Cant_entradas_cache; i++ {
+		if cpu.Cache_pags[i].pagina == nro_pagina {
+			utils.LoggerConFormato("PID: %d- Cache Hit - Pagina: %d", cpu.Proc_ejecutando.Pid, nro_pagina)
 			switch accion {
 			case "READ":
-				return cache_pags[i].frame, cache_pags[i].contenido
+				return cpu.Cache_pags[i].frame, cpu.Cache_pags[i].contenido
 
 			case "WRITE":
-				return cache_pags[i].frame, "OK"
+				return cpu.Cache_pags[i].frame, "OK"
 			}
 
 		}
 	}
 
-	utils.LoggerConFormato("PID: %d- Cache Miss - Pagina: %d", *pid_ejecutando, nro_pagina)
+	utils.LoggerConFormato("PID: %d- Cache Miss - Pagina: %d", cpu.Proc_ejecutando.Pid, nro_pagina)
 
+	//lock tlb_activa
 	if tlb_activa {
-		frame := buscarEnTLB(nro_pagina)
+		//unlock tlb_activa
+		frame := cpu.BuscarEnTLB(nro_pagina)
 		return frame, "NO_ENCONTRE"
 	}
 
-	frame := busquedaFrameAMemoria(float64(nro_pagina))
+	frame := cpu.BusquedaFrameAMemoria(float64(nro_pagina))
 	return frame, "NO_ENCONTRE"
 
 }
 
-func aplicarAlgoritmoTLB() error {
-	alg_reemplazo := config_CPU.Alg_repl_TLB
+func (cpu *CPU) AplicarAlgoritmoTLB() error {
+	alg_reemplazo := cpu.Config_CPU.Alg_repl_TLB
 	switch alg_reemplazo {
 	case "FIFO":
-		aux := tlb[0]
+		aux := cpu.Tlb[0]
 		aux_entrada := 0
 		aux_timestamp_tiempo_vida := aux.tiempo_vida.Sub(noticiero_metereologico)
 
-		for i := 1; i < config_CPU.Cant_entradas_TLB; i++ {
-			comparador_timestamp := tlb[i].tiempo_vida.Sub(noticiero_metereologico)
+		for i := 1; i < cpu.Config_CPU.Cant_entradas_TLB; i++ {
+			comparador_timestamp := cpu.Tlb[i].tiempo_vida.Sub(noticiero_metereologico)
 			if aux_timestamp_tiempo_vida < comparador_timestamp {
-				aux = tlb[i]
+				aux = cpu.Tlb[i]
 				aux_entrada = i
 				aux_timestamp_tiempo_vida = comparador_timestamp
 			}
 		}
 
-		cambiarEstadoMarco(aux.pagina, aux.frame, aux_entrada)
+		cpu.CambiarEstadoMarco(aux.pagina, aux.frame, aux_entrada)
 
 		aux.tiempo_vida = time.Now()
 		return nil
 
 	case "LRU":
-		aux := tlb[0]
+		aux := cpu.Tlb[0]
 		aux_entrada := 0
 		aux_timestamp_lru := aux.tiempo_vida.Sub(noticiero_metereologico)
 
-		for i := 1; i < config_CPU.Cant_entradas_TLB; i++ {
-			comparador_timestamp := tlb[i].last_recently_used.Sub(noticiero_metereologico)
+		for i := 1; i < cpu.Config_CPU.Cant_entradas_TLB; i++ {
+			comparador_timestamp := cpu.Tlb[i].last_recently_used.Sub(noticiero_metereologico)
 			if aux_timestamp_lru < comparador_timestamp {
-				aux = tlb[i]
+				aux = cpu.Tlb[i]
 				aux_entrada = i
 				aux_timestamp_lru = comparador_timestamp
 			}
 		}
 
-		cambiarEstadoMarco(aux.pagina, aux.frame, aux_entrada)
+		cpu.CambiarEstadoMarco(aux.pagina, aux.frame, aux_entrada)
 		aux.last_recently_used = time.Now()
 
 		return nil
@@ -190,28 +191,28 @@ func aplicarAlgoritmoTLB() error {
 	}
 }
 
-func cambiarEstadoMarco(nro_pagina int, frame int, entrada_tlb int) {
-	tlb[entrada_tlb].pagina = nro_pagina
-	tlb[entrada_tlb].frame = frame
+func (cpu *CPU) CambiarEstadoMarco(nro_pagina int, frame int, entrada_tlb int) {
+	cpu.Tlb[entrada_tlb].pagina = nro_pagina
+	cpu.Tlb[entrada_tlb].frame = frame
 	utils.LoggerConFormato("Se realizo un cambio de marco en la TLB correctamente")
 }
 
-func chequearEspacioEnTLB() (bool, int) {
-	for i := 0; i <= config_CPU.Cant_entradas_TLB; i++ {
-		if tlb[i].pagina < 0 {
+func (cpu *CPU) ChequearEspacioEnTLB() (bool, int) {
+	for i := 0; i <= cpu.Config_CPU.Cant_entradas_TLB; i++ {
+		if cpu.Tlb[i].pagina < 0 {
 			return true, i
 		}
 	}
 	return false, -1
 }
 
-func busquedaMemoriaFrame(nro_pagina int, accion string) (int, string) {
+func (cpu *CPU) BusquedaMemoriaFrame(nro_pagina int, accion string) (int, string) {
 	/*---------------------------------------------------(frame,contenido,mensaje)
 	frame
 	*/
 
 	if cache_pags_activa {
-		frame, contenido := buscarEnCachePags(nro_pagina, accion)
+		frame, contenido := cpu.BuscarEnCachePags(nro_pagina, accion)
 		// Caso encontre
 		if contenido != "NO_ENCONTRE" {
 			return frame, contenido
@@ -221,31 +222,32 @@ func busquedaMemoriaFrame(nro_pagina int, accion string) (int, string) {
 	}
 
 	if tlb_activa {
-		frame := buscarEnTLB(nro_pagina)
+		frame := cpu.BuscarEnTLB(nro_pagina)
 		return frame, ""
 
 	}
 
-	frame := busquedaFrameAMemoria(float64(nro_pagina))
+	frame := cpu.BusquedaFrameAMemoria(float64(nro_pagina))
 
 	return frame, ""
 }
 
-func aplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int, contenido string, accion string) {
-	algoritmo := config_CPU.Alg_repl_cache
+func (cpu *CPU) AplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int, contenido string, accion string) {
+	algoritmo := cpu.Config_CPU.Alg_repl_cache
+	cant_entradas_cache := cpu.Config_CPU.Cant_entradas_cache
 
 	switch algoritmo {
 	case "CLOCK":
-		for i := range config_CPU.Cant_entradas_cache {
-			if cache_pags[i].bit_uso == 0 {
-				actualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
+		for i := range cant_entradas_cache {
+			if cpu.Cache_pags[i].bit_uso == 0 {
+				cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
 				return
 			}
-			cache_pags[i].bit_uso = 0
+			cpu.Cache_pags[i].bit_uso = 0
 		}
-		for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
-			if cache_pags[i].bit_uso == 0 {
-				actualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
+		for i := 0; i < cpu.Config_CPU.Cant_entradas_cache; i++ {
+			if cpu.Cache_pags[i].bit_uso == 0 {
+				cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
 				return
 			}
 		}
@@ -260,7 +262,7 @@ func aplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int, contenido 
 		// 	}
 		// }
 
-		cicloCLockM(0, 0, 0, nro_pagina, frame, offset, contenido, accion)
+		cpu.CicloCLockM(0, 0, 0, nro_pagina, frame, offset, contenido, accion)
 		// 2) Segunda pasada
 		//    u=0;m=1
 		//Si no encuentro, u=0 -> u=1
@@ -271,7 +273,7 @@ func aplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int, contenido 
 		// 	}
 		// 	cache_pags[i].bit_uso = 0
 		// }
-		cicloCLockM(1, 0, 1, nro_pagina, frame, offset, contenido, accion)
+		cpu.CicloCLockM(1, 0, 1, nro_pagina, frame, offset, contenido, accion)
 		// 3) Tercera pasada
 		// reintento de 1)
 		// for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
@@ -280,7 +282,7 @@ func aplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int, contenido 
 		// 		return
 		// 	}
 		// }
-		cicloCLockM(0, 0, 0, nro_pagina, frame, offset, contenido, accion)
+		cpu.CicloCLockM(0, 0, 0, nro_pagina, frame, offset, contenido, accion)
 		// 4) Cuarta pasada
 		// reintento de 2)
 		// for i := 0; i < config_CPU.Cant_entradas_cache; i++ {
@@ -289,40 +291,44 @@ func aplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int, contenido 
 		// 		return
 		// 	}
 		// }
-		cicloCLockM(0, 0, 1, nro_pagina, frame, offset, contenido, accion)
+		cpu.CicloCLockM(0, 0, 1, nro_pagina, frame, offset, contenido, accion)
 	}
 }
 
-func cicloCLockM(sector_extra int, valor_uso int, valor_modificado int, nro_pagina int, frame int, offset int, contenido string, accion string) {
-
-	for i := range config_CPU.Cant_entradas_cache {
-		if cache_pags[i].bit_uso == valor_uso && cache_pags[i].bit_modificado == valor_modificado {
-			actualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
+func (cpu *CPU) CicloCLockM(sector_extra int, valor_uso int, valor_modificado int, nro_pagina int, frame int, offset int, contenido string, accion string) {
+	cant_entradas_cache := cpu.Config_CPU.Cant_entradas_cache
+	for i := range cant_entradas_cache {
+		if cpu.Cache_pags[i].bit_uso == valor_uso && cpu.Cache_pags[i].bit_modificado == valor_modificado {
+			cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
 			return
 		}
 		if sector_extra == 1 {
-			cache_pags[i].bit_uso = 0
+			cpu.Cache_pags[i].bit_uso = 0
 		}
 
 	}
 
 }
 
-func actualizarEntradaCache(posicion int, nro_pagina int, frame int, offset int, contenido string, accion string) {
-	cache_pags[posicion].contenido = contenido
-	cache_pags[posicion].frame = frame
-	cache_pags[posicion].offset = offset
-	cache_pags[posicion].pagina = nro_pagina
-	cache_pags[posicion].bit_uso = 1
+func (cpu *CPU) ActualizarEntradaCache(posicion int, nro_pagina int, frame int, offset int, contenido string, accion string) {
+	// Posiblemente cpu.Cache_pags[posicion] =&EntradaCachePag{
+
+	// }
+	cpu.Cache_pags[posicion].contenido = contenido
+	cpu.Cache_pags[posicion].frame = frame
+	cpu.Cache_pags[posicion].offset = offset
+	cpu.Cache_pags[posicion].pagina = nro_pagina
+	cpu.Cache_pags[posicion].bit_uso = 1
 
 	if accion == "WRITE" {
-		cache_pags[posicion].bit_modificado = 1
+		cpu.Cache_pags[posicion].bit_modificado = 1
 	}
 
-	utils.LoggerConFormato("PID: %d - Cache Add - Pagina: %d", *pid_ejecutando, nro_pagina)
+	utils.LoggerConFormato("PID: %d - Cache Add - Pagina: %d", cpu.Proc_ejecutando.Pid, nro_pagina)
+
 }
 
-func MMU(frame int, offset int) DireccionFisica {
+func (cpu *CPU) MMU(frame int, offset int) DireccionFisica {
 	dir_fisica := DireccionFisica{
 		frame:  frame,
 		offset: offset,
@@ -330,8 +336,12 @@ func MMU(frame int, offset int) DireccionFisica {
 	return dir_fisica
 }
 
-func actualizarPagCompleta(entrada_a_actualizar *EntradaCachePag) {
-	utils.FormatearUrlYEnviar(url_memo, "/actualizar_entrada_cache", false, "%d %d", *pid_ejecutando, entrada_a_actualizar.frame)
+func (cpu *CPU) ActualizarPagCompleta(entrada_a_actualizar *EntradaCachePag) {
+	utils.FormatearUrlYEnviar(cpu.Url_memoria, "/actualizar_entrada_cache", false, "%d %d",
+		cpu.Proc_ejecutando.Pid,
+		entrada_a_actualizar.frame,
+	)
+
 	utils.LoggerConFormato("PID: %d - Memory Update - Página: %d - Frame: %d",
-		*pid_ejecutando, entrada_a_actualizar.pagina, entrada_a_actualizar.frame)
+		cpu.Proc_ejecutando.Pid, entrada_a_actualizar.pagina, entrada_a_actualizar.frame)
 }
