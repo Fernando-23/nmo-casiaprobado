@@ -19,6 +19,7 @@ func (k *Kernel) LlegaNuevaCPU(w http.ResponseWriter, r *http.Request) { // Hand
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensajeCPU := string(body_Bytes)
 

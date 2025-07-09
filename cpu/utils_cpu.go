@@ -135,6 +135,7 @@ func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensajeKernel := string(body_Bytes)
 

@@ -19,6 +19,7 @@ func (cpu *CPU) EsperarDatosKernel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensaje := string(body_Bytes)
 

@@ -17,6 +17,7 @@ func (k *Kernel) llegaFinInterrupcion(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensajeCPU := string(body_Bytes)
 

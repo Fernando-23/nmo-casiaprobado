@@ -43,6 +43,7 @@ func (memo *Memo) Fetch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensaje := string(body_Bytes)
 
@@ -99,6 +100,7 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensaje := string(body_Bytes)
 
@@ -164,6 +166,7 @@ func Hanshake(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	string_modulo = string(body_bytes)
 
@@ -286,6 +289,7 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensaje := string(body_Bytes)
 
@@ -338,6 +342,7 @@ func (memo *Memo) LeerEnMemoria(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensaje := string(body_Bytes)
 
@@ -383,6 +388,7 @@ func (memo *Memo) EscribirEnMemoria(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensaje := string(body_Bytes)
 
@@ -450,6 +456,7 @@ func (memo *Memo) DumpMemory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensaje := string(body_Bytes)
 
@@ -520,6 +527,7 @@ func (memo *Memo) FinalizarProceso(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensaje := string(body_Bytes)
 
