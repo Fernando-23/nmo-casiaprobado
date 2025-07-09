@@ -227,7 +227,7 @@ func crearCPU(id string, path_config string) *CPU {
 		panic(fmt.Sprintf("Error cargando config CPU: %v", err))
 	}
 
-	url_kernel := fmt.Sprintf("http://%s:%d/kernel", p_config.Ip_Kernel, p_config.Puerto_Kernel)
+	url_kernel := fmt.Sprintf("http://%s:%d/cpu", p_config.Ip_Kernel, p_config.Puerto_Kernel)
 	url_memo := fmt.Sprintf("http://%s:%d/memoria", p_config.Ip_Memoria, p_config.Puerto_Memoria)
 
 	cant_entradas_tlb := p_config.Cant_entradas_TLB

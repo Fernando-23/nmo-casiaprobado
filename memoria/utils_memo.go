@@ -131,7 +131,7 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 }
 
 func HayEspacio(tamanio int) bool {
-	return tamanio >= tam_memo_actual
+	return tam_memo_actual >= tamanio
 }
 
 func (memo *Memo) CrearNuevoProceso(pid int, tamanio int, arch_pseudo string) {
