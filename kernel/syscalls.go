@@ -1,8 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -24,13 +24,17 @@ func (k *Kernel) liberarCPU(idCPU int) {
 }
 
 func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
-	var mensaje string
 
-	if err := json.NewDecoder(r.Body).Decode(&mensaje); err != nil {
-		slog.Error("Error al decodificar syscall", "error", err)
-		http.Error(w, "Formato inválido", http.StatusBadRequest)
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (llegoSyscallCPU) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+
+	mensaje := string(body_Bytes)
+
+	slog.Debug("Llegó syscall", "mensaje", mensaje)
 
 	debeContinuar, err := k.GestionarSyscalls(mensaje)
 	if err != nil {

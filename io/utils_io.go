@@ -1,9 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,15 +26,19 @@ func RegistrarIO(nombre string) {
 }
 
 func AtenderPeticion(w http.ResponseWriter, r *http.Request) {
-	var peticion_recibida string
 
-	err := json.NewDecoder(r.Body).Decode(&peticion_recibida)
+	body_Bytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Println("Error recibiendo datos")
+		slog.Error("Error - (AtenderPeticion) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
 
-	aux := strings.Split(peticion_recibida, " ")
+	mensaje := string(body_Bytes)
+
+	slog.Debug("Llegó petición desde kernel", "mensaje", mensaje)
+
+	aux := strings.Split(mensaje, " ")
 	pid_recibido := aux[0]
 	tiempo_recibido, _ := strconv.Atoi(aux[1])
 

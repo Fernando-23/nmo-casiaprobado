@@ -13,18 +13,18 @@ import (
 )
 
 func (cpu *CPU) EsperarDatosKernel(w http.ResponseWriter, r *http.Request) {
-	var respuesta string
-
-	body_bytes, err := io.ReadAll(r.Body)
+	body_Bytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		fmt.Println("Error leyendo la solicitud:", err)
+		slog.Error("Error - (EsperarDatosKernel) - Leyendo la solicitud", "error", err)
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
 
-	respuesta = string(body_bytes)
+	mensaje := string(body_Bytes)
 
-	datos := strings.Split(respuesta, " ")
+	slog.Debug("Llegaron datos desde kernel", "mensaje", mensaje)
+
+	datos := strings.Split(mensaje, " ")
 	if len(datos) != 2 {
 		http.Error(w, "Se recibio una formato incorrecto", http.StatusBadRequest)
 		return

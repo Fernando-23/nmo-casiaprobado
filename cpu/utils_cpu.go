@@ -1,8 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -128,15 +128,19 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 }
 
 func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
-	var respuesta string
 
-	utils.LoggerConFormato("## Llega interrupción al puerto Interrupt")
-	if err := json.NewDecoder(r.Body).Decode(&respuesta); err != nil {
-		fmt.Println("error decodificando la respuesta: ", err) //revisar porque no podemos usar Errorf
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (RecibirInterrupt) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
 
-	if respuesta == "OK" {
+	mensajeKernel := string(body_Bytes)
+
+	slog.Debug("Llego interrrupción desde kernel", "mensaje", mensajeKernel)
+
+	if mensajeKernel == "OK" {
 		HabilitarInterrupt(true)
 		utils.FormatearUrlYEnviar(cpu.Url_kernel, "/interrumpido", false, "%s %d %d", cpu.Id, cpu.Proc_ejecutando.Pid, cpu.Proc_ejecutando.Pc)
 		return

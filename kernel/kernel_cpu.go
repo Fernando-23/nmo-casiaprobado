@@ -22,7 +22,7 @@ func (k *Kernel) LlegaNuevaCPU(w http.ResponseWriter, r *http.Request) { // Hand
 
 	mensajeCPU := string(body_Bytes)
 
-	utils.LoggerConFormato("(llegaNuevaCPU) con mensaje: %s\n", mensajeCPU)
+	slog.Debug("Llegó nueva cpu", "mensaje", mensajeCPU)
 
 	if !k.registrarNuevaCPU(mensajeCPU) {
 		http.Error(w, "No se pudo registar la CPU", http.StatusBadRequest)

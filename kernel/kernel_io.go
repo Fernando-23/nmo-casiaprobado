@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -22,6 +21,9 @@ func (k *Kernel) llegaDesconexionIO(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mensajeIO := string(bodyBytes)
+
+	slog.Debug("Llegó desconeccion io", "mensaje", mensajeIO)
+
 	nombre, url, err := decodificarMensajeDesconeccionIO(mensajeIO)
 
 	if err != nil {
@@ -118,6 +120,9 @@ func (k *Kernel) llegaNuevaIO(w http.ResponseWriter, r *http.Request) { // Hands
 	}
 
 	mensajeIO := string(bodyBytes)
+
+	slog.Debug("Llegó nueva io", "mensaje", mensajeIO)
+
 	nombre, ip, puerto, err := decodificarMensajeNuevaIO(mensajeIO)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -170,12 +175,18 @@ func (k *Kernel) registrarNuevaIO(nombre, ip, puerto string) { // Handshake
 }
 
 func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {
-	var mensajeIO string
-	if err := json.NewDecoder(r.Body).Decode(&mensajeIO); err != nil {
-		slog.Error("Error recibiendo la solicitud", "error", err)
-		http.Error(w, "Error en el formato de la solicitud", http.StatusBadRequest)
+
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (llegoFinIO) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+
+	mensajeIO := string(body_Bytes)
+
+	slog.Debug("Llegó fin io", "mensaje", mensajeIO)
+
 	pid, nombre, err := decodificarMensajeFinIO(mensajeIO)
 
 	if err != nil {

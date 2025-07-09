@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -37,12 +36,19 @@ func CargarArchivoPseudocodigo(path string) []string {
 }
 
 func (memo *Memo) Fetch(w http.ResponseWriter, r *http.Request) {
-	var request string
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		slog.Error("Error - (Fetch) - Recibiendo fetch de cpu")
+
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (Fetch) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
+		return
 	}
 
-	aux := strings.Split(request, " ")
+	mensaje := string(body_Bytes)
+
+	slog.Debug("Llegó petición fetch", "mensaje", mensaje)
+
+	aux := strings.Split(mensaje, " ")
 
 	pid, err := strconv.Atoi(aux[0])
 	if err != nil {
@@ -86,15 +92,19 @@ func (memo *Memo) Fetch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
-	var request string
 
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		slog.Error("Error - (VerificarHayLugar) - Solicitud invalida")
-		w.WriteHeader(http.StatusBadRequest)
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (VerificarHayLugar) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
 
-	aux := strings.Split(request, " ")
+	mensaje := string(body_Bytes)
+
+	slog.Debug("Llegó petición verificar hay lugar", "mensaje", mensaje)
+
+	aux := strings.Split(mensaje, " ")
 
 	pid, _ := strconv.Atoi(aux[0])
 	tamanio, _ := strconv.Atoi(aux[1])
@@ -269,15 +279,27 @@ func (memo *Memo) InicializarTablaFramesGlobal(cant_frames_memo int) {
 
 // Acceso a espacio de usuario
 func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.Request) {
-	var request string
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		fmt.Println("error al recibir peticion de busqueda en tpags")
+
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (buscarEnTablaAsociadoAProceso) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
+		return
 	}
 
-	aux := strings.Split(request, " ")
-	pid, _ := strconv.Atoi(aux[0])
-	nivel_actual_solicitado, _ := strconv.Atoi(aux[1])
-	entrada, _ := strconv.Atoi(aux[2])
+	mensaje := string(body_Bytes)
+
+	slog.Debug("Llegó petición buscar en tabla asociado a proceso", "mensaje", mensaje)
+
+	aux := strings.Split(mensaje, " ")
+	pid, err1 := strconv.Atoi(aux[0])
+	nivel_actual_solicitado, err2 := strconv.Atoi(aux[1])
+	entrada, err3 := strconv.Atoi(aux[2])
+
+	if err1 != nil || err2 != nil || err3 != nil {
+		slog.Error("Error - (buscarEnTablaAsociadoAProceso) - Conversiones a int")
+		return
+	}
 
 	if nivel_actual_solicitado != config_memo.Cant_niveles {
 		hacerRetardo()
@@ -309,16 +331,28 @@ func hacerRetardo() {
 }
 
 func (memo *Memo) LeerEnMemoria(w http.ResponseWriter, r *http.Request) {
-	var request string
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		fmt.Println("error al recibir peticion de READ")
+
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (LeerEnMemoria) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
+		return
 	}
 
-	aux := strings.Split(request, " ")
-	pid, _ := strconv.Atoi(aux[0])
-	frame, _ := strconv.Atoi(aux[1])
-	offset, _ := strconv.Atoi(aux[2])
-	tamanio_a_leer, _ := strconv.Atoi(aux[3])
+	mensaje := string(body_Bytes)
+
+	slog.Debug("Llegó petición leer en memoria", "mensaje", mensaje)
+
+	aux := strings.Split(mensaje, " ")
+	pid, err1 := strconv.Atoi(aux[0])
+	frame, err2 := strconv.Atoi(aux[1])
+	offset, err3 := strconv.Atoi(aux[2])
+	tamanio_a_leer, err4 := strconv.Atoi(aux[3])
+
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
+		slog.Error("Error - (LeerEnMemoria) - Conversiones a int")
+		return
+	}
 
 	if !memo.ConfirmacionFrameMio(pid, frame) {
 		w.WriteHeader(http.StatusOK)
@@ -342,15 +376,28 @@ func (memo *Memo) LeerEnMemoria(w http.ResponseWriter, r *http.Request) {
 }
 
 func (memo *Memo) EscribirEnMemoria(w http.ResponseWriter, r *http.Request) {
-	var request string
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		fmt.Println("error al recibir peticion de WRITE")
+
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (EscribirEnMemoria) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
+		return
 	}
 
-	aux := strings.Split(request, " ")
-	pid, _ := strconv.Atoi(aux[0])
-	frame, _ := strconv.Atoi(aux[1])
-	offset, _ := strconv.Atoi(aux[2])
+	mensaje := string(body_Bytes)
+
+	slog.Debug("Llegó petición escribir en memoria", "mensaje", mensaje)
+
+	aux := strings.Split(mensaje, " ")
+	pid, err1 := strconv.Atoi(aux[0])
+	frame, err2 := strconv.Atoi(aux[1])
+	offset, err3 := strconv.Atoi(aux[2])
+
+	if err1 != nil || err2 != nil || err3 != nil {
+		slog.Error("Error - (EscribirEnMemoria) - Conversiones a int")
+		return
+	}
+
 	datos_a_escribir := []byte(aux[3])
 
 	if !memo.ConfirmacionFrameMio(pid, frame) {
@@ -396,12 +443,24 @@ func (memo *Memo) SigoEnMiFrame(pid int, frame int, base int, tamanio_a_escribir
 }
 
 func (memo *Memo) DumpMemory(w http.ResponseWriter, r *http.Request) {
-	var request string
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		fmt.Println("error al recibir peticion de WRITE")
+
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (DumpMemory) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
+		return
 	}
 
-	pid, _ := strconv.Atoi(request)
+	mensaje := string(body_Bytes)
+
+	slog.Debug("Llegó petición dump memory", "mensaje", mensaje)
+
+	pid, err := strconv.Atoi(mensaje)
+
+	if err != nil {
+		slog.Error("Error - (DumpMemory) - Conversiones a int")
+		return
+	}
 
 	timestamp := time.Now().Format(time.RFC3339) //me lo ensenio mi amigo luchin guita facil
 	nombre := fmt.Sprintf("%s%d-%s.dmp", config_memo.Path_dump, pid, timestamp)
@@ -454,14 +513,24 @@ func (memo *Memo) EliminarProceso(pid int) bool {
 }
 
 func (memo *Memo) FinalizarProceso(w http.ResponseWriter, r *http.Request) {
-	var request string
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		slog.Error("Error - (FinalizarProceso) - Error al recibir peticion de WRITE")
-		w.WriteHeader(http.StatusBadRequest)
+
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (FinalizarProceso) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
 
-	pid, _ := strconv.Atoi(request)
+	mensaje := string(body_Bytes)
+
+	slog.Debug("Llegó petición finalizar proceso", "mensaje", mensaje)
+
+	pid, err := strconv.Atoi(mensaje)
+
+	if err != nil {
+		slog.Error("Error - (FinalizarProceso) - Conversiones a int")
+		return
+	}
 
 	eliminado_correctamente := memo.EliminarProceso(pid)
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -32,15 +32,23 @@ func (memo *Memo) CargarDataSwap(pid int, tamanio int) {
 }
 
 func (memo *Memo) EscribirEnSwap(w http.ResponseWriter, r *http.Request) {
-	var request string
 
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		slog.Error("Error - (EscribirEnSwap) - Error al recibir los datos desde kernel")
-		w.WriteHeader(http.StatusBadRequest)
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (EscribirEnSwap) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
 
-	pid, _ := strconv.Atoi(request)
+	mensaje := string(body_Bytes)
+
+	slog.Debug("Llegó petición escribir en swap", "mensaje", mensaje)
+
+	pid, err := strconv.Atoi(mensaje)
+
+	if err != nil {
+		slog.Error("Error - (EscribirEnSwap) - Error convirtiendo pid")
+	}
 
 	file, err := os.OpenFile(config_memo.Path_swap, os.O_RDWR|os.O_CREATE, 0666)
 
@@ -77,20 +85,23 @@ func (memo *Memo) EscribirEnSwap(w http.ResponseWriter, r *http.Request) {
 }
 
 func (memo *Memo) QuitarDeSwap(w http.ResponseWriter, r *http.Request) {
-	var request string
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		slog.Error("Error - (QuitarDeSwap) - Error al recibir los datos desde kernel")
-		http.Error(w, "Solicitud Invalida", http.StatusBadRequest)
+
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (QuitarDeSwap) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
 
-	pid, err := strconv.Atoi(request)
+	mensaje := string(body_Bytes)
+
+	slog.Debug("Llegó petición quitar de swap", "mensaje", mensaje)
+
+	pid, err := strconv.Atoi(mensaje)
 
 	if err != nil {
-		slog.Error("Error - (QuitarDeSwap) - Conversion request sin PID",
-			"valor", request,
-			"error", err,
-		)
+		slog.Error("Error - (QuitarDeSwap) - Conversion de pid ")
+		return
 	}
 	proceso_en_swap, existe := memo.swap.espacio_contiguo[pid]
 	if !existe {

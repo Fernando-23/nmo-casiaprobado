@@ -1,8 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -10,14 +10,17 @@ import (
 )
 
 func (k *Kernel) llegaFinInterrupcion(w http.ResponseWriter, r *http.Request) {
-	var mensajeCPU string
-	if err := json.NewDecoder(r.Body).Decode(&mensajeCPU); err != nil {
-		fmt.Println("Error recibiendo la solicitud:", err)
-		http.Error(w, "Error en el formato de la solicitud", http.StatusBadRequest)
+
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (llegoFinInterrupcion) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
 
-	utils.LoggerConFormato("(llegoFinInterrupcion) con mensaje: %s\n", mensajeCPU)
+	mensajeCPU := string(body_Bytes)
+
+	slog.Debug("Llegó fin interrupcion", "mensaje", mensajeCPU)
 
 	idCPU, pidDesalojado, pcActualizado, err := decodificarMensajeFinInterrupcion(mensajeCPU)
 
