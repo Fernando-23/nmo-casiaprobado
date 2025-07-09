@@ -16,9 +16,10 @@ func (k *Kernel) llegaDesconexionIO(w http.ResponseWriter, r *http.Request) {
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
-		slog.Error("Error - (FinalizarIO) - Error al decodificar cuerpo", "error", err)
+		slog.Error("Error - (llegaDesconexionIO) - Error al decodificar cuerpo", "error", err)
 		return
 	}
+	defer r.Body.Close()
 
 	mensajeIO := string(bodyBytes)
 
@@ -118,6 +119,7 @@ func (k *Kernel) llegaNuevaIO(w http.ResponseWriter, r *http.Request) { // Hands
 		slog.Error("Error - (llegaNuevaIO) - Error al decodificar cuerpo", "error", err)
 		return
 	}
+	defer r.Body.Close()
 
 	mensajeIO := string(bodyBytes)
 
@@ -178,10 +180,11 @@ func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {
 
 	body_Bytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		slog.Error("Error - (llegoFinIO) - Leyendo la solicitud", "error", err)
+		slog.Error("Error - (llegaFinIO) - Leyendo la solicitud", "error", err)
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensajeIO := string(body_Bytes)
 
@@ -197,31 +200,28 @@ func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 
-	go func() {
-		k.liberarInstanciaIO(pid, nombre)
-		utils.LoggerConFormato("Fin de ejecución de liberarInstanciaIO para PID %d (%s)", pid, nombre)
-	}()
+	go k.liberarInstanciaIO(pid, nombre)
 }
 
 func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
 
 	if !k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, true) {
-		if k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid, true) {
-			//hola
-			return
+		if !k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid, true) {
+			slog.Error("Error -(liberarInstanciaIO) - Pid no estaba en BLOCK ni BLOCK_SUSP",
+				"pid_io", pid,
+			)
+			return //no estaba en ninguno de los estados posibles
 		}
-		slog.Error("Error -(liberarInstanciaIO) - Pid no estaba en BLOCK ni BLOCK_SUSP",
-			"pid_io", pid,
-		)
-		return //no estaba en ninguno de los estados posibles
 	}
 
 	if err := k.ActualizarIO(nombre, pid); err != nil {
 		slog.Error("Error - (liberarInstanciaIO) - Falló actualización de IO", "error", err)
 		return
 	}
-
+	//==================== LOG OBLIGATORIO ====================
 	utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY", pid)
+	//=========================================================
+
 }
 
 func (k *Kernel) ActualizarIO(nombreIO string, pid int) error {
@@ -283,10 +283,10 @@ func (k *Kernel) buscarIOLibre(nombre string) *DispositivoIO {
 
 func enviarProcesoAIO(dispositivo *DispositivoIO, duracion int) {
 
-	fullURL := fmt.Sprintf("%s/io/hace_algo", dispositivo.Url)
-	datos := fmt.Sprintf("%d %d", dispositivo.PidOcupante, duracion)
-
-	utils.EnviarStringSinEsperar("POST", fullURL, datos)
+	utils.FormatearUrlYEnviar(dispositivo.Url, "/io/hace_algo", false, "%d %d",
+		dispositivo.PidOcupante,
+		duracion,
+	)
 
 	utils.LoggerConFormato("## (%d) - Se envió proceso a IO en %s", dispositivo.PidOcupante, dispositivo.Url)
 }

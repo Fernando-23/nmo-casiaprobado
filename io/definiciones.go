@@ -13,12 +13,15 @@ type ConfigIO struct {
 }
 
 var (
-	config_IO      *ConfigIO
+	config_io      *ConfigIO
+	ch_cancelar_io chan struct{}
+	url_kernel     string
+)
+
+var (
 	url_io         string
 	nombre_io      string
+	tiempo_en_io   time.Time
 	hay_proceso_io bool
-
-	duracion_en_IO float64
-	tiempo_en_IO   time.Time
-	ch_cancelar_IO chan struct{}
+	duracion_en_io float64
 )

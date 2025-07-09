@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,28 +19,35 @@ func main() {
 	if len(os.Args) != 2 { // ruta archivo-pseudo tamanio
 		fmt.Println("Cantidad de argumentos incorrecta. Uso: ruta <archivo-pseudo> <tamanio>")
 		os.Exit(1)
-	}
-
-	nombre_io = args[1]
-	config_IO = &ConfigIO{}
-
-	err := utils.IniciarConfiguracion("io.json", config_IO)
-
-	if err != nil {
-		slog.Info("Error al iniciar config")
 		return
 	}
 
-	// Url por si hay que desconectar IO
-	url_io = fmt.Sprintf("http://%s:%s", config_IO.Ip_io, strconv.Itoa(config_IO.Puerto_io))
+	nombre_io = args[1]
+	config_io = &ConfigIO{}
 
-	//peticion registar io para kernel
+	err := utils.IniciarConfiguracion("io.json", config_io)
+
+	if err != nil {
+		fmt.Printf("Error al iniciar config, error: %e", err)
+		return
+	}
+
+	utils.ConfigurarLogger(nombre_io, config_io.Log_level)
+
+	// Url por si hay que desconectar IO
+
+	url_io = fmt.Sprintf("http://%s:%s", config_io.Ip_io, strconv.Itoa(config_io.Puerto_io))
+
+	//Url base de kernel
+	url_kernel = fmt.Sprintf("http://%s:%s/kernel", config_io.Ip_kernel, strconv.Itoa(config_io.Puerto_kernel))
+
+	//Petición registrar io para kernel
 	RegistrarIO(nombre_io)
 
 	//Iniciando servidor para peticiones I/O - Kernel
 	mux := http.NewServeMux()
 	mux.HandleFunc("/io/hace_algo", AtenderPeticion)
-	url_socket := fmt.Sprintf(":%d", config_IO.Puerto_io)
+	url_socket := fmt.Sprintf(":%d", config_io.Puerto_io)
 
 	go func() {
 		if err := http.ListenAndServe(url_socket, mux); err != nil {
@@ -57,14 +63,14 @@ func main() {
 
 	//canal para terminar
 
-	ch_cancelar_IO = make(chan struct{})
+	ch_cancelar_io = make(chan struct{})
 	signal.Notify(senial_sistema_operativo, syscall.SIGTERM, syscall.SIGINT)
 
 	fmt.Println("Modulo IO esperando seniales (SIGINT o SIGTERM)..")
 
 	senial := <-senial_sistema_operativo
 	fmt.Println("Senial desconexion IO recibida:", senial)
-	close(ch_cancelar_IO)
+	close(ch_cancelar_io)
 	AvisarDesconexionIO()
 
 	fmt.Printf("IO %s finalizada.", nombre_io)

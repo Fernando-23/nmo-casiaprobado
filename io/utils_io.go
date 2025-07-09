@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -15,14 +14,24 @@ import (
 
 func RegistrarIO(nombre string) {
 
-	fullURL := fmt.Sprintf("http://%s:%d/kernel/registrar_io", config_IO.Ip_kernel, config_IO.Puerto_kernel)
-	registro := fmt.Sprintf("%s %s %d", nombre, config_IO.Ip_io, config_IO.Puerto_io)
+	fullURL := fmt.Sprintf("http://%s:%d/kernel/registrar_io", config_io.Ip_kernel, config_io.Puerto_kernel)
+	registro := fmt.Sprintf("%s %s %d", nombre, config_io.Ip_io, config_io.Puerto_io)
 
 	utils.EnviarSolicitudHTTPString("POST", fullURL, registro)
 
-	log.Println("Hanshake realizado correctamente!")
-	log.Println("Se registro la IO correctamente")
+	respuesta, err := utils.FormatearUrlYEnviar(url_kernel, "/registrar_io", true, "%s %s %d",
+		nombre,
+		config_io.Ip_io,
+		config_io.Puerto_io,
+	)
+	if respuesta != "OK" || err != nil {
+		slog.Error("Error - (RegistrarIO) - Respuesta Kernel",
+			"respuesta", respuesta,
+			"error", err,
+		)
+	}
 
+	slog.Debug("Se registró la IO correctamente")
 }
 
 func AtenderPeticion(w http.ResponseWriter, r *http.Request) {
@@ -33,49 +42,70 @@ func AtenderPeticion(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	mensaje := string(body_Bytes)
 
 	slog.Debug("Llegó petición desde kernel", "mensaje", mensaje)
 
 	aux := strings.Split(mensaje, " ")
+
+	if len(aux) != 2 {
+		slog.Error("Error - (AtenderPeticion) - Cantidad erronea de argumentos", "error", err)
+		http.Error(w, "Cantidad de argumentos inválida", http.StatusBadRequest)
+		return
+	}
+
 	pid_recibido := aux[0]
-	tiempo_recibido, _ := strconv.Atoi(aux[1])
+	tiempo_recibido, err := strconv.Atoi(aux[1])
+
+	if err != nil {
+		http.Error(w, "Tiempo inválido", http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 
 	utils.LoggerConFormato("## PID: %s - Inicio de IO - Tiempo: %d", pid_recibido, tiempo_recibido)
 
 	hay_proceso_io = true
-	duracion_en_IO = float64(tiempo_recibido)
-	tiempo_en_IO = time.Now()
+	duracion_en_io = float64(tiempo_recibido)
+	tiempo_en_io = time.Now()
 
 	select {
 	case <-time.After(time.Duration(tiempo_recibido) * time.Millisecond):
 		utils.LoggerConFormato("Termino correctamente tiempo en io en AtenderPeticion")
-
 		hay_proceso_io = false
 		AvisarFinIO(pid_recibido)
-	case <-ch_cancelar_IO:
+
+	case <-ch_cancelar_io:
 		utils.LoggerConFormato("IO desconectada en medio de ejecucion de AtenderPeticion")
 	}
-
 }
 
 func AvisarFinIO(pid string) {
-	fullURL := fmt.Sprintf("http://%s:%d/kernel/fin_io", config_IO.Ip_kernel, config_IO.Puerto_kernel)
-	fullData := fmt.Sprintf("%s %s", pid, nombre_io)
+
+	respuesta, err := utils.FormatearUrlYEnviar(url_kernel, "/fin_io", true, "%s %s", pid, nombre_io)
+
+	if respuesta != "OK" || err != nil {
+		slog.Error("Error - (AvisarFinIO) - Respuesta Kernel",
+			"respuesta", respuesta,
+			"error", err,
+		)
+	}
+
+	//==================== LOG OBLIGATORIO ====================
 	utils.LoggerConFormato("## PID: %s - Fin de IO", pid)
-	utils.EnviarSolicitudHTTPString("POST", fullURL, fullData)
+	//=========================================================
 }
 
 func AvisarDesconexionIO() { //gracias que te aviso pa
 
-	if hay_proceso_io {
-		transcurrido := float64(time.Since(tiempo_en_IO).Milliseconds())
-		duracion_en_IO -= transcurrido
-	}
+	utils.FormatearUrlYEnviar(url_kernel, "/desconectar_io", false, "%s %s",
+		nombre_io,
+		url_io,
+	)
 
-	fullURL := fmt.Sprintf("http://%s:%d/kernel/desconectar_io", config_IO.Ip_kernel, config_IO.Puerto_kernel)
-	peticion := fmt.Sprintf("%s %s %f", nombre_io, url_io, duracion_en_IO)
-	utils.LoggerConFormato("## Avisando desconexion IO: %s", peticion)
-	utils.EnviarSolicitudHTTPString("POST", fullURL, peticion)
+	utils.LoggerConFormato("Avisando desconexion IO: %s", nombre_io)
 }
