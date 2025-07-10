@@ -20,73 +20,95 @@ func (k *Kernel) HandshakeMemoria() error {
 	return nil
 }
 
-func (k *Kernel) MemoHayEspacio(pid int, tamanio int, archivoPseudo string) (bool, error) {
-
-	respuesta, err := utils.FormatearUrlYEnviar(url_memo, "/hay_lugar", true, "%d %d %s", pid, tamanio, archivoPseudo)
-	if err != nil {
-		slog.Error("Error - (MemoHayEspacio) - codificando mensaje", "error", err.Error())
-		return false, err
-	}
-
-	if respuesta == "OK" {
-		slog.Debug("PRUEBA - efectivamente, habia espacio")
-		return true, nil
-	}
-	return false, nil
-
-}
-
-func (k *Kernel) solicitudEliminarProceso(pid int) (string, error) {
-
+func (k *Kernel) solicitudEliminarProceso(pid int) error {
 	respuestaMemo, err := utils.FormatearUrlYEnviar(url_memo, "/EXIT_PROC", true, "%d", pid)
 
-	if err != nil || respuestaMemo != "OK" {
-		slog.Error("Error - (SolicitudEliminarProceso) - Error codificando mensaje",
-			"error", err.Error(),
+	if err != nil {
+		slog.Error("Error - (SolicitudEliminarProceso) - Fallo al enviar solicitud",
+			"pid", pid,
+			"error", err,
 		)
-		return "", err
+		return err
 	}
 
-	//Deberia responder "OK"
-	return respuestaMemo, nil
-}
+	if respuestaMemo != RESPUESTA_OK {
+		slog.Warn("Advertencia - (SolicitudEliminarProceso) - Respuesta inesperada",
+			"pid", pid,
+			"respuesta", respuestaMemo,
+		)
+		return fmt.Errorf("respuesta inesperada: %s", respuestaMemo)
+	}
 
+	return nil
+}
 func EnviarMemoryDump(pid int) bool {
 	respuesta, err := utils.FormatearUrlYEnviar(url_memo, "/MEMORY_DUMP", true, "%d", pid)
 
-	if err != nil || respuesta != "OK" {
-		slog.Error("Error - (GestionarDUMP_MEMORY) - Dump fallido o respuesta inesperada",
+	if err != nil {
+		slog.Error("Error - (EnviarMemoryDump) - Fallo al enviar solicitud",
 			"pid", pid,
 			"error", err,
+		)
+		return false
+	}
+
+	if respuesta != RESPUESTA_OK {
+		slog.Warn("Advertencia - (EnviarMemoryDump) - Respuesta inesperada",
+			"pid", pid,
 			"respuesta", respuesta,
 		)
 		return false
 	}
+
+	slog.Info("Memory Dump exitoso", "pid", pid)
 	return true
 }
 
 func EnviarSuspension(pid int) {
 	resp, err := utils.FormatearUrlYEnviar(url_memo, "/SUSPEND_PROC", true, "%d", pid)
 
-	if err != nil || resp != "OK" {
-		slog.Error("Error - (EnviarSuspension) - Dump fallido o respuesta inesperada",
-			"pid", pid,
-			"error", err,
-			"respuesta", resp,
-		)
+	if err != nil {
+		slog.Error("Error - (EnviarSuspension) - Fallo al enviar solicitud", "pid", pid, "error", err)
+		return
 	}
+
+	if resp != RESPUESTA_OK {
+		slog.Warn("Advertencia - (EnviarSuspension) - Respuesta inesperada", "pid", pid, "respuesta", resp)
+		return
+	}
+
+	slog.Info("Proceso suspendido exitosamente", "pid", pid)
 }
 
 func EnviarDesuspension(pid int) (bool, error) {
 	resp, err := utils.FormatearUrlYEnviar(url_memo, "/DE_SUSPEND_PROC", true, "%d", pid)
 
-	if err != nil || resp != "OK" {
-		slog.Error("Error - (EnviarDesuspension) - Desuspirar fallido o respuesta inesperada",
-			"pid", pid,
-			"error", err,
-			"respuesta", resp,
-		)
+	if err != nil {
+		slog.Error("Error - (EnviarDesuspension) - Fallo al enviar solicitud", "pid", pid, "error", err)
 		return false, err
 	}
+
+	if resp != "OK" {
+		slog.Warn("Advertencia - (EnviarDesuspension) - Respuesta inesperada", "pid", pid, "respuesta", resp)
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (k *Kernel) MemoHayEspacio(pid int, tamanio int, archivoPseudo string) (bool, error) {
+
+	resp, err := utils.FormatearUrlYEnviar(url_memo, "/hay_lugar", true, "%d %d %s", pid, tamanio, archivoPseudo)
+
+	if err != nil {
+		slog.Error("Error - (MemoHayEspacio) - Fallo al enviar solicitud", "pid", pid, "error", err)
+		return false, err
+	}
+
+	if resp != "OK" {
+		slog.Warn("Advertencia - (MemoHayEspacio) - Respuesta inesperada", "pid", pid, "respuesta", resp)
+		return false, nil
+	}
+
 	return true, nil
 }

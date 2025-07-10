@@ -128,64 +128,31 @@ func (k *Kernel) IntentarEnviarProcesosAReady() {
 	mutex_peticionHayEspacioMemoria.Lock()
 	defer mutex_peticionHayEspacioMemoria.Unlock()
 
-	mutex_ProcesoPorEstado[EstadoReadySuspended].Lock()
-	mutex_ProcesoPorEstado[EstadoNew].Lock()
+	estados := []int{EstadoReadySuspended, EstadoNew}
 
-	k.PlanificarLargoPorLista(EstadoReadySuspended)
-
-	for k.TieneProcesos(EstadoReadySuspended) {
-
-		procCandidatoAReady := k.PrimerElementoSinSacar(EstadoReadySuspended)
-		pid := procCandidatoAReady.Pid
-		tamanio := procCandidatoAReady.Tamanio
-		arch_pseudo := procCandidatoAReady.Arch_pseudo
-
-		mutex_ProcesoPorEstado[EstadoNew].Unlock()
-		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
-
-		exito, err := k.gestionarAccesoAReady(pid, tamanio, arch_pseudo, EstadoReadySuspended)
-
-		if err != nil {
-			slog.Error("Error", "error", err)
-		}
-
-		if !exito {
-			// No pudo pasar, salimos del ciclo para evitar bucle infinito
-			mutex_ProcesoPorEstado[EstadoReadySuspended].Lock()
-			mutex_ProcesoPorEstado[EstadoNew].Lock()
-			break
-		}
-
-		k.IntentarEnviarProcesoAExecute()
-
-		// Volvemos a tomar los mutex para la siguiente iteración o para pasar a NEW
+	for _, estado := range estados {
 		mutex_ProcesoPorEstado[EstadoReadySuspended].Lock()
 		mutex_ProcesoPorEstado[EstadoNew].Lock()
 
-	}
+		k.PlanificarLargoPorLista(estado)
 
-	//si no quedan procesos en READY_SUSPENDED, intentamos con new
-	if !k.TieneProcesos(EstadoReadySuspended) {
-		k.PlanificarLargoPorLista(EstadoNew)
+		for k.TieneProcesos(estado) {
+			proc := k.PrimerElementoSinSacar(estado)
+			pid := proc.Pid
+			tamanio := proc.Tamanio
+			arch_pseudo := proc.Arch_pseudo
 
-		for k.TieneProcesos(EstadoNew) {
-
-			procCandidatoAReady := k.PrimerElementoSinSacar(EstadoNew)
-			pid := procCandidatoAReady.Pid
-			tamanio := procCandidatoAReady.Tamanio
-			arch_pseudo := procCandidatoAReady.Arch_pseudo
-
-			mutex_ProcesoPorEstado[EstadoNew].Unlock()
+			// Desbloquear mutexes para evitar deadlocks durante llamada externa
 			mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
+			mutex_ProcesoPorEstado[EstadoNew].Unlock()
 
-			exito, err := k.gestionarAccesoAReady(pid, tamanio, arch_pseudo, EstadoNew)
-
+			exito, err := k.gestionarAccesoAReady(pid, tamanio, arch_pseudo, estado)
 			if err != nil {
-				slog.Error("Error", "error", err)
+				slog.Error("Error en gestionarAccesoAReady", "error", err)
 			}
 
 			if !exito {
-				// No pudo pasar, salimos del ciclo para evitar bucle infinito
+				// Rebloquear mutexes antes de salir para mantener consistencia
 				mutex_ProcesoPorEstado[EstadoReadySuspended].Lock()
 				mutex_ProcesoPorEstado[EstadoNew].Lock()
 				break
@@ -193,13 +160,20 @@ func (k *Kernel) IntentarEnviarProcesosAReady() {
 
 			k.IntentarEnviarProcesoAExecute()
 
+			// Rebloquear mutexes para siguiente iteración
 			mutex_ProcesoPorEstado[EstadoReadySuspended].Lock()
 			mutex_ProcesoPorEstado[EstadoNew].Lock()
-
 		}
+
+		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
+		mutex_ProcesoPorEstado[EstadoNew].Unlock()
+
+		// Si el estado fue EstadoReadySuspended y ya no hay procesos, hace EstadoNew
+		if estado == EstadoReadySuspended && !k.TieneProcesos(EstadoReadySuspended) {
+			continue
+		}
+		break
 	}
-	mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
-	mutex_ProcesoPorEstado[EstadoNew].Unlock()
 }
 
 func (k *Kernel) PlanificarLargoPorLista(codLista int) {
@@ -217,14 +191,15 @@ func (k *Kernel) gestionarAccesoAReady(pid int, tamanio int, arch_pseudo string,
 	var hayEspacio bool
 	var err error
 
-	if estadoOrigen == EstadoReadySuspended {
+	switch estadoOrigen {
+	case EstadoReadySuspended:
 		hayEspacio, err = EnviarDesuspension(pid)
-	} else if estadoOrigen == EstadoNew {
+	case EstadoNew:
 		hayEspacio, err = k.MemoHayEspacio(pid, tamanio, arch_pseudo)
 	}
 
 	if err != nil {
-		return false, fmt.Errorf("error: %e - Pid: %d - (gestionarAccesoAReady) - Peticion espacio en memoria", err, pid)
+		return false, fmt.Errorf("error: %w - Pid: %d - (gestionarAccesoAReady) - Peticion espacio en memoria", err, pid)
 	}
 
 	mutex_ProcesoPorEstado[estadoOrigen].Lock()

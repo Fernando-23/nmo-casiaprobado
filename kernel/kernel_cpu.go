@@ -30,7 +30,7 @@ func (k *Kernel) LlegaNuevaCPU(w http.ResponseWriter, r *http.Request) { // Hand
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	w.Write([]byte(RESPUESTA_OK))
 }
 
 func (k *Kernel) registrarNuevaCPU(mensajeCPU string) bool {

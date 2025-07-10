@@ -244,6 +244,11 @@ func (memo *Memo) EliminarProcesoDeSwap(pid int) {
 
 	if proceso_en_swap := memo.swap.espacio_contiguo[pid]; proceso_en_swap != nil {
 
+		slog.Debug("EliminarProcesoDeSwap - espacio liberado en swap",
+			"pid", pid,
+			"inicio", proceso_en_swap.inicio,
+			"tamanio", proceso_en_swap.tamanio)
+
 		delete(memo.swap.espacio_contiguo, pid)
 
 		nueva_instancia_espacio_libre := &EspacioLibre{

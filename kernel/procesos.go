@@ -57,15 +57,12 @@ func (k *Kernel) actualizarEstimacionSJF(pcb *PCB, tiempoEnExecute time.Duration
 }
 
 func (k *Kernel) EliminarProceso(procesoAEliminar *PCB, liberaMemoria bool) {
-	respuesta, err := k.solicitudEliminarProceso(procesoAEliminar.Pid)
-	if err != nil {
-		slog.Error("Error -(EliminarProceso) - Solicitud a memoria con error",
-			"error", err)
-		return
-	}
 
-	if respuesta != "OK" {
-		slog.Error("Error - (EliminarProceso) - Memoria no mandó el OK (mandó otra cosa)")
+	if err := k.solicitudEliminarProceso(procesoAEliminar.Pid); err != nil {
+		slog.Error("Error - (EliminarProceso) - Solicitud a memoria fallida",
+			"pid", procesoAEliminar.Pid,
+			"error", err,
+		)
 		return
 	}
 

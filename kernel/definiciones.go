@@ -128,4 +128,6 @@ const (
 	CodOp
 )
 
+const RESPUESTA_OK = "OK"
+
 var estados_proceso = []string{"NEW", "READY", "EXECUTE", "BLOCKED", "SUSPENDED_BLOCKED", "SUSPENDED_READY"}

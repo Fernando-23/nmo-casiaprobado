@@ -32,7 +32,7 @@ func (k *Kernel) llegaDesconexionIO(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	w.Write([]byte(RESPUESTA_OK))
 
 	go k.desconectarIO(nombre, url)
 }
@@ -131,7 +131,7 @@ func (k *Kernel) llegaNuevaIO(w http.ResponseWriter, r *http.Request) { // Hands
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	w.Write([]byte(RESPUESTA_OK))
 
 	go func() {
 		k.registrarNuevaIO(nombre, ip, puerto)
@@ -199,7 +199,7 @@ func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	w.Write([]byte(RESPUESTA_OK))
 
 	go k.liberarInstanciaIO(pid, nombre)
 }

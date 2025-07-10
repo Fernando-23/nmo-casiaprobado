@@ -14,25 +14,30 @@ import (
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-func CargarArchivoPseudocodigo(path string) []string {
+func CargarArchivoPseudocodigo(path string) ([]string, error) {
 	path_completo := "/home/utnso/pruebas/" + path
+
 	archivo, err := os.Open(path_completo)
 
 	if err != nil {
-		fmt.Println(err)
+		return nil, fmt.Errorf("no se pudo abrir archivo %s: %w", path_completo, err)
 	}
 	defer archivo.Close()
 
-	var nuevas_instr_pid []string
+	var instrucciones []string
+	scanner := bufio.NewScanner(archivo)
 
-	scaner := bufio.NewScanner(archivo)
-	scaner.Split(bufio.ScanLines)
+	scanner.Split(bufio.ScanLines)
 
-	for scaner.Scan() {
-		nuevas_instr_pid = append(nuevas_instr_pid, scaner.Text())
+	for scanner.Scan() {
+		instrucciones = append(instrucciones, scanner.Text())
 	}
 
-	return nuevas_instr_pid
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error leyendo archivo %s: %w", path_completo, err)
+	}
+
+	return instrucciones, nil
 
 }
 
@@ -126,12 +131,28 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 
 	aux := strings.Split(mensaje, " ")
 
-	pid, _ := strconv.Atoi(aux[0])
-	tamanio, _ := strconv.Atoi(aux[1])
+	if len(aux) < 3 {
+		http.Error(w, "Formato inválido: se requieren pid, tamanio y arch_pseudo", http.StatusBadRequest)
+		return
+	}
+
+	pid, err := strconv.Atoi(aux[0])
+	if err != nil {
+		http.Error(w, "PID inválido", http.StatusBadRequest)
+		return
+	}
+
+	tamanio, err := strconv.Atoi(aux[1])
+	if err != nil {
+		http.Error(w, "Tamaño inválido", http.StatusBadRequest)
+		return
+	}
+
 	arch_pseudo := aux[2]
 
 	mutex_tamanioMemoActual.Lock()
 	defer mutex_tamanioMemoActual.Unlock()
+
 	if !HayEspacio(tamanio) || !HayFramesLibresPara(tamanio) {
 
 		slog.Debug("No hay espacio suficiente para crear el proceso pedido por kernel", "pid", pid)
@@ -167,7 +188,12 @@ func (memo *Memo) CrearNuevoProceso(pid int, tamanio int, arch_pseudo string) {
 	}
 
 	// 1er check, cargar arch pseudo
-	nuevo_elemento := CargarArchivoPseudocodigo(arch_pseudo)
+	nuevo_elemento, err := CargarArchivoPseudocodigo(arch_pseudo)
+
+	if err != nil {
+		slog.Error("Error al cargar archivo pseudocódigo", "pid", pid, "error", err)
+		return
+	}
 	memo.memoria_sistema[pid] = nuevo_elemento
 
 	cant_frames := LaCuentitaMaestro(tamanio, memo.config_memo.Tamanio_pag)
@@ -571,29 +597,33 @@ func (memo *Memo) DumpMemory(w http.ResponseWriter, r *http.Request) {
 func (memo *Memo) EliminarProceso(pid int) bool {
 
 	mutex_lprocs.Lock()
+	defer mutex_lprocs.Unlock()
+
 	proceso_existe := memo.l_proc[pid]
-	slog.Debug("procesoe en memo.lproc", "pid", memo.l_proc[pid].tamanio)
 
 	if proceso_existe == nil {
-		mutex_lprocs.Unlock()
+		slog.Warn("EliminarProceso - proceso no encontrado", "pid", pid)
 		return false
 	}
 
-	frames_asignados_a_pid := memo.l_proc[pid].ptr_a_frames_asignados
+	slog.Debug("EliminarProceso - proceso encontrado", "pid", pid, "tamanio", proceso_existe.tamanio)
+
+	frames_asignados_a_pid := proceso_existe.ptr_a_frames_asignados
 
 	if frames_asignados_a_pid == nil {
-		slog.Error("hola roberta")
-		memo.EliminarProceso(pid)
+		slog.Error("Error - (EliminarProceso) - frames asignados es nil", "pid", pid)
+		return false
 	}
-	for i := range frames_asignados_a_pid {
 
+	for i := range frames_asignados_a_pid {
 		if frames_asignados_a_pid[i] != nil {
 			*frames_asignados_a_pid[i] = -1
 		} else {
-			slog.Warn("No tiene punteros asignados", "pid", pid)
+			slog.Warn("Cuidadito - (EliminarProceso) - puntero a frame nil", "indice", i, "pid", pid)
 		}
 	}
-	mutex_lprocs.Unlock()
+
+	delete(memo.l_proc, pid)
 
 	memo.EliminarProcesoDeSwap(pid)
 
@@ -617,7 +647,8 @@ func (memo *Memo) FinalizarProceso(w http.ResponseWriter, r *http.Request) {
 	pid, err := strconv.Atoi(mensaje)
 
 	if err != nil {
-		slog.Error("Error - (FinalizarProceso) - Conversiones a int")
+		slog.Error("Error - (FinalizarProceso) - Conversiones a int", "mensaje", mensaje, "error", err)
+		http.Error(w, "PID inválido", http.StatusBadRequest)
 		return
 	}
 
@@ -632,11 +663,17 @@ func (memo *Memo) FinalizarProceso(w http.ResponseWriter, r *http.Request) {
 	mutex_metricas.Lock()
 	defer mutex_metricas.Unlock()
 
-	mt_a_log := memo.metricas[pid]
-	utils.LoggerConFormato(
-		"## PID: %d - Proceso Destruido - Métricas - Acc.T.Pag: %d; Inst.Sol.: %d; SWAP: %d; Mem.Prin.: %d; Lec.Mem.: %d; Esc.Mem.: %d",
-		pid, mt_a_log[Accesos_a_tpags], mt_a_log[Cant_instr_solicitadas], mt_a_log[Bajadas_de_swap],
-		mt_a_log[Subidas_a_memoria], mt_a_log[Cant_read], mt_a_log[Cant_write])
+	mt_a_log, ok := memo.metricas[pid]
+	if ok {
+		utils.LoggerConFormato(
+			"## PID: %d - Proceso Destruido - Métricas - Acc.T.Pag: %d; Inst.Sol.: %d; SWAP: %d; Mem.Prin.: %d; Lec.Mem.: %d; Esc.Mem.: %d",
+			pid, mt_a_log[Accesos_a_tpags], mt_a_log[Cant_instr_solicitadas], mt_a_log[Bajadas_de_swap],
+			mt_a_log[Subidas_a_memoria], mt_a_log[Cant_read], mt_a_log[Cant_write])
+
+	} else {
+		slog.Warn("Advertencia - (FinalizarProceso) - Métricas no encontradas para PID", "pid", pid)
+	}
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 
