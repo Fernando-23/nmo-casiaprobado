@@ -17,6 +17,27 @@ func (k *Kernel) InicializarMapaDeEstados() {
 	}
 }
 
+func (k *Kernel) ImprimirPCBsDeEstado(estado int) {
+	mutex_ProcesoPorEstado[estado].Lock()
+	defer mutex_ProcesoPorEstado[estado].Unlock()
+
+	listaPCB, ok := k.ProcesoPorEstado[estado]
+
+	if !ok || len(listaPCB) == 0 {
+		slog.Debug("No hay procesos en estado", "estado", estado)
+		return
+	}
+
+	for _, pcb := range listaPCB {
+		if pcb != nil {
+			slog.Debug("PCB",
+				"pid", pcb.Pid,
+				"estado", estado,
+				"pc", pcb.Pc)
+		}
+	}
+}
+
 func (k *Kernel) AgregarAEstado(estado int, pcb *PCB, hacerSincro bool) {
 
 	if hacerSincro {

@@ -44,9 +44,14 @@ func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	k.ImprimirPCBsDeEstado(EstadoReady)
+
 	if debeContinuar {
 		w.Write([]byte("SEGUI"))
 	} else {
+
+		slog.Debug("intentando enviar proceso a execute", "mensaje", mensaje)
+
 		k.IntentarEnviarProcesoAExecute()
 		w.Write([]byte("REPLANIFICAR"))
 	}

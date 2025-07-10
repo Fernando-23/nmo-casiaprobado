@@ -132,9 +132,9 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 
 	mutex_tamanioMemoActual.Lock()
 	defer mutex_tamanioMemoActual.Unlock()
-	if !HayEspacio(tamanio) {
+	if !HayEspacio(tamanio) || !HayFramesLibresPara(tamanio) {
 
-		slog.Debug("No hay espacio suficiente para crear el proceso pedido por kernel")
+		slog.Debug("No hay espacio suficiente para crear el proceso pedido por kernel", "pid", pid)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("NO_OK"))
 		return
@@ -151,21 +151,31 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 func HayEspacio(tamanio int) bool {
 	return gb_tam_memo_actual >= tamanio
 }
+func HayFramesLibresPara(tamanio int) bool {
+	return gb_frames_disponibles > tamanio
+}
 
 func (memo *Memo) CrearNuevoProceso(pid int, tamanio int, arch_pseudo string) {
 
 	mutex_memoriaSistema.Lock()
 	defer mutex_memoriaSistema.Unlock()
 	_, ok := memo.memoria_sistema[pid]
+
 	if ok {
-		slog.Error("Error - (CrearNuevoProceso) - Ya se encuentra creado este proceso",
-			"pid", pid)
+		slog.Error("Error - (CrearNuevoProceso) - Ya se encuentra creado este proceso", "pid", pid)
 		return
 	}
 
 	// 1er check, cargar arch pseudo
 	nuevo_elemento := CargarArchivoPseudocodigo(arch_pseudo)
 	memo.memoria_sistema[pid] = nuevo_elemento
+
+	cant_frames := LaCuentitaMaestro(tamanio, memo.config_memo.Tamanio_pag)
+
+	memo.l_proc[pid] = &Proceso{
+		ptr_a_frames_asignados: make([]*int, cant_frames),
+		tamanio:                tamanio,
+	}
 
 	// 2do check, asignarle frames y crear tablas
 	memo.InicializarTablaPunterosAsociadosA(pid, tamanio)
@@ -177,6 +187,7 @@ func (memo *Memo) CrearNuevoProceso(pid int, tamanio int, arch_pseudo string) {
 
 	utils.LoggerConFormato("PID: %d - Proceso Creado - Tamaño: %d", pid, tamanio)
 }
+
 func (memo *Memo) InicializarMetricasPor(pid int) {
 	memo.metricas[pid] = make([]int, cant_metricas)
 }
@@ -212,7 +223,7 @@ func (memo *Memo) ResponderHandshakeA(modulo string, w http.ResponseWriter) {
 
 }
 
-func (memo *Memo) InicializarTablaPunterosAsociadosA(pid int, tamanio int) {
+func (memo *Memo) InicializarTablaPunterosAsociadosA(pid int, frames_a_reservar int) {
 
 	mutex_tablaPaginas.Lock()
 	defer mutex_tablaPaginas.Unlock()
@@ -226,7 +237,7 @@ func (memo *Memo) InicializarTablaPunterosAsociadosA(pid int, tamanio int) {
 
 	if memo.config_memo.Cant_niveles == 0 {
 		nuevo_puntero_de_tablas.entradas = make([]*int, memo.config_memo.Cant_entradasXpag)
-		memo.AsignarFramesAProceso(nuevo_puntero_de_tablas, tamanio, pid)
+		memo.AsignarFramesAProceso(nuevo_puntero_de_tablas, frames_a_reservar, pid)
 		return
 	}
 
@@ -242,24 +253,21 @@ func (memo *Memo) InicializarTablaPunterosAsociadosA(pid int, tamanio int) {
 	}
 
 	nuevo_puntero_de_tablas.entradas = make([]*int, memo.config_memo.Cant_entradasXpag)
-	memo.AsignarFramesAProceso(nuevo_puntero_de_tablas, tamanio, pid)
+	memo.AsignarFramesAProceso(nuevo_puntero_de_tablas, frames_a_reservar, pid)
 }
 
-func (memo *Memo) AsignarFramesAProceso(tpags_final *NivelTPag, tamanio int, pid int) {
+func (memo *Memo) AsignarFramesAProceso(tpags_final *NivelTPag, frames_a_reservar int, pid int) {
 	mutex_framesDisponibles.Lock()
 	defer mutex_framesDisponibles.Unlock()
-	if HayFramesLibresPara(tamanio) {
 
-		frames_a_reservar := LaCuentitaMaestro(tamanio, memo.config_memo.Tamanio_pag)
-		mutex_bitmap.Lock()
-		memo.ModificarEstadoFrames(frames_a_reservar, pid)
-		mutex_bitmap.Unlock()
-		slog.Debug("Debug - (AsignarFramesAProceso) -  Se asigno correctamente frames al proceso",
-			"pid", pid,
-		)
-		return
-	}
-	slog.Error("Error - (AsignarFramesAProceso) - No se pudo asignar frames a un proceso")
+	mutex_bitmap.Lock()
+	defer mutex_bitmap.Unlock()
+
+	memo.ModificarEstadoFrames(frames_a_reservar, pid)
+
+	slog.Debug("Debug - (AsignarFramesAProceso) -  Se asigno correctamente frames al proceso",
+		"pid", pid,
+	)
 }
 
 // Traeme la dolorosa, la juguetona pa
@@ -300,10 +308,6 @@ func (memo *Memo) ModificarEstadoFrames(frames_a_reservar int, pid int) {
 		slog.Error("Error - (ModificarEstadoFrames) - Se intento asignar mas frames de los que habia diponibles") //poner pid que pide mucho si queres
 		return
 	}
-}
-
-func HayFramesLibresPara(tamanio int) bool {
-	return gb_tam_memo_actual > tamanio
 }
 
 func (memo *Memo) InicializarTablaFramesGlobal(cant_frames_memo int) {
