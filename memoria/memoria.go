@@ -10,49 +10,61 @@ import (
 
 func main() {
 
-	config_memo = &ConfigMemo{}
-	utils.IniciarConfiguracion("memoria.json", config_memo)
-	utils.ConfigurarLogger("memoria", config_memo.Log_level)
-	cant_frames_totales := int(config_memo.Tamanio_memoria / config_memo.Tamanio_pag)
+	config := new(ConfigMemo)
 
-	memo := &Memo{
-		memoria_sistema: make(map[int][]string),
-		ptrs_raiz_tpag:  make(map[int]*NivelTPag),
-		tabla_frames:    make([]int, cant_frames_totales),
-		swap: &DataSwap{
-			espacio_contiguo: make(map[int]*ProcesoEnSwap),
-			espacio_libre:    []*EspacioLibre{},
-		},
-		metricas: make(map[int][]int),
+	if err := utils.IniciarConfiguracion("memoria.json", config); err != nil {
+		fmt.Println("Error cargando config memoria: ", err)
+		return
 	}
 
-	tam_memo_actual = config_memo.Tamanio_memoria
-	tamanio_pag = config_memo.Tamanio_pag
-	memoria_principal = make([]byte, config_memo.Tamanio_memoria)
-	fmt.Println(cant_frames_totales)
+	cant_frames_totales := int(config.Tamanio_memoria / config.Tamanio_pag)
+	gb_tam_memo_actual = config.Tamanio_memoria
+	gb_tamanio_pag = config.Tamanio_pag
+
+	memo := &Memo{
+		memoria_sistema:   make(map[int][]string),
+		memoria_principal: make([]byte, config.Tamanio_memoria),
+		ptrs_raiz_tpag:    make(map[int]*NivelTPag),
+		bitmap:            make([]int, cant_frames_totales),
+		l_proc:            make(map[int]*Proceso),
+		metricas:          make(map[int][]int),
+		config_memo:       config,
+		swap: &DataSwap{
+			ultimo_byte:      0,
+			espacio_contiguo: make(map[int]*ProcesoEnSwap),
+			espacio_libre: []*EspacioLibre{
+				{
+					inicio:  0,
+					tamanio: config.Tamanio_memoria,
+				},
+			},
+		},
+	}
+
+	utils.ConfigurarLogger("memoria", memo.config_memo.Log_level)
+
 	memo.InicializarTablaFramesGlobal(cant_frames_totales)
 
 	mux := http.NewServeMux()
 	// GENERAL
-	mux.HandleFunc("/memoria/handshake", Hanshake)
-	// ========
-	// APIs CPU
-	// ========
-	mux.HandleFunc("/memoria/fetch", memo.Fetch)
-	mux.HandleFunc("/memoria/busqueda_tabla", memo.buscarEnTablaAsociadoAProceso)
-	mux.HandleFunc("/memoria/READ", memo.LeerEnMemoria)
-	mux.HandleFunc("/memoria/WRITE", memo.EscribirEnMemoria)
+	mux.HandleFunc("/memoria/handshake", memo.Hanshake)
+
+	// ======== APIs CPU  ========
+	mux.HandleFunc("/memoria/fetch", memo.Fetch)                                  //---sincronizado
+	mux.HandleFunc("/memoria/busqueda_tabla", memo.buscarEnTablaAsociadoAProceso) //---sincronizado
+	mux.HandleFunc("/memoria/READ", memo.LeerEnMemoria)                           //---sincronizado
+	mux.HandleFunc("/memoria/WRITE", memo.EscribirEnMemoria)                      //---sincronizado
 	// mux.HandleFunc("/memoria/actualizar_entrada_cache", memo.ActualizarEntradaCache)
 	// ===========
 	// APIs Kernel
 	// ===========
-	mux.HandleFunc("/memoria/hay_lugar", memo.VerificarHayLugar)
-	mux.HandleFunc("/memoria/MEMORY_DUMP", memo.DumpMemory)
-	mux.HandleFunc("/memoria/EXIT_PROC", memo.FinalizarProceso)
-	mux.HandleFunc("/memoria/SUSPEND_PROC", memo.EscribirEnSwap)
-	mux.HandleFunc("/memoria/DE_SUSPEND_PROC", memo.QuitarDeSwap)
+	mux.HandleFunc("/memoria/hay_lugar", memo.VerificarHayLugar)  //--------------------sincronizado
+	mux.HandleFunc("/memoria/MEMORY_DUMP", memo.DumpMemory)       //--------------------sincronizado
+	mux.HandleFunc("/memoria/EXIT_PROC", memo.FinalizarProceso)   //--------------------sincronizado
+	mux.HandleFunc("/memoria/SUSPEND_PROC", memo.EscribirEnSwap)  //--------------------sincronizado
+	mux.HandleFunc("/memoria/DE_SUSPEND_PROC", memo.QuitarDeSwap) //--------------------sincronizado
 
-	url := fmt.Sprintf(":%d", config_memo.Puerto_mem)
+	url := fmt.Sprintf(":%d", memo.config_memo.Puerto_mem)
 
 	slog.Debug("Iniciando servidor")
 	go http.ListenAndServe(url, mux)

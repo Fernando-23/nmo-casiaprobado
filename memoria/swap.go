@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -8,6 +9,15 @@ import (
 	"slices"
 	"strconv"
 )
+
+func (memo *Memo) CrearSwapfile() {
+	_, err := os.Create(memo.config_memo.Path_swap)
+
+	if err != nil {
+		fmt.Println("Error en crear swapfile")
+		return
+	}
+}
 
 func (memo *Memo) CargarDataSwap(pid int, tamanio int) {
 
@@ -51,7 +61,7 @@ func (memo *Memo) EscribirEnSwap(w http.ResponseWriter, r *http.Request) {
 		slog.Error("Error - (EscribirEnSwap) - Error convirtiendo pid")
 	}
 
-	file, err := os.OpenFile(config_memo.Path_swap, os.O_RDWR|os.O_CREATE, 0666)
+	file, err := os.OpenFile(memo.config_memo.Path_swap, os.O_RDWR|os.O_CREATE, 0666)
 
 	if err != nil {
 		slog.Error("Error - (EscribirEnSwap) - Error en abrir swapfile")
@@ -59,28 +69,37 @@ func (memo *Memo) EscribirEnSwap(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
+	mutex_lprocs.Lock()
 	frames_asignados_a_pid := memo.l_proc[pid].ptr_a_frames_asignados
 	tamanio := memo.l_proc[pid].tamanio
 
+	mutex_memoriaPrincipal.Lock()
 	for i := range frames_asignados_a_pid {
 		ptr_frame_asignado := frames_asignados_a_pid[i]
-		inicio := *frames_asignados_a_pid[i] * config_memo.Tamanio_pag
-		fin_de_pag := inicio + config_memo.Tamanio_pag //Liam vino de rendir funcional mepa
+		inicio := *frames_asignados_a_pid[i] * memo.config_memo.Tamanio_pag
+		fin_de_pag := inicio + memo.config_memo.Tamanio_pag //Liam vino de rendir funcional mepa
 
-		contenido_pag := memoria_principal[inicio:fin_de_pag]
+		contenido_pag := memo.memoria_principal[inicio:fin_de_pag]
 		*ptr_frame_asignado = -1
 		file.Write(contenido_pag)
 	}
+	mutex_memoriaPrincipal.Unlock()
 
+	mutex_swap.Lock()
 	memo.CargarDataSwap(pid, tamanio)
+	mutex_swap.Unlock()
 
 	memo.l_proc[pid].ptr_a_frames_asignados = memo.l_proc[pid].ptr_a_frames_asignados[:0]
+	mutex_lprocs.Unlock()
 
+	mutex_metricas.Lock()
 	memo.IncrementarMetrica(pid, Bajadas_de_swap)
+	mutex_metricas.Unlock()
 
-	// lock mutex_tamanioMemoActual.Lock()
-	tam_memo_actual += tamanio
-	// unlock mutex_tamanioMemoActual.Unlock()
+	mutex_tamanioMemoActual.Lock()
+	gb_tam_memo_actual += tamanio
+	mutex_tamanioMemoActual.Unlock()
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
@@ -104,7 +123,11 @@ func (memo *Memo) QuitarDeSwap(w http.ResponseWriter, r *http.Request) {
 		slog.Error("Error - (QuitarDeSwap) - Conversion de pid ")
 		return
 	}
+
+	mutex_swap.Lock()
+	defer mutex_swap.Unlock()
 	proceso_en_swap, existe := memo.swap.espacio_contiguo[pid]
+
 	if !existe {
 		slog.Error("Error - (QuitarDeSwap) - NO existe el proceso en swap", "pid", pid)
 		http.Error(w, "Proceso no encontrado en swap", http.StatusNotFound)
@@ -114,22 +137,23 @@ func (memo *Memo) QuitarDeSwap(w http.ResponseWriter, r *http.Request) {
 	inicio_proceso := proceso_en_swap.inicio
 	tamanio := proceso_en_swap.tamanio
 
+	mutex_tamanioMemoActual.Lock()
 	if !HayEspacio(tamanio) {
+		mutex_tamanioMemoActual.Unlock()
 		slog.Debug("Debug - (QuitarDeSwap) - No hay espacio en memoria para sacar un proceso de swap")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("NO_OK"))
 		return
 	}
+	mutex_tamanioMemoActual.Unlock()
 
-	file, err := os.Open(config_memo.Path_swap)
+	file, err := os.Open(memo.config_memo.Path_swap)
 
 	if err != nil {
 		slog.Error("Error - (QuitarDeSwap) - Error en abrir swapfile")
 		http.Error(w, "Error accediendo al archivo swap", http.StatusBadGateway)
 		return
 	}
-
-	defer file.Close()
 
 	if _, err := file.Seek(int64(inicio_proceso), 1); err != nil {
 		slog.Error("Error - (QuitarDeSwap) - Fallo al hacer seek en swap", "error", err)
@@ -163,21 +187,20 @@ func (memo *Memo) QuitarDeSwap(w http.ResponseWriter, r *http.Request) {
 	//segurisimo
 
 	//TEMA ASIGNAR FRAMES AL PROCESO SACADO DE SWAP
+
+	mutex_tablaPaginas.Lock()
+	defer mutex_tablaPaginas.Unlock()
 	ptr_tpag_del_pid := memo.ptrs_raiz_tpag[pid]
-	if config_memo.Cant_niveles == 0 {
-		//lock memoria_principal
+	if memo.config_memo.Cant_niveles == 0 {
 		memo.EscribirDeSwapAMemoriaPrincipal(pid, tamanio, ptr_tpag_del_pid, w)
-		//unlock memoria_principal
 		return
 	}
 
-	for i := 1; i < config_memo.Cant_niveles; i++ {
+	for i := 1; i < memo.config_memo.Cant_niveles; i++ {
 		ptr_tpag_del_pid = ptr_tpag_del_pid.sgte_nivel
 	}
 
-	//lock memoria_principal
 	memo.EscribirDeSwapAMemoriaPrincipal(pid, tamanio, ptr_tpag_del_pid, w)
-	//unlock memoria_principal
 
 }
 
@@ -185,29 +208,39 @@ func (memo *Memo) EscribirDeSwapAMemoriaPrincipal(pid int, tamanio int, ptr_tpag
 
 	memo.AsignarFramesAProceso(ptr_tpag_del_pid, tamanio, pid)
 
+	mutex_lprocs.Lock()
 	frames_asignados_a_pid := memo.l_proc[pid].ptr_a_frames_asignados
 	var contenido_proc_dividido []byte
 
+	mutex_memoriaPrincipal.Lock()
 	for i := range frames_asignados_a_pid {
 		//tema contenido
-		inicio_contenido := i * tamanio_pag
-		fin_contenido := inicio_contenido + tamanio_pag
+		inicio_contenido := i * gb_tamanio_pag
+		fin_contenido := inicio_contenido + gb_tamanio_pag
 		pagina_a_escribir := contenido_proc_dividido[inicio_contenido:fin_contenido]
 
 		//tema memoria
 		frame := *frames_asignados_a_pid[i]
-		inicio_memo := frame * tamanio_pag
-		fin_memo := inicio_memo + tamanio_pag
+		inicio_memo := frame * gb_tamanio_pag
+		fin_memo := inicio_memo + gb_tamanio_pag
 
-		copy(memoria_principal[inicio_memo:fin_memo], pagina_a_escribir)
+		copy(memo.memoria_principal[inicio_memo:fin_memo], pagina_a_escribir)
 	}
+	mutex_memoriaPrincipal.Unlock()
+	mutex_lprocs.Unlock()
+
+	mutex_metricas.Lock()
 	memo.IncrementarMetrica(pid, Subidas_a_memoria)
+	mutex_metricas.Unlock()
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
 
 func (memo *Memo) EliminarProcesoDeSwap(pid int) {
 
+	mutex_swap.Lock()
+	defer mutex_swap.Unlock()
 	proceso_en_swap := memo.swap.espacio_contiguo[pid]
 
 	delete(memo.swap.espacio_contiguo, pid)

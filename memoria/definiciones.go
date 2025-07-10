@@ -17,12 +17,15 @@ type ConfigMemo struct {
 }
 
 type Memo struct {
-	memoria_sistema map[int][]string
-	swap            *DataSwap
-	l_proc          map[int]*Proceso
-	ptrs_raiz_tpag  map[int]*NivelTPag
-	tabla_frames    []int //sincronizacion
-	metricas        map[int][]int
+	memoria_sistema   map[int][]string //mapeo de arch pseudo
+	memoria_principal []byte
+	config_memo       *ConfigMemo
+
+	swap           *DataSwap
+	l_proc         map[int]*Proceso
+	ptrs_raiz_tpag map[int]*NivelTPag
+	bitmap         []int //sincronizacion
+	metricas       map[int][]int
 }
 
 type Proceso struct {
@@ -62,12 +65,21 @@ const (
 )
 
 var (
-	memoria_principal       []byte
-	config_memo             *ConfigMemo
-	frames_disponibles      int
-	tam_memo_actual         int
-	tamanio_pag             int
-	mutex_memoria_principal sync.Mutex
+	gb_frames_disponibles int
+	gb_tam_memo_actual    int
+	gb_tamanio_pag        int
+)
+
+var (
+	mutex_tamanioMemoActual sync.Mutex
+	mutex_framesDisponibles sync.Mutex
+	mutex_memoriaPrincipal  sync.Mutex
+	mutex_memoriaSistema    sync.Mutex
+	mutex_metricas          sync.Mutex
+	mutex_tablaPaginas      sync.Mutex
+	mutex_lprocs            sync.Mutex
+	mutex_bitmap            sync.Mutex
+	mutex_swap              sync.Mutex
 )
 
 const cant_metricas = 6
