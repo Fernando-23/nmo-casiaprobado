@@ -20,6 +20,7 @@ func main() {
 	cant_frames_totales := int(config.Tamanio_memoria / config.Tamanio_pag)
 	gb_tam_memo_actual = config.Tamanio_memoria
 	gb_tamanio_pag = config.Tamanio_pag
+	gb_frames_disponibles = cant_frames_totales
 
 	memo := &Memo{
 		memoria_sistema:   make(map[int][]string),

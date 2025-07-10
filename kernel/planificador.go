@@ -304,10 +304,13 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	if cpu_seleccionada == nil { //no hay cpu libre
 		if hay_que_chequear_desalojo {
 			slog.Debug("No hay CPU libre, intentando desalojo por SRT", "pid", pid)
-			k.IntentarDesalojoSRT(pid)
+			if !k.IntentarDesalojoSRT(pid) {
+				MarcarProcesoReservado(pcb, "NO")
+			}
 
 		} else {
 			slog.Debug("No hay CPU libre y no se requiere desalojo", "pid", pid)
+			MarcarProcesoReservado(pcb, "NO")
 		}
 		mutex_CPUsConectadas.Unlock()
 		return
@@ -332,13 +335,14 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	procVerificadoAExecute := k.QuitarYObtenerPCB(EstadoReady, pid, false)
 
 	if procVerificadoAExecute == nil {
-		slog.Error("Error - (IntentarEnviarProcesoAExecute) - El proceso no esta en la lista Ready")
+		slog.Error("Error - (IntentarEnviarProcesoAExecute) - El proceso no esta en la lista Ready", "pid", pid)
 		return
 	}
 	actualizarCPU(cpu_seleccionada, pid, pc, false)
 
-	MarcarProcesoReservado(procVerificadoAExecute, "NO")
 	k.AgregarAEstado(EstadoExecute, procVerificadoAExecute, false)
+
+	MarcarProcesoReservado(procVerificadoAExecute, "NO")
 
 	slog.Debug("Proceso enviado a EXECUTE", "pid", pid, "cpu_id", idCPU)
 }

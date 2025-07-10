@@ -52,19 +52,23 @@ func (memo *Memo) Fetch(w http.ResponseWriter, r *http.Request) {
 
 	aux := strings.Split(mensaje, " ")
 
+	if len(aux) < 2 {
+		slog.Error("Error - (Fetch) - Formato invalido", "mensaje", mensaje)
+		http.Error(w, "Formato invalido", http.StatusBadRequest)
+		return
+	}
+
 	pid, err := strconv.Atoi(aux[0])
 	if err != nil {
-		slog.Error("Error - (Fetch) - Transformando pid",
-			"pid", pid)
-		w.Write([]byte("TODO MAL"))
+		slog.Error("Error - (Fetch) - Transformando pid", "pid", pid)
+		http.Error(w, "PID inválido", http.StatusBadRequest)
 		return
 	}
 
 	pc, err := strconv.Atoi(aux[1])
 	if err != nil {
-		slog.Error("Error - (Fetch) - Transformando pc",
-			"pc", pc)
-		w.Write([]byte("TODO MAL"))
+		slog.Error("Error - (Fetch) - Transformando pc", "pc", pc)
+		http.Error(w, "PC inválido", http.StatusBadRequest)
 		return
 	}
 
@@ -273,7 +277,15 @@ func LaCuentitaMaestro(tamanio_proc int, tamanio_frame int) int {
 func (memo *Memo) ModificarEstadoFrames(frames_a_reservar int, pid int) {
 
 	i := 0
-	for frame := 0; frames_a_reservar != 0 && gb_frames_disponibles > 0; frame++ {
+
+	ptrs := memo.l_proc[pid].ptr_a_frames_asignados
+
+	if ptrs == nil || len(ptrs) < frames_a_reservar {
+		slog.Warn("Warn - (ModificarEstadoFrames) - Estructura ptr_a_frames_asignados", "pid", pid)
+		return
+	}
+
+	for frame := 0; frame < len(memo.bitmap) && frames_a_reservar > 0 && gb_frames_disponibles > 0; frame++ {
 		if memo.bitmap[frame] < 0 {
 			memo.bitmap[frame] = frame
 			memo.l_proc[pid].ptr_a_frames_asignados[i] = &memo.bitmap[frame]
@@ -291,7 +303,7 @@ func (memo *Memo) ModificarEstadoFrames(frames_a_reservar int, pid int) {
 }
 
 func HayFramesLibresPara(tamanio int) bool {
-	return gb_frames_disponibles > tamanio
+	return gb_tam_memo_actual > tamanio
 }
 
 func (memo *Memo) InicializarTablaFramesGlobal(cant_frames_memo int) {
@@ -557,7 +569,7 @@ func (memo *Memo) EliminarProceso(pid int) bool {
 	mutex_lprocs.Lock()
 	proceso_existe := memo.l_proc[pid]
 
-	if proceso_existe != nil {
+	if proceso_existe == nil {
 		return false
 	}
 

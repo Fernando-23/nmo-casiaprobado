@@ -122,6 +122,7 @@ func (k *Kernel) CambiosEnElPlantel(cpuPosicion *CPU, procesoTitular *PCB, proce
 	}
 
 	MarcarProcesoReservado(procVerificadoAExecute, "NO")
+
 	k.AgregarAEstado(EstadoExecute, procVerificadoAExecute, false)
 
 	utils.LoggerConFormato("(%d) Pasa del estado <%s> al estado <%s>",
@@ -142,7 +143,7 @@ func EnviarInterrupt(cpu *CPU) { // yo te hablo por la puerta interrupt y me des
 	utils.EnviarStringSinEsperar("POST", fullURL, "")
 }
 
-func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) {
+func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) bool {
 
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 	defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
@@ -151,14 +152,14 @@ func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) {
 	defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
 
 	if !k.TieneProcesos(EstadoReady) {
-		return //no hay procesos en READY, no tiene sentido desalojar
+		return false //no hay procesos en READY, no tiene sentido desalojar
 	}
 
 	procesoCandidato := k.BuscarPorPidSinLock(EstadoReady, pidQuiereDesalojar)
 
 	if procesoCandidato == nil {
 		slog.Error("Error - (IntentarDesalojoSRT) - Proceso ya no está en READY", "pid", pidQuiereDesalojar)
-		return
+		return false
 	}
 	estimacionReady := procesoCandidato.SJF.Estimado_actual
 
@@ -173,7 +174,7 @@ func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) {
 
 		if procesoEjecutando == nil {
 			slog.Error("Error - (IntentarDesalojoSRT) - El proceso no esta en la lista execute, incosistencia interna")
-			return
+			return false
 		}
 
 		tiempoEjecutando := duracionEnEstado(procesoEjecutando)
@@ -200,6 +201,9 @@ func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) {
 
 		reservarCPU(cpuElegida, pidQuiereDesalojar)
 		EnviarInterrupt(cpuElegida)
+
+		return true
 	}
+	return false
 
 }
