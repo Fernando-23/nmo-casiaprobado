@@ -59,9 +59,9 @@ func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
 }
 
 func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
-
+	//mutex_syscall.Lock()
 	syscall := strings.Split(respuesta, " ")
-
+	//mutex_syscall.Unlock()
 	if len(syscall) < 3 {
 		return false, fmt.Errorf("error - syscall incompleta: %v", respuesta)
 	}
@@ -102,7 +102,7 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("error - syscall IO - tiempo inválido: %s", syscall[4])
 		}
-		k.GestionarIO(nombre, pid, pc, tiempo, idCPU)
+		k.GestionarIO(nombre, pid, pc+1, tiempo, idCPU)
 		k.liberarCPU(idCPU)
 		return false, nil // la CPU debe replanificar
 
@@ -195,7 +195,9 @@ func (k *Kernel) GestionarIO(nombreIO string, pid, pc, duracion, idCPU int) {
 	IO_seleccionada.Libre = false
 
 	utils.LoggerConFormato("## (%d) - Bloqueado por IO: %s", pid, nombreIO)
+	//k.IntentarEnviarProcesosAReady()
 	enviarProcesoAIO(IO_seleccionada, duracion)
+
 }
 
 func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int) {

@@ -214,6 +214,7 @@ func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
 			return //no estaba en ninguno de los estados posibles
 		}
 	}
+	k.IntentarEnviarProcesoAExecute()
 
 	if err := k.ActualizarIO(nombre, pid); err != nil {
 		slog.Error("Error - (liberarInstanciaIO) - Falló actualización de IO", "error", err)
@@ -222,7 +223,6 @@ func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
 	//==================== LOG OBLIGATORIO ====================
 	utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY", pid)
 	//=========================================================
-
 }
 
 func (k *Kernel) ActualizarIO(nombreIO string, pid int) error {
@@ -258,6 +258,7 @@ func (k *Kernel) ActualizarIO(nombreIO string, pid int) error {
 		ioUsada.Actualizar(proceso_sgte.Pid, false)
 
 		// mandarlo a io
+
 		enviarProcesoAIO(ioUsada, proceso_sgte.TiempoIO)
 	}
 	return nil

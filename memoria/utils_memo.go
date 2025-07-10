@@ -572,20 +572,26 @@ func (memo *Memo) EliminarProceso(pid int) bool {
 
 	mutex_lprocs.Lock()
 	proceso_existe := memo.l_proc[pid]
+	slog.Debug("procesoe en memo.lproc", "pid", memo.l_proc[pid].tamanio)
 
 	if proceso_existe == nil {
+		mutex_lprocs.Unlock()
 		return false
 	}
 
 	frames_asignados_a_pid := memo.l_proc[pid].ptr_a_frames_asignados
 
-	/*if frames_asignados_a_pid == nil {
+	if frames_asignados_a_pid == nil {
 		slog.Error("hola roberta")
-		return
-	}*/
+		memo.EliminarProceso(pid)
+	}
 	for i := range frames_asignados_a_pid {
-		ptr_frame_asignado := frames_asignados_a_pid[i]
-		*ptr_frame_asignado = -1
+
+		if frames_asignados_a_pid[i] != nil {
+			*frames_asignados_a_pid[i] = -1
+		} else {
+			slog.Warn("No tiene punteros asignados", "pid", pid)
+		}
 	}
 	mutex_lprocs.Unlock()
 

@@ -241,15 +241,16 @@ func (memo *Memo) EliminarProcesoDeSwap(pid int) {
 
 	mutex_swap.Lock()
 	defer mutex_swap.Unlock()
-	proceso_en_swap := memo.swap.espacio_contiguo[pid]
 
-	delete(memo.swap.espacio_contiguo, pid)
+	if proceso_en_swap := memo.swap.espacio_contiguo[pid]; proceso_en_swap != nil {
 
-	nueva_instancia_espacio_libre := &EspacioLibre{
-		inicio:  proceso_en_swap.inicio,
-		tamanio: proceso_en_swap.tamanio,
+		delete(memo.swap.espacio_contiguo, pid)
+
+		nueva_instancia_espacio_libre := &EspacioLibre{
+			inicio:  proceso_en_swap.inicio,
+			tamanio: proceso_en_swap.tamanio,
+		}
+
+		memo.swap.espacio_libre = append(memo.swap.espacio_libre, nueva_instancia_espacio_libre)
 	}
-
-	memo.swap.espacio_libre = append(memo.swap.espacio_libre, nueva_instancia_espacio_libre)
-
 }
