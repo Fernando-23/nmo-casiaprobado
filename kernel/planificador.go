@@ -149,14 +149,19 @@ func (k *Kernel) IntentarEnviarProcesosAReady() {
 			slog.Error("Error", "error", err)
 		}
 
+		if !exito {
+			// No pudo pasar, salimos del ciclo para evitar bucle infinito
+			mutex_ProcesoPorEstado[EstadoReadySuspended].Lock()
+			mutex_ProcesoPorEstado[EstadoNew].Lock()
+			break
+		}
+
+		k.IntentarEnviarProcesoAExecute()
+
 		// Volvemos a tomar los mutex para la siguiente iteración o para pasar a NEW
 		mutex_ProcesoPorEstado[EstadoReadySuspended].Lock()
 		mutex_ProcesoPorEstado[EstadoNew].Lock()
 
-		if !exito {
-			// No pudo pasar, salimos del ciclo para evitar bucle infinito
-			break
-		}
 	}
 
 	//si no quedan procesos en READY_SUSPENDED, intentamos con new
@@ -176,16 +181,21 @@ func (k *Kernel) IntentarEnviarProcesosAReady() {
 			exito, err := k.gestionarAccesoAReady(pid, tamanio, arch_pseudo, EstadoNew)
 
 			if err != nil {
-				slog.Error("")
+				slog.Error("Error", "error", err)
 			}
+
+			if !exito {
+				// No pudo pasar, salimos del ciclo para evitar bucle infinito
+				mutex_ProcesoPorEstado[EstadoReadySuspended].Lock()
+				mutex_ProcesoPorEstado[EstadoNew].Lock()
+				break
+			}
+
+			k.IntentarEnviarProcesoAExecute()
 
 			mutex_ProcesoPorEstado[EstadoReadySuspended].Lock()
 			mutex_ProcesoPorEstado[EstadoNew].Lock()
 
-			if !exito {
-				// No pudo pasar, salimos del ciclo para evitar bucle infinito
-				break
-			}
 		}
 	}
 	mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()

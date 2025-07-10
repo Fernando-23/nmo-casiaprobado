@@ -203,8 +203,12 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int) {
 	unElemento, _ := k.UnicoEnNewYNadaEnSuspReady()
 
 	if !unElemento {
-		k.IntentarEnviarProcesoAReady(EstadoNew, pid)
+		if !k.IntentarEnviarProcesoAReady(EstadoNew, pid) {
+			return
+		}
 	}
+
+	k.IntentarEnviarProcesoAExecute()
 	// cpu_ejecutando.Pc = pc //Actualizar pc para cpu
 }
 

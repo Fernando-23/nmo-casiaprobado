@@ -76,6 +76,8 @@ func main() {
 	ch_esperar_datos = make(chan struct{})
 
 	for {
+		slog.Debug("Debug - (CicloInstruccion) - Esperando datos de kernel",
+			"cpu", id_cpu)
 		<-ch_esperar_datos
 
 		for !hay_interrupcion { //consulta el valor en un tiempo t no necesito sincronizar

@@ -15,7 +15,8 @@ import (
 )
 
 func CargarArchivoPseudocodigo(path string) []string {
-	archivo, err := os.Open(path)
+	path_completo := "/home/utnso/pruebas/" + path
+	archivo, err := os.Open(path_completo)
 
 	if err != nil {
 		fmt.Println(err)
@@ -76,6 +77,12 @@ func (memo *Memo) Fetch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//para pruebas nomas
+	//==================================================
+	//==================================================
+	//--------------ESTO LO VAMOS A BORRAR--------------
+	//
+	//==================================================
+	//==================================================
 	for _, linea_a_leer := range elemento_en_memo_sistema {
 		slog.Debug(linea_a_leer)
 	}
@@ -87,7 +94,11 @@ func (memo *Memo) Fetch(w http.ResponseWriter, r *http.Request) {
 	)
 
 	memo.IncrementarMetrica(pid, Cant_instr_solicitadas)
+
+	//==================== LOG OBLIGATORIO ====================
 	utils.LoggerConFormato("## PID: %d - Obtener instrucción: %d - Instrucción: %s", pid, pc, instruccion)
+	//=========================================================
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(instruccion))
 }
@@ -227,6 +238,7 @@ func (memo *Memo) AsignarFramesAProceso(tpags_final *NivelTPag, tamanio int, pid
 		slog.Debug("Debug - (AsignarFramesAProceso) -  Se asigno correctamente frames al proceso",
 			"pid", pid,
 		)
+		return
 	}
 	slog.Error("Error - (AsignarFramesAProceso) - No se pudo asignar frames a un proceso")
 }

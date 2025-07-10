@@ -172,8 +172,9 @@ func (k *Kernel) registrarNuevaIO(nombre, ip, puerto string) { // Handshake
 			"nombre", nombre,
 			"url", url,
 		)
-
 	}
+
+	//////// Intentar enviar proceso a io si hay esperando y se presiono el ENTER //////
 }
 
 func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {

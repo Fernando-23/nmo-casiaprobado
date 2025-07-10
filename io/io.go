@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
@@ -36,10 +35,10 @@ func main() {
 
 	// Url por si hay que desconectar IO
 
-	url_io = fmt.Sprintf("http://%s:%s", config_io.Ip_io, strconv.Itoa(config_io.Puerto_io))
+	url_io = fmt.Sprintf("http://%s:%d", config_io.Ip_io, config_io.Puerto_io)
 
 	//Url base de kernel
-	url_kernel = fmt.Sprintf("http://%s:%s/kernel", config_io.Ip_kernel, strconv.Itoa(config_io.Puerto_kernel))
+	url_kernel = fmt.Sprintf("http://%s:%d/kernel", config_io.Ip_kernel, config_io.Puerto_kernel)
 
 	//Petición registrar io para kernel
 	RegistrarIO(nombre_io)

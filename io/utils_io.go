@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -14,16 +13,12 @@ import (
 
 func RegistrarIO(nombre string) {
 
-	fullURL := fmt.Sprintf("http://%s:%d/kernel/registrar_io", config_io.Ip_kernel, config_io.Puerto_kernel)
-	registro := fmt.Sprintf("%s %s %d", nombre, config_io.Ip_io, config_io.Puerto_io)
-
-	utils.EnviarSolicitudHTTPString("POST", fullURL, registro)
-
 	respuesta, err := utils.FormatearUrlYEnviar(url_kernel, "/registrar_io", true, "%s %s %d",
 		nombre,
 		config_io.Ip_io,
 		config_io.Puerto_io,
 	)
+
 	if respuesta != "OK" || err != nil {
 		slog.Error("Error - (RegistrarIO) - Respuesta Kernel",
 			"respuesta", respuesta,
@@ -104,8 +99,7 @@ func AvisarDesconexionIO() { //gracias que te aviso pa
 
 	utils.FormatearUrlYEnviar(url_kernel, "/desconectar_io", false, "%s %s",
 		nombre_io,
-		url_io,
-	)
+		url_io)
 
 	utils.LoggerConFormato("Avisando desconexion IO: %s", nombre_io)
 }
