@@ -77,7 +77,6 @@ var (
 	mutex_CPUsConectadas            sync.Mutex
 	mutex_ProcesoPorEstado          [cantEstados]sync.Mutex
 	mutex_DispositivosIO            sync.Mutex
-	mutex_syscall                   sync.Mutex
 	url_memo                        string
 )
 

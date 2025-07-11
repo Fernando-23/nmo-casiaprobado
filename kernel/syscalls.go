@@ -140,6 +140,8 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 		}
 		k.GestionarIO(nombre, pid, tiempo, idCPU)
 		k.liberarCPU(idCPU)
+		slog.Debug("Debug - (GestionarSyscall) - Se libero la cpu por Syscall IO",
+			"id_cpu", idCPU)
 		return false, nil // la CPU debe replanificar
 
 	case "INIT_PROC":
@@ -164,6 +166,8 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 		k.GestionarDUMP_MEMORY(pid, idCPU)
 		k.liberarCPU(idCPU)
 
+		slog.Debug("Debug - (GestionarSyscall) - Se libero la cpu por Syscall DUMP_MEMORY",
+			"id_cpu", idCPU)
 		return false, nil // la CPU debe replanificar
 
 	case "EXIT":
@@ -171,6 +175,8 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 		k.GestionarEXIT(pid, idCPU)
 		k.liberarCPU(idCPU)
 
+		slog.Debug("Debug - (GestionarSyscall) - Se libero la cpu por Syscall EXIT",
+			"id_cpu", idCPU)
 		return false, nil // la CPU debe replanificar
 
 	default:
@@ -229,7 +235,6 @@ func (k *Kernel) GestionarIO(nombreIO string, pid, duracion, idCPU int) {
 	IO_seleccionada.Libre = false
 
 	utils.LoggerConFormato("## (%d) - Bloqueado por IO: %s", pid, nombreIO)
-	//k.IntentarEnviarProcesosAReady()
 	enviarProcesoAIO(IO_seleccionada, duracion)
 
 }

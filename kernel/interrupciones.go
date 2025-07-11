@@ -32,13 +32,13 @@ func (k *Kernel) llegaFinInterrupcion(w http.ResponseWriter, r *http.Request) {
 	// Ya validado, respondemos OK
 	w.WriteHeader(http.StatusOK)
 
-	go k.antenderFinInterrupcion(idCPU, pidDesalojado, pcActualizado)
+	go k.AtenderFinInterrupcion(idCPU, pidDesalojado, pcActualizado)
 
-	utils.LoggerConFormato("Fin de antenderFinInterrupcion para CPU %d", idCPU)
+	utils.LoggerConFormato("Fin de AtenderFinInterrupcion para CPU %d", idCPU)
 
 }
 
-func (k *Kernel) antenderFinInterrupcion(idCPU, pidDesalojado, pcActualizado int) {
+func (k *Kernel) AtenderFinInterrupcion(idCPU, pidDesalojado, pcActualizado int) {
 	mutex_CPUsConectadas.Lock()
 	defer mutex_CPUsConectadas.Unlock()
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()

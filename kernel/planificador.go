@@ -272,6 +272,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 		mutex_ProcesoPorEstado[EstadoReady].Unlock()
 		return
 	}
+
 	hay_que_chequear_desalojo := k.PlaniCortoPlazo()
 
 	//Tomamos el primer PCB "NO" reservado tras la planificacion
@@ -298,6 +299,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 
 	// intentamos asignarle cpu
 	mutex_CPUsConectadas.Lock()
+	defer mutex_CPUsConectadas.Unlock()
 	cpu_seleccionada := k.ObtenerCPULibre()
 
 	if cpu_seleccionada == nil { //no hay cpu libre
@@ -311,7 +313,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 			slog.Debug("No hay CPU libre y no se requiere desalojo", "pid", pid)
 			MarcarProcesoReservado(pcb, "NO")
 		}
-		mutex_CPUsConectadas.Unlock()
+
 		return
 	}
 	//voy a liberar la cpu, la reservo
@@ -319,8 +321,6 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 
 	idCPU := cpu_seleccionada.ID
 	url := cpu_seleccionada.Url
-
-	mutex_CPUsConectadas.Unlock()
 
 	handleDispatch(pid, pc, url)
 
@@ -335,6 +335,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 
 	if procVerificadoAExecute == nil {
 		slog.Error("Error - (IntentarEnviarProcesoAExecute) - El proceso no esta en la lista Ready", "pid", pid)
+
 		return
 	}
 	actualizarCPU(cpu_seleccionada, pid, pc, false)
@@ -344,6 +345,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	MarcarProcesoReservado(procVerificadoAExecute, "NO")
 
 	slog.Debug("Proceso enviado a EXECUTE", "pid", pid, "cpu_id", idCPU)
+
 }
 
 func (k *Kernel) PlaniCortoPlazo() bool {
