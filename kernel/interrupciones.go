@@ -21,7 +21,7 @@ func (k *Kernel) llegaFinInterrupcion(w http.ResponseWriter, r *http.Request) {
 
 	mensajeCPU := string(body_Bytes)
 
-	slog.Debug("Llegó fin interrupcion", "mensaje", mensajeCPU)
+	slog.Debug("Llego fin interrupcion", "mensaje", mensajeCPU)
 
 	idCPU, pidDesalojado, pcActualizado, err := decodificarMensajeFinInterrupcion(mensajeCPU)
 
@@ -145,6 +145,8 @@ func EnviarInterrupt(cpu *CPU) { // yo te hablo por la puerta interrupt y me des
 
 func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) bool {
 
+	slog.Debug("(IntentarDesalojoSRT) - Llegue hasta esta funcion", "pid", pidQuiereDesalojar)
+
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 	defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 
@@ -152,6 +154,9 @@ func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) bool {
 	defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
 
 	if !k.TieneProcesos(EstadoReady) {
+		slog.Error("Error - (IntentarDEsalojoSRT) - no hay proceso en READY",
+			"pid_quiere_desalojar", pidQuiereDesalojar,
+		)
 		return false //no hay procesos en READY, no tiene sentido desalojar
 	}
 
@@ -184,7 +189,7 @@ func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) bool {
 			estimacionRestante = 0
 		}
 
-		if estimacionRestante > estimacionReady && estimacionRestante > estimacionMaxRestante {
+		if estimacionRestante > estimacionReady && estimacionRestante > estimacionMaxRestante { //
 			estimacionMaxRestante = estimacionRestante
 			cpuElegida = cpu
 		}

@@ -306,6 +306,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 		if hay_que_chequear_desalojo {
 			slog.Debug("No hay CPU libre, intentando desalojo por SRT", "pid", pid)
 			if !k.IntentarDesalojoSRT(pid) {
+				slog.Debug("(IntentarEnviarProcesoAExecute) - No hay que desalojar", "pid", pid)
 				MarcarProcesoReservado(pcb, "NO")
 			}
 
@@ -359,6 +360,7 @@ func (k *Kernel) PlaniCortoPlazo() bool {
 		sort.Sort(PorSJF(lista_ready)) //SJF distinto de nil
 
 		if k.Configuracion.Algoritmo_Plani == "SRT" && pcb_nuevo_pid == lista_ready[0].Pid { //  10 15 18 31 32 500
+			slog.Debug("(PlaniCortoPlazo) - Hay que desalojar", "pid", pcb_nuevo_pid)
 			return true
 		}
 	}
