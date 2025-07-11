@@ -19,43 +19,43 @@ func main() {
 
 	cant_frames_totales := int(config.Tamanio_memoria / config.Tamanio_pag)
 	gb_tam_memo_actual = config.Tamanio_memoria
-	gb_tamanio_pag = config.Tamanio_pag
 	gb_frames_disponibles = cant_frames_totales
+
+	// Inicializar frames con valores por defecto
+	frames := make([]*Frame, cant_frames_totales)
+	for i := 0; i < cant_frames_totales; i++ {
+		frames[i] = &Frame{
+			Usado:        false,
+			PidOcupante:  -1,
+			NumeroPagina: -1,
+		}
+	}
 
 	memo := &Memo{
 		memoria_sistema:   make(map[int][]string),
 		memoria_principal: make([]byte, config.Tamanio_memoria),
-		ptrs_raiz_tpag:    make(map[int]*NivelTPag),
-		bitmap:            make([]int, cant_frames_totales),
-		l_proc:            make(map[int]*Proceso),
+		Procesos:          make(map[int]*Proceso),
 		metricas:          make(map[int][]int),
-		config_memo:       config,
+		Frames:            frames,
+		Config:            config,
 		swap: &DataSwap{
 			ultimo_byte:      0,
 			espacio_contiguo: make(map[int]*ProcesoEnSwap),
-			espacio_libre: []*EspacioLibre{
-				{
-					inicio:  0,
-					tamanio: config.Tamanio_memoria,
-				},
-			},
+			espacio_libre:    []*EspacioLibre{},
 		},
 	}
 
-	utils.ConfigurarLogger("memoria", memo.config_memo.Log_level)
-
-	memo.InicializarTablaFramesGlobal(cant_frames_totales)
-	slog.Debug("Debug - (main) - Se inicializo el bitmap")
+	utils.ConfigurarLogger("memoria", memo.Config.Log_level)
 
 	mux := http.NewServeMux()
 	// GENERAL
 	mux.HandleFunc("/memoria/handshake", memo.Hanshake)
 
 	// ======== APIs CPU  ========
-	mux.HandleFunc("/memoria/fetch", memo.Fetch)                                  //---sincronizado
-	mux.HandleFunc("/memoria/busqueda_tabla", memo.buscarEnTablaAsociadoAProceso) //---sincronizado
-	mux.HandleFunc("/memoria/READ", memo.LeerEnMemoria)                           //---sincronizado
-	mux.HandleFunc("/memoria/WRITE", memo.EscribirEnMemoria)                      //---sincronizado
+	mux.HandleFunc("/memoria/fetch", memo.Fetch)                                  //----sincronizado
+	mux.HandleFunc("/memoria/busqueda_tabla", memo.buscarEnTablaAsociadoAProceso) //----sincronizado
+	mux.HandleFunc("/memoria/READ", memo.LeerEnMemoria)                           //----sincronizado
+	mux.HandleFunc("/memoria/WRITE", memo.EscribirEnMemoria)                      //----sincronizado
 	// mux.HandleFunc("/memoria/actualizar_entrada_cache", memo.ActualizarEntradaCache)
 	// ===========
 	// APIs Kernel
@@ -66,7 +66,7 @@ func main() {
 	mux.HandleFunc("/memoria/SUSPEND_PROC", memo.EscribirEnSwap)  //--------------------sincronizado
 	mux.HandleFunc("/memoria/DE_SUSPEND_PROC", memo.QuitarDeSwap) //--------------------sincronizado
 
-	url := fmt.Sprintf(":%d", memo.config_memo.Puerto_mem)
+	url := fmt.Sprintf(":%d", memo.Config.Puerto_mem)
 
 	slog.Debug("Iniciando servidor")
 	go http.ListenAndServe(url, mux)

@@ -14,6 +14,12 @@ import (
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
+// =================================================================================
+// =================================================================================
+// Hola soy liam, lo comentado es porque ya no se usa y me dio cosa borrarlo mirenlo
+// =================================================================================
+// =================================================================================
+
 func CargarArchivoPseudocodigo(path string) ([]string, error) {
 	path_completo := "/home/utnso/pruebas/" + path
 	//path_completo := "/home/liam/Data/Ftd/ISI/Proyectos/tp-2025-1c-Nombre-muy-original/pruebas/" + path
@@ -128,44 +134,76 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 
 	mensaje := string(body_Bytes)
 
-	slog.Debug("Llegó petición verificar hay lugar", "mensaje", mensaje)
+	slog.Debug("Debug - (VerificarHayLugar) - Llego peticion verificar hay lugar", "mensaje", mensaje)
 
 	aux := strings.Split(mensaje, " ")
 
 	if len(aux) < 3 {
-		http.Error(w, "Formato inválido: se requieren pid, tamanio y arch_pseudo", http.StatusBadRequest)
+		http.Error(w, "Formato invalido: se requieren pid, tamanio y arch_pseudo", http.StatusBadRequest)
 		return
 	}
 
 	pid, err := strconv.Atoi(aux[0])
 	if err != nil {
-		http.Error(w, "PID inválido", http.StatusBadRequest)
+		http.Error(w, "PID invalido", http.StatusBadRequest)
 		return
 	}
 
 	tamanio, err := strconv.Atoi(aux[1])
 	if err != nil {
-		http.Error(w, "Tamaño inválido", http.StatusBadRequest)
+		http.Error(w, "Tamanio invalido", http.StatusBadRequest)
 		return
 	}
 
 	arch_pseudo := aux[2]
 
 	mutex_tamanioMemoActual.Lock()
-	defer mutex_tamanioMemoActual.Unlock()
+	hayEspacio := HayEspacio(tamanio)
+	mutex_tamanioMemoActual.Unlock()
 
-	if !HayEspacio(tamanio) {
-		slog.Debug("No hay espacio suficiente para crear el proceso pedido por kernel", "pid", pid)
+	if !hayEspacio {
+		slog.Debug("Debug - (VerificarHayLugar) - No hay espacio suficiente para crear el proceso pedido por kernel", "pid", pid)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("NO_OK"))
 		return
 	}
 
+	// Intentar crear el proceso
+	mutex_lprocs.Lock()
+	err = memo.CrearNuevoProceso(pid, tamanio)
+	if err != nil {
+		slog.Error("Error - (VerificarHayLugar) - Error creando proceso", "pid", pid, "error", err)
+		http.Error(w, "Error creando el proceso", http.StatusInternalServerError)
+		mutex_lprocs.Unlock()
+		return
+	}
+	mutex_lprocs.Unlock()
+
+	// Cargar archivo pseudo
+	nuevoElemento, err := CargarArchivoPseudocodigo(arch_pseudo)
+	if err != nil {
+		slog.Error("Error - (VerificarHayLugar) - Error al cargar archivo pseudocodigo", "pid", pid, "error", err)
+		http.Error(w, "Error al cargar pseudocodigo", http.StatusInternalServerError)
+		return
+	}
+
+	mutex_memoriaSistema.Lock()
+	memo.memoria_sistema[pid] = nuevoElemento
+	mutex_memoriaSistema.Unlock()
+
+	// Actualizar memoria usada (la variable global)
+	mutex_tamanioMemoActual.Lock()
+	gb_tam_memo_actual -= tamanio
+	mutex_tamanioMemoActual.Unlock()
+
+	// Inicializar metricas
+	mutex_metricas.Lock()
+	memo.InicializarMetricasPor(pid)
+	mutex_metricas.Unlock()
+
+	// Digo que esta bien porque ya verifique todo
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
-
-	memo.CrearNuevoProceso(pid, tamanio, arch_pseudo)
-	gb_tam_memo_actual -= tamanio
 
 }
 
@@ -176,42 +214,113 @@ func HayFramesLibresPara(cant_frames_pedidos int) bool {
 	return gb_frames_disponibles > cant_frames_pedidos
 }
 
-func (memo *Memo) CrearNuevoProceso(pid int, tamanio int, arch_pseudo string) {
+func (memo *Memo) CrearNuevoProceso(pid int, tamanio int) error {
 
-	mutex_memoriaSistema.Lock()
-	defer mutex_memoriaSistema.Unlock()
-	_, ok := memo.memoria_sistema[pid]
-
-	if ok {
-		slog.Error("Error - (CrearNuevoProceso) - Ya se encuentra creado este proceso", "pid", pid)
-		return
+	proc := &Proceso{
+		Pid:           pid,
+		TablaPagsRaiz: memo.crearTablasParaProceso(pid, tamanio),
+		Tamanio:       tamanio,
 	}
 
-	// 1er check, cargar arch pseudo
-	nuevo_elemento, err := CargarArchivoPseudocodigo(arch_pseudo)
+	memo.Procesos[pid] = proc
 
+	err := memo.AsignarFramesAProceso(pid)
 	if err != nil {
-		slog.Error("Error al cargar archivo pseudocódigo", "pid", pid, "error", err)
-		return
+		return err
 	}
-	memo.memoria_sistema[pid] = nuevo_elemento
-
-	cant_frames := LaCuentitaMaestro(tamanio, memo.config_memo.Tamanio_pag)
-
-	memo.l_proc[pid] = &Proceso{
-		ptr_a_frames_asignados: make([]*int, cant_frames),
-		tamanio:                tamanio,
-	}
-
-	// 2do check, asignarle frames y crear tablas
-	memo.InicializarTablaPunterosAsociadosA(pid, cant_frames)
-
-	// 3er check, inicializar metrica
-	mutex_metricas.Lock()
-	memo.InicializarMetricasPor(pid)
-	mutex_metricas.Unlock()
 
 	utils.LoggerConFormato("PID: %d - Proceso Creado - Tamaño: %d", pid, tamanio)
+	return nil
+}
+
+func (memo *Memo) crearTablasParaProceso(pid int, tamanioProceso int) *TablaDePaginas {
+	numPaginas := memo.LaCuentitaMaestro(tamanioProceso)
+
+	entradaRaiz := &TablaDePaginas{
+		Entradas: make([]*EntradaTablaDePaginas, memo.Config.EntradasPorNivel),
+	}
+
+	for pagina := 0; pagina < numPaginas; pagina++ {
+		indices := memo.indicesParaPagina(pagina)
+
+		actual := entradaRaiz
+		for nivel := 0; nivel < memo.Config.Cant_niveles-1; nivel++ {
+			idx := indices[nivel]
+			if actual.Entradas[idx] == nil {
+				actual.Entradas[idx] = &EntradaTablaDePaginas{
+					SiguienteNivel: &TablaDePaginas{
+						Entradas: make([]*EntradaTablaDePaginas, memo.Config.EntradasPorNivel),
+					},
+				}
+			}
+			actual = actual.Entradas[idx].SiguienteNivel
+		}
+
+		// Último nivel creo entrada vacia (sin frame asignado)
+		ultimoIdx := indices[len(indices)-1]
+		if actual.Entradas[ultimoIdx] == nil {
+			actual.Entradas[ultimoIdx] = &EntradaTablaDePaginas{}
+		}
+	}
+
+	return entradaRaiz
+}
+
+// Puede volar
+func (memo *Memo) buscarFrameLibre() int {
+	for i, frame := range memo.Frames {
+		if !frame.Usado {
+			return i
+		}
+	}
+	return -1 // No hay frames disponibles
+}
+
+func (memo *Memo) indicesParaPagina(pagina int) []int {
+	indices := make([]int, memo.Config.Cant_niveles)
+	divisor := 1
+	for i := memo.Config.Cant_niveles - 1; i >= 0; i-- {
+		indices[i] = (pagina / divisor) % memo.Config.EntradasPorNivel
+		divisor *= memo.Config.EntradasPorNivel
+	}
+	return indices
+}
+
+func (memo *Memo) traducir(pid int, direccionLogica int) (int, error) {
+	proc := memo.Procesos[pid]
+	pagina := direccionLogica / memo.Config.Tamanio_pag
+	offset := direccionLogica % memo.Config.Tamanio_pag
+
+	indices := memo.indicesParaPagina(pagina)
+	actual := proc.TablaPagsRaiz
+	for nivel := 0; nivel < memo.Config.Cant_niveles-1; nivel++ {
+		entry := actual.Entradas[indices[nivel]]
+		if entry == nil || entry.SiguienteNivel == nil {
+			return -1, fmt.Errorf("page fault")
+		}
+		actual = entry.SiguienteNivel
+	}
+
+	finalEntry := actual.Entradas[indices[len(indices)-1]]
+	if finalEntry == nil || finalEntry.NumeroDeFrame == nil {
+		return -1, fmt.Errorf("page fault")
+	}
+
+	frameBase := (*finalEntry.NumeroDeFrame) * memo.Config.Tamanio_pag
+	return frameBase + offset, nil
+}
+
+func (memo *Memo) LiberarFramesDeProceso(pid int) {
+	mutex_framesDisponibles.Lock()
+	defer mutex_framesDisponibles.Unlock()
+
+	for _, frame := range memo.Frames {
+		if frame != nil && frame.Usado && frame.PidOcupante == pid {
+			frame.Usado = false
+			frame.PidOcupante = -1
+			frame.NumeroPagina = -1
+		}
+	}
 }
 
 func (memo *Memo) InicializarMetricasPor(pid int) {
@@ -237,7 +346,7 @@ func (memo *Memo) Hanshake(w http.ResponseWriter, r *http.Request) {
 func (memo *Memo) ResponderHandshakeA(modulo string, w http.ResponseWriter) {
 	switch modulo {
 	case "CPU":
-		respuesta := fmt.Sprintf("%d %d %d", memo.config_memo.Cant_niveles, memo.config_memo.Cant_entradasXpag, memo.config_memo.Tamanio_pag)
+		respuesta := fmt.Sprintf("%d %d %d", memo.Config.Cant_niveles, memo.Config.EntradasPorNivel, memo.Config.Tamanio_pag)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(respuesta))
 
@@ -249,61 +358,64 @@ func (memo *Memo) ResponderHandshakeA(modulo string, w http.ResponseWriter) {
 
 }
 
-func (memo *Memo) InicializarTablaPunterosAsociadosA(pid int, frames_a_reservar int) {
-
-	mutex_tablaPaginas.Lock()
-	defer mutex_tablaPaginas.Unlock()
-
-	nivelRaiz := &NivelTPag{
-		lv_tabla:   1,
-		entradas:   make([]*int, memo.config_memo.Cant_entradasXpag),
-		sgte_nivel: nil,
-	}
-
-	memo.ptrs_raiz_tpag[pid] = nivelRaiz
-
-	if memo.config_memo.Cant_niveles == 1 {
-		memo.AsignarFramesAProceso(frames_a_reservar, pid)
-		return
-	}
-
-	nivelActual := nivelRaiz
-	for i := 2; i <= memo.config_memo.Cant_niveles; i++ {
-		nivelSiguiente := &NivelTPag{
-			lv_tabla:   i,
-			entradas:   make([]*int, memo.config_memo.Cant_entradasXpag),
-			sgte_nivel: nil,
+func (memo *Memo) buscarFrameLibrePara(pid int, pageNum int) int {
+	for i, frame := range memo.Frames {
+		if !frame.Usado {
+			memo.Frames[i] = &Frame{
+				Usado:        true,
+				PidOcupante:  pid,
+				NumeroPagina: pageNum,
+			}
+			return i
 		}
-
-		nivelActual.sgte_nivel = nivelSiguiente
-		nivelActual = nivelSiguiente
-
-		// if i != memo.config_memo.Cant_niveles {
-		// 	nivelActual = nivelActual.sgte_nivel
-		// }
 	}
-
-	memo.AsignarFramesAProceso(frames_a_reservar, pid)
+	return -1
 }
 
-func (memo *Memo) AsignarFramesAProceso(frames_a_reservar int, pid int) {
+func (memo *Memo) AsignarFramesAProceso(pid int) error {
 	mutex_framesDisponibles.Lock()
 	defer mutex_framesDisponibles.Unlock()
 
-	mutex_bitmap.Lock()
-	defer mutex_bitmap.Unlock()
+	proc, ok := memo.Procesos[pid]
+	if !ok {
+		return fmt.Errorf("Proceso %d no existe", pid)
+	}
 
-	memo.ModificarEstadoFrames(frames_a_reservar, pid)
+	numPaginas := memo.LaCuentitaMaestro(proc.Tamanio)
 
-	slog.Debug("Debug - (AsignarFramesAProceso) -  Se asigno correctamente frames al proceso",
-		"pid", pid,
-	)
+	for pagina := 0; pagina < numPaginas; pagina++ {
+		indices := memo.indicesParaPagina(pagina)
+
+		actual := proc.TablaPagsRaiz
+		for nivel := 0; nivel < memo.Config.Cant_niveles-1; nivel++ {
+			idx := indices[nivel]
+			if actual.Entradas[idx] == nil || actual.Entradas[idx].SiguienteNivel == nil {
+				return fmt.Errorf("estructura inconsistente para PID %d en nivel %d", pid, nivel)
+			}
+			actual = actual.Entradas[idx].SiguienteNivel
+		}
+
+		// Último nivel
+		finalIdx := indices[len(indices)-1]
+		entrada := actual.Entradas[finalIdx]
+
+		if entrada.NumeroDeFrame == nil {
+			frameIdx := memo.buscarFrameLibrePara(pid, pagina)
+			if frameIdx == -1 {
+				return fmt.Errorf("sin frames libres para la pagina %d del proceso %d", pagina, pid)
+			}
+			entrada.NumeroDeFrame = &frameIdx
+		}
+	}
+
+	slog.Debug("Debug - (AsignarFramesAProceso) -  Se asigno correctamente frames al proceso", "pid", pid)
+	return nil
 }
 
 // Traeme la dolorosa, la juguetona pa
-func LaCuentitaMaestro(tamanio_proc int, tamanio_frame int) int {
-	la_dolorosa := tamanio_proc / tamanio_frame
-	if (tamanio_proc % tamanio_frame) != 0 {
+func (memo *Memo) LaCuentitaMaestro(tamanio_proc int) int {
+	la_dolorosa := tamanio_proc / memo.Config.Tamanio_pag
+	if (tamanio_proc % memo.Config.Tamanio_pag) != 0 {
 		return la_dolorosa + 1
 	} else if tamanio_proc == 0 {
 		return 1
@@ -312,38 +424,45 @@ func LaCuentitaMaestro(tamanio_proc int, tamanio_frame int) int {
 	return la_dolorosa
 }
 
-func (memo *Memo) ModificarEstadoFrames(frames_a_reservar int, pid int) {
-
-	i := 0
-
-	ptrs := memo.l_proc[pid].ptr_a_frames_asignados
-
-	if ptrs == nil || len(ptrs) < frames_a_reservar {
-		slog.Warn("Warn - (ModificarEstadoFrames) - Estructura ptr_a_frames_asignados", "pid", pid)
+// imprime las lablas de paginas un proceso
+func (memo *Memo) ImprimirTablasProceso(pid int) {
+	proc, ok := memo.Procesos[pid]
+	if !ok {
+		slog.Warn("Cuidadito - (ImprimirTablasProceso) - Proceso NO encontrado", "pid", pid)
 		return
 	}
 
-	for frame := 0; frame < len(memo.bitmap) && frames_a_reservar > 0 && gb_frames_disponibles > 0; frame++ {
-		if memo.bitmap[frame] < 0 {
-			memo.bitmap[frame] = frame
-			memo.l_proc[pid].ptr_a_frames_asignados[i] = &memo.bitmap[frame]
-			i++
+	fmt.Printf("Proceso %d - Arbol de tablas:\n\n", pid)
+	memo.recorrerTabla(proc.TablaPagsRaiz, []int{}, 0)
+}
 
-			frames_a_reservar--
-			gb_frames_disponibles--
+func (memo *Memo) recorrerTabla(tabla *TablaDePaginas, path []int, nivel int) {
+	for i, entrada := range tabla.Entradas {
+		if entrada == nil {
+			continue
 		}
-	}
 
-	if frames_a_reservar != 0 {
-		slog.Error("Error - (ModificarEstadoFrames) - Se intento asignar mas frames de los que habia diponibles") //poner pid que pide mucho si queres
-		return
+		nuevoPath := append([]int{}, path...)
+		nuevoPath = append(nuevoPath, i)
+
+		if entrada.SiguienteNivel != nil {
+			indent := strings.Repeat("  ", nivel)
+			fmt.Printf("%sNivel %d, Entrada %d \n", indent, nivel, i)
+			memo.recorrerTabla(entrada.SiguienteNivel, nuevoPath, nivel+1)
+		} else if entrada.NumeroDeFrame != nil {
+			indent := strings.Repeat("  ", nivel)
+			fmt.Printf("%sNivel %d, Entrada %d → Frame %d (Página virtual %s)\n", indent, nivel, i, *entrada.NumeroDeFrame, formatPath(nuevoPath))
+		}
 	}
 }
 
-func (memo *Memo) InicializarTablaFramesGlobal(cant_frames_memo int) {
-	for i := 0; i < cant_frames_memo; i++ {
-		memo.bitmap[i] = -1 // -1 = libre
+// Imprime lindo
+func formatPath(indices []int) string {
+	strs := make([]string, len(indices))
+	for i, val := range indices {
+		strs[i] = strconv.Itoa(val)
 	}
+	return strings.Join(strs, ".")
 }
 
 // Acceso a espacio de usuario
@@ -362,19 +481,59 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 	slog.Debug("Debug - (buscarEnTablaAsociadoAProceso) - Llegó petición buscar en tabla asociado a proceso", "pid lv_actual entrada", mensaje)
 
 	aux := strings.Split(mensaje, " ")
-	pid, err1 := strconv.Atoi(aux[0])
-	nivel_actual_solicitado, err2 := strconv.Atoi(aux[1])
-	entrada, err3 := strconv.Atoi(aux[2])
 
-	if err1 != nil || err2 != nil || err3 != nil {
-		slog.Error("Error - (buscarEnTablaAsociadoAProceso) - Conversiones a int")
+	if len(aux) < 3 {
+		slog.Error("Error - (buscarEnTablaAsociadoAProceso) - Faltan argumentos")
+		http.Error(w, "Faltan argumentos", http.StatusBadRequest)
 		return
 	}
 
-	if nivel_actual_solicitado != memo.config_memo.Cant_niveles {
+	pid, err1 := strconv.Atoi(aux[0])
+	nivelSolicitado, err2 := strconv.Atoi(aux[1])
+	entrada, err3 := strconv.Atoi(aux[2])
 
+	if err1 != nil || err2 != nil || err3 != nil {
+		slog.Error("Error - (buscarEnTablaAsociadoAProceso) - Argumentos inválidos")
+		http.Error(w, "Argumentos inválidos", http.StatusBadRequest)
+		return
+	}
+
+	mutex_lprocs.Lock()
+	defer mutex_lprocs.Unlock()
+	proc, ok := memo.Procesos[pid]
+
+	if !ok || proc == nil {
+		slog.Error("Error - (buscarEnTablaAsociadoAProceso) - NO se encontro el proceos", "pid", pid)
+		http.Error(w, "Proceso no encontrado", http.StatusNotFound)
+		return
+	}
+
+	tablaActual := proc.TablaPagsRaiz
+	if tablaActual == nil {
+		slog.Error("Error - (buscarEnTablaAsociadoAProceso) - NO se inicializo la tabla de paginas", "pid", pid)
+		http.Error(w, "Tabla de páginas no inicializada", http.StatusInternalServerError)
+		return
+	}
+
+	// Navegar desde nivel 1 hasta nivelSolicitado - 1
+	for nivel := 1; nivel < nivelSolicitado; nivel++ {
+		if tablaActual.Entradas == nil || entrada >= len(tablaActual.Entradas) {
+			slog.Error("Error - (buscarEnTablaAsociadoAProceso) - Entrada invalida de Nivel", "nivel", nivel, "pid", pid)
+			http.Error(w, "Entrada invalida en nivel", http.StatusBadRequest)
+			return
+		}
+		entradaTabla := tablaActual.Entradas[entrada]
+		if entradaTabla == nil || entradaTabla.SiguienteNivel == nil {
+			slog.Error("Error - (buscarEnTablaAsociadoAProceso) - NO hay siguiente nivel", "nivel", nivel, "pid", pid)
+			http.Error(w, "Siguiente nivel no encontrado", http.StatusBadRequest)
+			return
+		}
+		tablaActual = entradaTabla.SiguienteNivel
+	}
+
+	// Si no es último nivel, decir que siga consultando
+	if nivelSolicitado != memo.Config.Cant_niveles {
 		memo.HacerRetardo()
-
 		mutex_metricas.Lock()
 		memo.IncrementarMetrica(pid, Accesos_a_tpags)
 		mutex_metricas.Unlock()
@@ -384,18 +543,19 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	mutex_tablaPaginas.Lock()
-	tabla_asociada_proceso := memo.ptrs_raiz_tpag[pid]
-
-	//valor := 5
-	//tabla_asociada_proceso.entradas[entrada] = &valor
-
-	for i := 1; i < memo.config_memo.Cant_niveles; i++ {
-		tabla_asociada_proceso = tabla_asociada_proceso.sgte_nivel
+	// Último nivel: obtener frame
+	if entrada < 0 || entrada >= len(tablaActual.Entradas) {
+		http.Error(w, "Error - (buscarEnTablaAsociadoAsociadoAProceso) - Entrada invalida en ultimo nivel", http.StatusBadRequest)
+		return
 	}
 
-	respuesta := strconv.Itoa(*tabla_asociada_proceso.entradas[entrada])
-	mutex_tablaPaginas.Unlock()
+	entradaFinal := tablaActual.Entradas[entrada]
+	if entradaFinal == nil || entradaFinal.NumeroDeFrame == nil {
+		http.Error(w, "Error - (buscarEnTablaAsociadoAsociadoAProceso) - Frame no asignado", http.StatusNotFound)
+		return
+	}
+
+	frameStr := strconv.Itoa(*entradaFinal.NumeroDeFrame)
 
 	mutex_metricas.Lock()
 	memo.IncrementarMetrica(pid, Accesos_a_tpags)
@@ -404,11 +564,11 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 	memo.HacerRetardo()
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(respuesta))
+	w.Write([]byte(frameStr))
 }
 
 func (memo *Memo) HacerRetardo() {
-	time.Sleep(time.Duration(memo.config_memo.Delay_memoria) * time.Millisecond)
+	time.Sleep(time.Duration(memo.Config.Delay_memoria) * time.Millisecond)
 }
 
 func (memo *Memo) LeerEnMemoria(w http.ResponseWriter, r *http.Request) {
@@ -423,47 +583,74 @@ func (memo *Memo) LeerEnMemoria(w http.ResponseWriter, r *http.Request) {
 
 	mensaje := string(body_Bytes)
 
-	slog.Debug("Llegó petición leer en memoria", "mensaje", mensaje)
+	slog.Debug("Debug - (LeerEnMemoria) - Llego peticion leer en memoria", "mensaje", mensaje)
 
 	aux := strings.Split(mensaje, " ")
+
+	if len(aux) < 4 {
+		http.Error(w, "Error - (LeerEnMemoria) Faltan argumentos (pid frame offset tamanio)", http.StatusBadRequest)
+		return
+	}
+
 	pid, err1 := strconv.Atoi(aux[0])
-	frame, err2 := strconv.Atoi(aux[1])
+	frameIdx, err2 := strconv.Atoi(aux[1])
 	offset, err3 := strconv.Atoi(aux[2])
-	tamanio_a_leer, err4 := strconv.Atoi(aux[3])
+	tamanioLeer, err4 := strconv.Atoi(aux[3])
 
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
-		slog.Error("Error - (LeerEnMemoria) - Conversiones a int")
+		slog.Error("Error - (LeerEnMemoria) - Argumentos invalidos")
+		http.Error(w, "Error - (LeerEnMemoria) - Argumentos invalidos", http.StatusBadRequest)
+		return
+	}
+	mutex_framesDisponibles.Lock()
+	defer mutex_framesDisponibles.Unlock()
+	// Validar que el frame exista y este asignado al proceso
+	if frameIdx < 0 || frameIdx >= len(memo.Frames) {
+		http.Error(w, "Error - (LeerEnMemoria) - Frame fuera de rango", http.StatusBadRequest)
 		return
 	}
 
-	mutex_lprocs.Lock()
-	if !memo.ConfirmacionFrameMio(pid, frame) {
-		mutex_lprocs.Unlock()
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("NO_ES_MI_FRAME_PADRE_NUESTRO...AMEN"))
+	frame := memo.Frames[frameIdx]
+
+	if !frame.Usado || frame.PidOcupante != pid { //quedo muy clean
+		http.Error(w, "Error - (LeerEnMemoria) - Frame no asignado a ese proceso", http.StatusForbidden)
 		return
 	}
-	mutex_lprocs.Unlock()
 
-	base := (frame * memo.config_memo.Tamanio_pag) + offset
+	// Validar offset y tamaño
+	tamPag := memo.Config.Tamanio_pag
+	if offset < 0 || offset >= tamPag {
+		http.Error(w, "Error - (LeerEnMemoria) - Offset fuera de rango", http.StatusBadRequest)
+		return
+	}
+
+	if tamanioLeer <= 0 || offset+tamanioLeer > tamPag {
+		http.Error(w, "Error - (LeerEnMemoria) - Tamanio a leer fuera de rango", http.StatusBadRequest)
+		return
+	}
+
+	// Calcular dirección física en memoria principal
+	direccionFisica := frameIdx*tamPag + offset
 
 	mutex_memoriaPrincipal.Lock()
-	contenido_leido := memo.memoria_principal[base:tamanio_a_leer]
-	mutex_memoriaPrincipal.Unlock()
+	defer mutex_memoriaPrincipal.Unlock()
 
-	if !memo.SigoEnMiFrame(pid, frame, base, tamanio_a_leer) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ME_PASE_DE_LA_RAYA_AMEN"))
+	if direccionFisica+tamanioLeer > len(memo.memoria_principal) {
+		http.Error(w, "Error - (LeerEnMemoria) - Lectura fuera del rango de memoria fisica", http.StatusBadRequest)
 		return
 	}
+
+	// Leer bytes de memoria fisica
+	datos := memo.memoria_principal[direccionFisica : direccionFisica+tamanioLeer]
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(datos)
 
 	mutex_metricas.Lock()
 	memo.IncrementarMetrica(pid, Cant_read)
 	mutex_metricas.Unlock()
 
-	utils.LoggerConFormato("## PID: %d - Lectura - Dir. Física: [ %d |  %d  ] - Tamaño: %d", pid, frame, offset, tamanio_a_leer)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(contenido_leido))
+	utils.LoggerConFormato("## PID: %d - Lectura - Dir. Fisica: [ %d |  %d  ] - Tamaño: %d", pid, frameIdx, offset, tamanioLeer)
 }
 
 func (memo *Memo) EscribirEnMemoria(w http.ResponseWriter, r *http.Request) {
@@ -478,68 +665,73 @@ func (memo *Memo) EscribirEnMemoria(w http.ResponseWriter, r *http.Request) {
 
 	mensaje := string(body_Bytes)
 
-	slog.Debug("Llegó petición escribir en memoria", "mensaje", mensaje)
+	slog.Debug("Debug - (EscribirEnMemoria) -Llego peticion escribir en memoria", "mensaje", mensaje)
 
 	aux := strings.Split(mensaje, " ")
+
+	if len(aux) < 4 {
+		http.Error(w, "Faltan argumentos (pid frame offset datos)", http.StatusBadRequest)
+		return
+	}
+
 	pid, err1 := strconv.Atoi(aux[0])
-	frame, err2 := strconv.Atoi(aux[1])
+	frameIdx, err2 := strconv.Atoi(aux[1])
 	offset, err3 := strconv.Atoi(aux[2])
+	datosStr := aux[3] // El resto es el dato a escribir
 
 	if err1 != nil || err2 != nil || err3 != nil {
 		slog.Error("Error - (EscribirEnMemoria) - Conversiones a int")
 		return
 	}
 
-	datos_a_escribir := []byte(aux[3])
+	datos := []byte(datosStr)
+	tamanioEscritura := len(datos)
+	mutex_framesDisponibles.Lock()
+	defer mutex_framesDisponibles.Unlock()
 
-	mutex_lprocs.Lock()
-
-	if !memo.ConfirmacionFrameMio(pid, frame) {
-		mutex_lprocs.Unlock()
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("NO_ES_MI_FRAME_PADRE_NUESTRO...AMEN"))
+	if frameIdx < 0 || frameIdx >= len(memo.Frames) {
+		http.Error(w, "Frame fuera de rango", http.StatusBadRequest)
 		return
 	}
-	mutex_lprocs.Unlock()
 
-	base := (frame * memo.config_memo.Tamanio_pag) + offset
-	tamanio_a_escribir := len(datos_a_escribir)
+	frame := memo.Frames[frameIdx]
 
-	if !memo.SigoEnMiFrame(pid, frame, base, tamanio_a_escribir) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ME_PASE_DE_LA_RAYA_AMEN"))
+	if !frame.Usado || frame.PidOcupante != pid {
+		http.Error(w, "Frame no asignado a ese proceso", http.StatusForbidden)
 		return
 	}
+
+	tamPag := memo.Config.Tamanio_pag
+	if offset < 0 || offset >= tamPag {
+		http.Error(w, "Offset fuera de rango", http.StatusBadRequest)
+		return
+	}
+	if offset+tamanioEscritura > tamPag {
+		http.Error(w, "Datos exceden tamanio de pagina", http.StatusBadRequest)
+		return
+	}
+
+	direccionFisica := frameIdx*tamPag + offset
+
+	mutex_memoriaPrincipal.Lock()
+	defer mutex_memoriaPrincipal.Unlock()
+
+	if direccionFisica+tamanioEscritura > len(memo.memoria_principal) {
+		http.Error(w, "Escritura fuera del rango de memoria fisica", http.StatusBadRequest)
+		return
+	}
+
+	// Copiar datos a memoria física
+	copy(memo.memoria_principal[direccionFisica:direccionFisica+tamanioEscritura], datos)
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 
 	mutex_metricas.Lock()
 	memo.IncrementarMetrica(pid, Cant_write)
 	mutex_metricas.Unlock()
 
-	mutex_memoriaPrincipal.Lock()
-	copy(memo.memoria_principal[base:], datos_a_escribir)
-	mutex_memoriaPrincipal.Unlock()
-
-	utils.LoggerConFormato("## PID: %d - Escritura - Dir. Física: [ %d |  %d  ] - Tamaño: %d ", pid, frame, offset, tamanio_a_escribir)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
-}
-
-func (memo *Memo) ConfirmacionFrameMio(pid int, frame int) bool {
-	for i := range memo.l_proc[pid].ptr_a_frames_asignados {
-		if *memo.l_proc[pid].ptr_a_frames_asignados[i] == frame {
-			return true
-		}
-	}
-	return false
-
-}
-
-func (memo *Memo) SigoEnMiFrame(pid int, frame int, base int, tamanio_a_escribir int) bool {
-	fin := base + tamanio_a_escribir
-	if memo.config_memo.Tamanio_pag >= fin { //    100 4 96
-		return true
-	}
-	return false
+	utils.LoggerConFormato("## PID: %d - Escritura - Dir. Fisica: [ %d |  %d  ] - Tamaño: %d ", pid, frameIdx, offset, tamanioEscritura)
 }
 
 func (memo *Memo) DumpMemory(w http.ResponseWriter, r *http.Request) {
@@ -554,87 +746,69 @@ func (memo *Memo) DumpMemory(w http.ResponseWriter, r *http.Request) {
 
 	mensaje := string(body_Bytes)
 
-	slog.Debug("Llegó petición dump memory", "mensaje", mensaje)
+	slog.Debug("Debug - (DumpMemory) - Llego peticion dump memory", "mensaje", mensaje)
 
 	pid, err := strconv.Atoi(mensaje)
-
 	if err != nil {
-		slog.Error("Error - (DumpMemory) - Conversiones a int")
+		slog.Error("Error - (DumpMemory) - Conversion PID invalida", "mensaje", mensaje)
+		http.Error(w, "PID invalido", http.StatusBadRequest)
 		return
 	}
 
-	timestamp := time.Now().Format(time.RFC3339) //me lo ensenio mi amigo luchin guita facil
-	nombre := fmt.Sprintf("%s%d-%s.dmp", memo.config_memo.Path_dump, pid, timestamp)
-	file, err := os.Create(nombre)
-
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-
 	mutex_lprocs.Lock()
 	defer mutex_lprocs.Unlock()
+	proc, ok := memo.Procesos[pid]
+	if !ok {
+		http.Error(w, "Proceso no encontrado", http.StatusNotFound)
+		return
+	}
+	tamanio := proc.Tamanio
 
-	frames_asignados_a_pid := memo.l_proc[pid].ptr_a_frames_asignados
-	tamanio := memo.l_proc[pid].tamanio
+	timestamp := time.Now().Format(time.RFC3339) //me lo ensenio mi amigo luchin guita facil
+	nombre := fmt.Sprintf("%s%d-%s.dmp", memo.Config.Path_dump, pid, timestamp)
+
+	file, err := os.Create(nombre)
+	if err != nil {
+		slog.Error("Error - (DumpMemory) - Error creando archivo dump", "path", nombre, "error", err)
+		http.Error(w, "No se pudo crear archivo dump", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
 
 	err = file.Truncate(int64(tamanio))
 
 	if err != nil {
-		panic(err)
+		slog.Error("Error - (DumpMemory) - Error truncando archivo dump", "error", err)
+		http.Error(w, "No se pudo preparar archivo", http.StatusInternalServerError)
+		return
 	}
 
 	mutex_memoriaPrincipal.Lock()
-	for i := range frames_asignados_a_pid {
-		inicio := *frames_asignados_a_pid[i] * memo.config_memo.Tamanio_pag
-		fin_de_pag := inicio + memo.config_memo.Tamanio_pag //Liam vino de rendir funcional mepa
+	defer mutex_memoriaPrincipal.Unlock()
 
-		contenido_pag := memo.memoria_principal[inicio:fin_de_pag]
-		file.Write(contenido_pag)
-	}
-
-	mutex_memoriaPrincipal.Unlock()
-
-	utils.LoggerConFormato("## PID: %d - Memory Dump solicitado", pid)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
-
-}
-
-func (memo *Memo) EliminarProceso(pid int) bool {
-
-	mutex_lprocs.Lock()
-	defer mutex_lprocs.Unlock()
-
-	proceso_existe := memo.l_proc[pid]
-
-	if proceso_existe == nil {
-		slog.Warn("EliminarProceso - proceso no encontrado", "pid", pid)
-		return false
-	}
-
-	slog.Debug("EliminarProceso - proceso encontrado", "pid", pid, "tamanio", proceso_existe.tamanio)
-
-	frames_asignados_a_pid := proceso_existe.ptr_a_frames_asignados
-
-	if frames_asignados_a_pid == nil {
-		slog.Error("Error - (EliminarProceso) - frames asignados es nil", "pid", pid)
-		return false
-	}
-
-	for i := range frames_asignados_a_pid {
-		if frames_asignados_a_pid[i] != nil {
-			*frames_asignados_a_pid[i] = -1
-		} else {
-			slog.Warn("Cuidadito - (EliminarProceso) - puntero a frame nil", "indice", i, "pid", pid)
+	mutex_framesDisponibles.Lock()
+	defer mutex_framesDisponibles.Unlock()
+	tamPag := memo.Config.Tamanio_pag
+	for idx, frame := range memo.Frames {
+		if frame.Usado && frame.PidOcupante == pid {
+			inicio := idx * tamPag
+			fin := inicio + tamPag
+			if fin > len(memo.memoria_principal) {
+				slog.Warn("Cuidadito - (DumpMemory) - Dump truncado: intento de leer mas alla del limite de memoria")
+				continue
+			}
+			_, err := file.Write(memo.memoria_principal[inicio:fin])
+			if err != nil {
+				slog.Error("Error - (DumpMemory) - Error escribiendo en archivo dump", "frame", idx, "error", err)
+				http.Error(w, "Error escribiendo dump", http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 
-	delete(memo.l_proc, pid)
-
-	memo.EliminarProcesoDeSwap(pid)
-
-	return true
+	utils.LoggerConFormato("## PID: %d - Memory Dump realizado correctamente", pid)
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
 
 func (memo *Memo) FinalizarProceso(w http.ResponseWriter, r *http.Request) {
@@ -649,19 +823,21 @@ func (memo *Memo) FinalizarProceso(w http.ResponseWriter, r *http.Request) {
 
 	mensaje := string(body_Bytes)
 
-	slog.Debug("Llegó petición finalizar proceso", "mensaje", mensaje)
+	slog.Debug("Llego peticion finalizar proceso", "mensaje", mensaje)
 
 	pid, err := strconv.Atoi(mensaje)
 
 	if err != nil {
 		slog.Error("Error - (FinalizarProceso) - Conversiones a int", "mensaje", mensaje, "error", err)
-		http.Error(w, "PID inválido", http.StatusBadRequest)
+		http.Error(w, "PID invalido", http.StatusBadRequest)
 		return
 	}
 
 	eliminado_correctamente := memo.EliminarProceso(pid)
 
-	if !eliminado_correctamente {
+	if eliminado_correctamente != nil {
+		slog.Error("Error - (FinalizarProceso/EliminarProceso) - no se pudo eliminar, anda a saber porque",
+			"pid", pid)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("NO_OK"))
 		return
@@ -673,12 +849,12 @@ func (memo *Memo) FinalizarProceso(w http.ResponseWriter, r *http.Request) {
 	mt_a_log, ok := memo.metricas[pid]
 	if ok {
 		utils.LoggerConFormato(
-			"## PID: %d - Proceso Destruido - Métricas - Acc.T.Pag: %d; Inst.Sol.: %d; SWAP: %d; Mem.Prin.: %d; Lec.Mem.: %d; Esc.Mem.: %d",
+			"## PID: %d - Proceso Destruido - Metricas - Acc.T.Pag: %d; Inst.Sol.: %d; SWAP: %d; Mem.Prin.: %d; Lec.Mem.: %d; Esc.Mem.: %d",
 			pid, mt_a_log[Accesos_a_tpags], mt_a_log[Cant_instr_solicitadas], mt_a_log[Bajadas_de_swap],
 			mt_a_log[Subidas_a_memoria], mt_a_log[Cant_read], mt_a_log[Cant_write])
-
+		delete(memo.metricas, pid)
 	} else {
-		slog.Warn("Advertencia - (FinalizarProceso) - Métricas no encontradas para PID", "pid", pid)
+		slog.Warn("Advertencia - (FinalizarProceso) - Metricas no encontradas para PID", "pid", pid)
 	}
 
 	w.WriteHeader(http.StatusOK)

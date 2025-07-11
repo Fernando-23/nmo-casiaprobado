@@ -1,42 +1,60 @@
 package main
 
-import "sync"
+import (
+	"os"
+	"sync"
+)
 
 type ConfigMemo struct {
-	Puerto_mem        int    `json:"port_memory"`
-	Ip_memoria        string `json:"ip_memory"`
-	Tamanio_memoria   int    `json:"memory_size"`
-	Tamanio_pag       int    `json:"page_size"`
-	Cant_entradasXpag int    `json:"entries_per_page"`
-	Cant_niveles      int    `json:"number_of_levels"`
-	Delay_memoria     int    `json:"memory_delay"`
-	Path_swap         string `json:"swapfile_path"`
-	Delay_swap        int    `json:"swap_delay"`
-	Log_level         string `json:"log_level"`
-	Path_dump         string `json:"dump_path"`
+	Puerto_mem       int    `json:"port_memory"`
+	Ip_memoria       string `json:"ip_memory"`
+	Tamanio_memoria  int    `json:"memory_size"`
+	Tamanio_pag      int    `json:"page_size"`
+	EntradasPorNivel int    `json:"entries_per_page"`
+	Cant_niveles     int    `json:"number_of_levels"`
+	Delay_memoria    int    `json:"memory_delay"`
+	Path_swap        string `json:"swapfile_path"`
+	Delay_swap       int    `json:"swap_delay"`
+	Log_level        string `json:"log_level"`
+	Path_dump        string `json:"dump_path"`
 }
 
 type Memo struct {
 	memoria_sistema   map[int][]string //mapeo de arch pseudo
 	memoria_principal []byte
-	config_memo       *ConfigMemo
+	Config            *ConfigMemo
+	swap              *DataSwap
+	Procesos          map[int]*Proceso
+	Frames            []*Frame //sincronizacion
+	metricas          map[int][]int
+}
 
-	swap           *DataSwap
-	l_proc         map[int]*Proceso
-	ptrs_raiz_tpag map[int]*NivelTPag
-	bitmap         []int //sincronizacion
-	metricas       map[int][]int
+type Frame struct {
+	Usado        bool
+	PidOcupante  int
+	NumeroPagina int //dentro del proceso ocupante
 }
 
 type Proceso struct {
-	ptr_a_frames_asignados []*int //apunta a elementos de la tabla_frames
-	tamanio                int
+	Pid           int
+	TablaPagsRaiz *TablaDePaginas
+	Tamanio       int
+}
+
+type TablaDePaginas struct {
+	Entradas []*EntradaTablaDePaginas
+}
+
+type EntradaTablaDePaginas struct {
+	SiguienteNivel *TablaDePaginas // si no es ultimo nivel
+	NumeroDeFrame  *int            // si es ultimo nivel
 }
 
 type DataSwap struct {
 	ultimo_byte      int
 	espacio_contiguo map[int]*ProcesoEnSwap
 	espacio_libre    []*EspacioLibre
+	SwapFile         *os.File // swap real en disco
 }
 
 type ProcesoEnSwap struct {
@@ -47,16 +65,6 @@ type ProcesoEnSwap struct {
 type EspacioLibre struct {
 	inicio  int
 	tamanio int
-}
-
-type NivelTPag struct {
-	lv_tabla     int
-	sgte_nivel   *NivelTPag
-	ultimo_nivel *UltimoNivelTPag
-}
-
-type UltimoNivelTPag struct {
-	entradas []*int
 }
 
 const (
@@ -71,7 +79,6 @@ const (
 var (
 	gb_frames_disponibles int
 	gb_tam_memo_actual    int
-	gb_tamanio_pag        int
 )
 
 var (
@@ -80,9 +87,7 @@ var (
 	mutex_memoriaPrincipal  sync.Mutex
 	mutex_memoriaSistema    sync.Mutex
 	mutex_metricas          sync.Mutex
-	mutex_tablaPaginas      sync.Mutex
 	mutex_lprocs            sync.Mutex
-	mutex_bitmap            sync.Mutex
 	mutex_swap              sync.Mutex
 )
 
