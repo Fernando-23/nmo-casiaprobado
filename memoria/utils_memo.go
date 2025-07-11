@@ -262,7 +262,7 @@ func (memo *Memo) crearTablasParaProceso(pid int, tamanioProceso int) *TablaDePa
 			actual.Entradas[ultimoIdx] = &EntradaTablaDePaginas{}
 		}
 	}
-
+	memo.ImprimirTablasProceso(pid)
 	return entradaRaiz
 }
 
@@ -405,6 +405,8 @@ func (memo *Memo) AsignarFramesAProceso(pid int) error {
 				return fmt.Errorf("sin frames libres para la pagina %d del proceso %d", pagina, pid)
 			}
 			entrada.NumeroDeFrame = &frameIdx
+			slog.Debug("Debug - (AsignarFramesAProceso) - Se asigno correctamente un frame",
+				"pid", pid, "pagina", pagina, "frame", *entrada.NumeroDeFrame)
 		}
 	}
 
@@ -503,7 +505,7 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 	proc, ok := memo.Procesos[pid]
 
 	if !ok || proc == nil {
-		slog.Error("Error - (buscarEnTablaAsociadoAProceso) - NO se encontro el proceos", "pid", pid)
+		slog.Error("Error - (buscarEnTablaAsociadoAProceso) - NO se encontro el proceso", "pid", pid)
 		http.Error(w, "Proceso no encontrado", http.StatusNotFound)
 		return
 	}
@@ -563,6 +565,7 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 
 	memo.HacerRetardo()
 
+	slog.Debug("Debug - (buscarEnTablaAsociadoAProceso) - Se accedio correctamente")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(frameStr))
 }

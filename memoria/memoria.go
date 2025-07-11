@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
@@ -31,6 +32,13 @@ func main() {
 		}
 	}
 
+	swapfile, err := os.OpenFile(config.Path_swap, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		slog.Error("error - abriendo el archivo de swap", err)
+		return
+	}
+	defer swapfile.Close()
+
 	memo := &Memo{
 		memoria_sistema:   make(map[int][]string),
 		memoria_principal: make([]byte, config.Tamanio_memoria),
@@ -42,6 +50,7 @@ func main() {
 			ultimo_byte:      0,
 			espacio_contiguo: make(map[int]*ProcesoEnSwap),
 			espacio_libre:    []*EspacioLibre{},
+			SwapFile:         swapfile,
 		},
 	}
 

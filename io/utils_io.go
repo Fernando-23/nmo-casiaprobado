@@ -97,7 +97,7 @@ func AvisarFinIO(pid string) {
 
 func AvisarDesconexionIO() { //gracias que te aviso pa
 
-	utils.FormatearUrlYEnviar(url_kernel, "/desconectar_io", false, "%s %s",
+	utils.FormatearUrlYEnviar(url_kernel, "/desconectar_io", true, "%s %s",
 		nombre_io,
 		url_io)
 

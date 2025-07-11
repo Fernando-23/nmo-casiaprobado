@@ -98,6 +98,9 @@ func (memo *Memo) EscribirProcesoEnSwap(pid int) error {
 			fin := inicio + tamPag
 			contenido := memo.memoria_principal[inicio:fin]
 
+			slog.Debug("Debug - (EscribirProcesoEnSwap) - Se va a intentar escribir un proceso en swap",
+				"contenido", contenido,
+				"offset", offsetSwap)
 			_, err := memo.swap.SwapFile.WriteAt(contenido, int64(offsetSwap))
 			if err != nil {
 				mutex_framesDisponibles.Unlock()

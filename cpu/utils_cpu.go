@@ -153,12 +153,14 @@ func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cpu *CPU) ChequarTLBActiva() {
+	tlb_activa = false
 	if cpu.Config_CPU.Cant_entradas_TLB > 0 {
 		tlb_activa = true
 	}
 }
 
 func (cpu *CPU) ChequearCachePagsActiva() {
+	cache_pags_activa = false
 	if cpu.Config_CPU.Cant_entradas_cache > 0 {
 		cache_pags_activa = true
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"math"
 	"strconv"
 	"time"
@@ -20,11 +21,16 @@ func (cpu *CPU) RequestWRITE(direccion_logica int, datos string) (string, Direcc
 	dir_fisica := cpu.MMU(frame, desplazamiento)
 
 	//Encuentro en cache pags
-	if contenido != "NO_ENCONTRE" {
+	if contenido != "NO_ENCONTRE" && cache_pags_activa {
 		utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", cpu.Proc_ejecutando.Pid, int(nro_pagina), frame)
+		slog.Debug("Debug - (RequestWRITE) - Cache HIT ", "pid", cpu.Proc_ejecutando.Pid, "frame",
+			dir_fisica.frame, "datos", datos)
 		return contenido, dir_fisica
 	}
 
+	slog.Debug("Debug - (RequestWRITE) - Se envia peticion a escribir",
+		"pid", cpu.Proc_ejecutando.Pid, "frame", dir_fisica.frame, "offset",
+		dir_fisica.offset, "datos", datos)
 	respuesta, _ := utils.FormatearUrlYEnviar(cpu.Url_memoria, "/WRITE", true, "%d %d %d %s", cpu.Proc_ejecutando.Pid, dir_fisica.frame, dir_fisica.offset, datos)
 
 	if cache_pags_activa {
