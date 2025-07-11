@@ -15,8 +15,8 @@ import (
 )
 
 func CargarArchivoPseudocodigo(path string) ([]string, error) {
-	//path_completo := "/home/utnso/pruebas/" + path
-	path_completo := "/home/liam/Data/Ftd/ISI/Proyectos/tp-2025-1c-Nombre-muy-original/pruebas/" + path
+	path_completo := "/home/utnso/pruebas/" + path
+	//path_completo := "/home/liam/Data/Ftd/ISI/Proyectos/tp-2025-1c-Nombre-muy-original/pruebas/" + path
 
 	archivo, err := os.Open(path_completo)
 
@@ -89,12 +89,12 @@ func (memo *Memo) Fetch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//para pruebas nomas
-	//==================================================
-	//==================================================
-	//--------------ESTO LO VAMOS A BORRAR--------------
-	//
-	//==================================================
-	//==================================================
+	//====================================================
+	//====================================================
+	//---------------ESTO LO VAMOS A BORRAR---------------
+	//----https://www.youtube.com/watch?v=S94C7rR429s-----
+	//====================================================
+	//====================================================
 	// for _, linea_a_leer := range elemento_en_memo_sistema {
 	// 	slog.Debug(linea_a_leer)
 	// }
@@ -154,8 +154,7 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 	mutex_tamanioMemoActual.Lock()
 	defer mutex_tamanioMemoActual.Unlock()
 
-	if !HayEspacio(tamanio) || !HayFramesLibresPara(tamanio) {
-
+	if !HayEspacio(tamanio) {
 		slog.Debug("No hay espacio suficiente para crear el proceso pedido por kernel", "pid", pid)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("NO_OK"))
@@ -173,8 +172,8 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 func HayEspacio(tamanio int) bool {
 	return gb_tam_memo_actual >= tamanio
 }
-func HayFramesLibresPara(tamanio int) bool {
-	return gb_frames_disponibles > tamanio
+func HayFramesLibresPara(cant_frames_pedidos int) bool {
+	return gb_frames_disponibles > cant_frames_pedidos
 }
 
 func (memo *Memo) CrearNuevoProceso(pid int, tamanio int, arch_pseudo string) {
@@ -205,7 +204,7 @@ func (memo *Memo) CrearNuevoProceso(pid int, tamanio int, arch_pseudo string) {
 	}
 
 	// 2do check, asignarle frames y crear tablas
-	memo.InicializarTablaPunterosAsociadosA(pid, tamanio)
+	memo.InicializarTablaPunterosAsociadosA(pid, cant_frames)
 
 	// 3er check, inicializar metrica
 	mutex_metricas.Lock()
@@ -255,35 +254,39 @@ func (memo *Memo) InicializarTablaPunterosAsociadosA(pid int, frames_a_reservar 
 	mutex_tablaPaginas.Lock()
 	defer mutex_tablaPaginas.Unlock()
 
-	memo.ptrs_raiz_tpag[pid] = &NivelTPag{
-		lv_tabla:   0,
+	nivelRaiz := &NivelTPag{
+		lv_tabla:   1,
+		entradas:   make([]*int, memo.config_memo.Cant_entradasXpag),
 		sgte_nivel: nil,
 	}
 
-	nuevo_puntero_de_tablas := memo.ptrs_raiz_tpag[pid]
+	memo.ptrs_raiz_tpag[pid] = nivelRaiz
 
-	if memo.config_memo.Cant_niveles == 0 {
-		nuevo_puntero_de_tablas.entradas = make([]*int, memo.config_memo.Cant_entradasXpag)
-		memo.AsignarFramesAProceso(nuevo_puntero_de_tablas, frames_a_reservar, pid)
+	if memo.config_memo.Cant_niveles == 1 {
+		memo.AsignarFramesAProceso(frames_a_reservar, pid)
 		return
 	}
 
-	for i := 1; i <= memo.config_memo.Cant_niveles; i++ {
-		nuevo_puntero_de_tablas.sgte_nivel = &NivelTPag{
+	nivelActual := nivelRaiz
+	for i := 2; i <= memo.config_memo.Cant_niveles; i++ {
+		nivelSiguiente := &NivelTPag{
 			lv_tabla:   i,
+			entradas:   make([]*int, memo.config_memo.Cant_entradasXpag),
 			sgte_nivel: nil,
 		}
 
-		if i != memo.config_memo.Cant_niveles {
-			nuevo_puntero_de_tablas = nuevo_puntero_de_tablas.sgte_nivel
-		}
+		nivelActual.sgte_nivel = nivelSiguiente
+		nivelActual = nivelSiguiente
+
+		// if i != memo.config_memo.Cant_niveles {
+		// 	nivelActual = nivelActual.sgte_nivel
+		// }
 	}
 
-	nuevo_puntero_de_tablas.entradas = make([]*int, memo.config_memo.Cant_entradasXpag)
-	memo.AsignarFramesAProceso(nuevo_puntero_de_tablas, frames_a_reservar, pid)
+	memo.AsignarFramesAProceso(frames_a_reservar, pid)
 }
 
-func (memo *Memo) AsignarFramesAProceso(tpags_final *NivelTPag, frames_a_reservar int, pid int) {
+func (memo *Memo) AsignarFramesAProceso(frames_a_reservar int, pid int) {
 	mutex_framesDisponibles.Lock()
 	defer mutex_framesDisponibles.Unlock()
 
@@ -356,7 +359,7 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 
 	mensaje := string(body_Bytes)
 
-	slog.Debug("Llegó petición buscar en tabla asociado a proceso", "mensaje", mensaje)
+	slog.Debug("Debug - (buscarEnTablaAsociadoAProceso) - Llegó petición buscar en tabla asociado a proceso", "pid lv_actual entrada", mensaje)
 
 	aux := strings.Split(mensaje, " ")
 	pid, err1 := strconv.Atoi(aux[0])
@@ -384,7 +387,10 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 	mutex_tablaPaginas.Lock()
 	tabla_asociada_proceso := memo.ptrs_raiz_tpag[pid]
 
-	for i := 0; i < memo.config_memo.Cant_niveles; i++ {
+	//valor := 5
+	//tabla_asociada_proceso.entradas[entrada] = &valor
+
+	for i := 1; i < memo.config_memo.Cant_niveles; i++ {
 		tabla_asociada_proceso = tabla_asociada_proceso.sgte_nivel
 	}
 

@@ -78,9 +78,9 @@ func (k *Kernel) MoverDeEstadoPorPid(estadoActual, estadoNuevo int, pid int, hac
 	pcb := k.QuitarYObtenerPCB(estadoActual, pid, hacerSincro) //aca sincroniza
 
 	if pcb == nil {
-		slog.Error("Error -(MoverDeEstadoPorPid) - No se encontró  proceso para mover de estado",
+		slog.Warn("Cuidadito -(MoverDeEstadoPorPid) - No se encontró  proceso para mover de estado",
 			"pid", pid,
-			"estado_actual", estadoActual)
+			"estado_actual", estados_proceso[estadoActual])
 		return false
 	}
 

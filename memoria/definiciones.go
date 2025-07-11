@@ -50,9 +50,13 @@ type EspacioLibre struct {
 }
 
 type NivelTPag struct {
-	lv_tabla   int
-	entradas   []*int
-	sgte_nivel *NivelTPag
+	lv_tabla     int
+	sgte_nivel   *NivelTPag
+	ultimo_nivel *UltimoNivelTPag
+}
+
+type UltimoNivelTPag struct {
+	entradas []*int
 }
 
 const (

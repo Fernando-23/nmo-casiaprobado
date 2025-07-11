@@ -45,6 +45,7 @@ func main() {
 	utils.ConfigurarLogger("memoria", memo.config_memo.Log_level)
 
 	memo.InicializarTablaFramesGlobal(cant_frames_totales)
+	slog.Debug("Debug - (main) - Se inicializo el bitmap")
 
 	mux := http.NewServeMux()
 	// GENERAL

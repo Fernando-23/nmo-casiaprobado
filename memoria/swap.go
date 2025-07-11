@@ -191,12 +191,12 @@ func (memo *Memo) QuitarDeSwap(w http.ResponseWriter, r *http.Request) {
 	mutex_tablaPaginas.Lock()
 	defer mutex_tablaPaginas.Unlock()
 	ptr_tpag_del_pid := memo.ptrs_raiz_tpag[pid]
-	if memo.config_memo.Cant_niveles == 0 {
+	if memo.config_memo.Cant_niveles == 1 {
 		memo.EscribirDeSwapAMemoriaPrincipal(pid, tamanio, ptr_tpag_del_pid, w)
 		return
 	}
 
-	for i := 1; i < memo.config_memo.Cant_niveles; i++ {
+	for i := 2; i <= memo.config_memo.Cant_niveles; i++ {
 		ptr_tpag_del_pid = ptr_tpag_del_pid.sgte_nivel
 	}
 
@@ -205,8 +205,9 @@ func (memo *Memo) QuitarDeSwap(w http.ResponseWriter, r *http.Request) {
 }
 
 func (memo *Memo) EscribirDeSwapAMemoriaPrincipal(pid int, tamanio int, ptr_tpag_del_pid *NivelTPag, w http.ResponseWriter) {
+	frames_a_reservar := LaCuentitaMaestro(tamanio, memo.config_memo.Tamanio_pag)
 
-	memo.AsignarFramesAProceso(ptr_tpag_del_pid, tamanio, pid)
+	memo.AsignarFramesAProceso(frames_a_reservar, pid)
 
 	mutex_lprocs.Lock()
 	frames_asignados_a_pid := memo.l_proc[pid].ptr_a_frames_asignados

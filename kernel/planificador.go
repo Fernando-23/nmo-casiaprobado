@@ -96,7 +96,7 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 		mutex_ProcesoPorEstado[EstadoNew].Unlock()
 		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
 		slog.Debug("Debug - (IntentarEnviarProcesoAReady) - No hay procesos en estado",
-			"estado", estadoOrigen,
+			"estado", estados_proceso[estadoOrigen],
 			"pid", pidQuiereEntrar,
 		)
 		return false
@@ -104,8 +104,8 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 
 	if !k.hayQuePlanificarAccesoAReady(estadoOrigen, pidQuiereEntrar) {
 
-		slog.Debug("Debug - (IntentarEnviarProcesoAReady) - No te toca fernandio",
-			"estado", estadoOrigen,
+		slog.Debug("Debug - (IntentarEnviarProcesoAReady) - No te toca fernandito",
+			"estado", estados_proceso[estadoOrigen],
 			"pid", pidQuiereEntrar,
 		)
 		mutex_ProcesoPorEstado[EstadoNew].Unlock()
@@ -223,7 +223,8 @@ func (k *Kernel) gestionarAccesoAReady(pid int, tamanio int, arch_pseudo string,
 	}
 
 	if err != nil {
-		return false, fmt.Errorf("error: %w - Pid: %d - (gestionarAccesoAReady) - Peticion espacio en memoria", err, pid)
+		return false, fmt.Errorf("error: %w - Pid: %d - Estado: %s - (gestionarAccesoAReady) - Peticion espacio en memoria",
+			err, pid, estados_proceso[estadoOrigen])
 	}
 
 	mutex_ProcesoPorEstado[estadoOrigen].Lock()
@@ -231,12 +232,12 @@ func (k *Kernel) gestionarAccesoAReady(pid int, tamanio int, arch_pseudo string,
 
 	pcb := k.BuscarPorPidSinLock(estadoOrigen, pid)
 	if pcb == nil {
-		return false, fmt.Errorf("error - Pid: %d - (BuscarPorPidSinLock) - Pcb no encontrado", pid)
+		return false, fmt.Errorf("error - Pid: %d - (gestionarAccesoAReady) - Pcb no encontrado - Estado %s", pid, estados_proceso[estadoOrigen])
 	}
 
 	if hayEspacio {
 
-		slog.Debug("Hay espacio en memoria, intentando mover proceso a READY",
+		slog.Debug("Debug - (gestionarAccesoAReady) - Intentando mover proceso a READY",
 			"pid", pid,
 			"estado_origen", estados_proceso[estadoOrigen],
 		)

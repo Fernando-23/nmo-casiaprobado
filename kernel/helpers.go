@@ -137,7 +137,7 @@ func decodificarMensajeFinIO(mensaje string) (pid int, nombre string, err error)
 func decodificarMensajeDesconeccionIO(mensaje string) (nombre, url string, err error) {
 	partes := strings.Split(mensaje, " ") // Esperado: "NOMBRE_IO URL_IO TIEMPO_IO"
 
-	if len(partes) < 3 {
+	if len(partes) < 2 {
 		return "", "", fmt.Errorf("formato inválido, se espera 'NOMBRE_IO URL_IO TIEMPO_IO'")
 	}
 

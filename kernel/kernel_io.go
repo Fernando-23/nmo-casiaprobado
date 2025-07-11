@@ -205,24 +205,30 @@ func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {
 }
 
 func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
+	if k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, true) {
+		//==================== LOG OBLIGATORIO ====================
+		utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY", pid)
+		//=========================================================
 
-	if !k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, true) {
-		if !k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid, true) {
-			slog.Error("Error -(liberarInstanciaIO) - Pid no estaba en BLOCK ni BLOCK_SUSP",
-				"pid_io", pid,
-			)
-			return //no estaba en ninguno de los estados posibles
+	} else if k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid, true) {
+		//==================== LOG OBLIGATORIO ====================
+		utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY_SUSPENDED", pid)
+		//=========================================================
+		if k.IntentarEnviarProcesoAReady(EstadoReadySuspended, pid) {
+			k.IntentarEnviarProcesoAExecute()
 		}
+
+	} else {
+		slog.Error("Error - (liberarInstanciaIO) - Pid no estaba en BLOCK ni BLOCK_SUSP",
+			"pid_io", pid)
+		return
+
 	}
-	k.IntentarEnviarProcesoAExecute()
 
 	if err := k.ActualizarIO(nombre, pid); err != nil {
 		slog.Error("Error - (liberarInstanciaIO) - Falló actualización de IO", "error", err)
-		return
 	}
-	//==================== LOG OBLIGATORIO ====================
-	utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY", pid)
-	//=========================================================
+
 }
 
 func (k *Kernel) ActualizarIO(nombreIO string, pid int) error {
