@@ -19,6 +19,8 @@ func (cpu *CPU) RequestWRITE(direccion_logica int, datos string) (string, Direcc
 	frame, contenido := cpu.BusquedaMemoriaFrame(int(nro_pagina), "WRITE") //el contenido es solo para cache pags activa
 
 	dir_fisica := cpu.MMU(frame, desplazamiento)
+	slog.Debug("Debug - (RequestWRITE) - Dir. Fisica concatenada por la MMU",
+		"pid", cpu.Proc_ejecutando.Pid, "frame", dir_fisica.frame, "offset", dir_fisica.offset)
 
 	//Encuentro en cache pags
 	if contenido != "NO_ENCONTRE" && cache_pags_activa {
@@ -97,7 +99,7 @@ func (cpu *CPU) BusquedaTabla(pid int, nivel_actual int, entrada_a_acceder int) 
 
 func (cpu *CPU) BuscarEnTLB(nro_pagina int) int {
 
-	for i := 0; i <= cpu.Config_CPU.Cant_entradas_TLB; i++ {
+	for i := 0; i < cpu.Config_CPU.Cant_entradas_TLB; i++ {
 		if cpu.Tlb[i].pagina == nro_pagina {
 			// Caso TLB HIT
 			utils.LoggerConFormato("PID: %d - TLB HIT - Pagina: %d", cpu.Proc_ejecutando.Pid, nro_pagina)
@@ -124,7 +126,7 @@ func (cpu *CPU) BuscarEnTLB(nro_pagina int) int {
 
 func (cpu *CPU) BuscarEnCachePags(nro_pagina int, accion string) (int, string) {
 
-	for i := 0; i <= cpu.Config_CPU.Cant_entradas_cache; i++ {
+	for i := 0; i < cpu.Config_CPU.Cant_entradas_cache; i++ {
 		if cpu.Cache_pags[i].pagina == nro_pagina {
 			utils.LoggerConFormato("PID: %d- Cache Hit - Pagina: %d", cpu.Proc_ejecutando.Pid, nro_pagina)
 			switch accion {
@@ -140,9 +142,8 @@ func (cpu *CPU) BuscarEnCachePags(nro_pagina int, accion string) (int, string) {
 
 	utils.LoggerConFormato("PID: %d- Cache Miss - Pagina: %d", cpu.Proc_ejecutando.Pid, nro_pagina)
 
-	//lock tlb_activa
 	if tlb_activa {
-		//unlock tlb_activa
+
 		frame := cpu.BuscarEnTLB(nro_pagina)
 		return frame, "NO_ENCONTRE"
 	}

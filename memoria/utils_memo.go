@@ -566,6 +566,7 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 	memo.HacerRetardo()
 
 	slog.Debug("Debug - (buscarEnTablaAsociadoAProceso) - Se accedio correctamente")
+	slog.Debug("Debug - (buscarEnTablaAsociadoAProceso) - Frame devuelto", "frame", frameStr)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(frameStr))
 }

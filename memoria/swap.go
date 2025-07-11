@@ -51,12 +51,13 @@ func (memo *Memo) CargarDataSwap(pid int, tamanio int) {
 func (memo *Memo) EscribirProcesoEnSwap(pid int) error {
 	mutex_lprocs.Lock()
 	proc, ok := memo.Procesos[pid]
-	tamanio := proc.Tamanio
 	mutex_lprocs.Unlock()
 
 	if !ok {
 		return fmt.Errorf("Proceso %d no encontrado", pid)
 	}
+
+	tamanio := proc.Tamanio
 
 	var inicioSwap int = -1
 
@@ -414,4 +415,35 @@ func (memo *Memo) EliminarProceso(pid int) error {
 	delete(memo.Procesos, pid)
 
 	return nil
+}
+
+func (memo *Memo) ImprimirSwap(pid int) error {
+	mutex_swap.Lock()
+	ProcesoEnSwap, ok := memo.swap.espacio_contiguo[pid]
+	mutex_swap.Unlock()
+
+	if !ok {
+		return fmt.Errorf("PID %d no tien entrada en swap", pid)
+	}
+
+	inicio := ProcesoEnSwap.inicio
+	tamanio := ProcesoEnSwap.tamanio
+
+	buffer := make([]byte, tamanio)
+
+	_, err := memo.swap.SwapFile.ReadAt(buffer, int64(inicio))
+	if err != nil {
+		return fmt.Errorf("error leyendo swap para PID %d: %v", pid, err)
+	}
+
+	fmt.Println("===== DUMP SWAP PID:", pid, "=====")
+	fmt.Printf("Desde byte %d hasta %d\n", inicio, inicio+tamanio)
+	fmt.Println("=============================")
+	fmt.Println(string(buffer))
+	fmt.Println("contenido como bytes:")
+	fmt.Printf("%v\n", buffer)
+	fmt.Println("=============================")
+
+	return nil
+
 }
