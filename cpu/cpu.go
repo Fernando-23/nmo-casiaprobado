@@ -97,12 +97,12 @@ func main() {
 			}
 
 			cod_op, operacion := cpu.Decode(instruccion)
-			fmt.Println("Aca llego la instruccion: ", instruccion)
+			slog.Debug("Debug - (CicloInstruccion) - Instruccion a ejecutar",
+				"instruccion", instruccion)
 			cpu.Execute(cod_op, operacion, instruccion)
 
 		}
-
-		cpu.ActualizarContexto()
+		slog.Debug("Debug - (CicloInstruccion) - Se va a cambiar el contexto")
 		cpu.LiberarCaches()
 		HabilitarInterrupt(false)
 

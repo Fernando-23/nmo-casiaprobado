@@ -23,6 +23,38 @@ func (k *Kernel) liberarCPU(idCPU int) {
 	actualizarCPU(cpu, -1, 0, true)
 }
 
+func (k *Kernel) ActualizarPC(idCPU int, pc int) {
+	cpu, ok := k.CPUsConectadas[idCPU]
+	if !ok {
+		slog.Error("Error -(ActualizarPc) - No se encontró la CPU", "idCPU", idCPU)
+		return
+	}
+
+	cpu.Pc = pc
+
+	mutex_ProcesoPorEstado[EstadoExecute].Lock()
+	procesoEjecutando := k.BuscarPorPidSinLock(EstadoExecute, cpu.Pid)
+
+	if procesoEjecutando == nil {
+		slog.Error("Error -(ActualizarPc) - No se encontró el proceso en ejecucion para esa CPU",
+			"idCPU", idCPU,
+			"pid", cpu.Pid,
+		)
+		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+
+		return
+	}
+	procesoEjecutando.Pc = pc
+
+	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+
+	slog.Debug("PC actualizado",
+		"id_cpu", idCPU,
+		"pid", cpu.Pid,
+		"pc", pc,
+	)
+}
+
 func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
 
 	body_Bytes, err := io.ReadAll(r.Body)
@@ -84,7 +116,11 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 		mutex_CPUsConectadas.Unlock()
 		return false, fmt.Errorf("error - CPU no registrada: %d", idCPU)
 	}
+
+	k.ActualizarPC(idCPU, pc)
+
 	pid := cpu_ejecutando.Pid
+
 	mutex_CPUsConectadas.Unlock()
 
 	cod_op := syscall[CodOp]
@@ -102,7 +138,7 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("error - syscall IO - tiempo inválido: %s", syscall[4])
 		}
-		k.GestionarIO(nombre, pid, pc+1, tiempo, idCPU)
+		k.GestionarIO(nombre, pid, tiempo, idCPU)
 		k.liberarCPU(idCPU)
 		return false, nil // la CPU debe replanificar
 
@@ -119,7 +155,7 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 			return false, fmt.Errorf("error - syscall IO - tamaño inválido: %s", syscall[4])
 		}
 
-		k.GestionarINIT_PROC(nombre_arch, tamanio, pc)
+		k.GestionarINIT_PROC(nombre_arch, tamanio)
 
 		return true, nil // la CPU debe seguir con el proceso
 
@@ -143,7 +179,7 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 
 }
 
-func (k *Kernel) GestionarIO(nombreIO string, pid, pc, duracion, idCPU int) {
+func (k *Kernel) GestionarIO(nombreIO string, pid, duracion, idCPU int) {
 
 	//mutex IOs
 	mutex_DispositivosIO.Lock()
@@ -169,8 +205,6 @@ func (k *Kernel) GestionarIO(nombreIO string, pid, pc, duracion, idCPU int) {
 		mutex_ProcesoPorEstado[EstadoBlock].Unlock()
 		return
 	}
-
-	pcb.Pc = pc
 
 	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, false)
 
@@ -200,7 +234,7 @@ func (k *Kernel) GestionarIO(nombreIO string, pid, pc, duracion, idCPU int) {
 
 }
 
-func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int) {
+func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int) {
 
 	nuevo_pcb := k.IniciarProceso(tamanio, nombre_arch)
 	pid := nuevo_pcb.Pid
@@ -211,10 +245,12 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int, pc int) {
 
 	if !unElemento {
 		if !k.IntentarEnviarProcesoAReady(EstadoNew, pid) {
+			slog.Error("No se pudo enviar el proceso a ready", "pid", pid)
 			return
 		}
 	}
 
+	k.IntentarEnviarProcesosAReady()
 	k.IntentarEnviarProcesoAExecute()
 	// cpu_ejecutando.Pc = pc //Actualizar pc para cpu
 }

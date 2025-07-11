@@ -35,9 +35,12 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, bool) { //el primero es si 
 	lista_susp_ready := k.ProcesoPorEstado[EstadoReadySuspended]
 
 	//Caso en en que hay exactamente un proceso en NEW y ninguno en SUSPENDED-READY
+	procCandidatoAReady := k.PrimerElementoSinSacar(EstadoNew)
+	if procCandidatoAReady == nil {
+		slog.Error("Error - (UnicoEnNewYNadaEnSuspReady) - no hay procesos en new")
+	}
+
 	if len(lista_susp_ready) == 0 && len(lista_new) == 1 {
-		fmt.Println("Soy el primer elemento y no hay procesos en SUSP READY", lista_new[0].Pid)
-		procCandidatoAReady := k.PrimerElementoSinSacar(EstadoNew)
 
 		slog.Debug("Único proceso de new y no hay procesos en SUSP READY",
 			"pid", procCandidatoAReady.Pid,
@@ -64,10 +67,17 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, bool) { //el primero es si 
 		}
 		return true, false
 	}
+
+	slog.Debug("No es unico proceso en new o hay procesos en susp ready",
+		"pid", procCandidatoAReady.Pid,
+	)
+
 	return false, false
 }
 
 func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar int) bool {
+	slog.Debug("uh mal ahi huayo, habia procesos en new o el susp ready", "pid", pidQuiereEntrar)
+
 	mutex_peticionHayEspacioMemoria.Lock()
 	defer mutex_peticionHayEspacioMemoria.Unlock()
 
@@ -78,16 +88,26 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 	if estadoOrigen == EstadoNew && k.TieneProcesos(EstadoReadySuspended) {
 		mutex_ProcesoPorEstado[EstadoNew].Unlock()
 		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
+		slog.Debug("Debug - (IntentarEnviarProcesoAReady) - proceso en NEW y hay procesos en SUSP-READY", "pid", pidQuiereEntrar)
 		return false
 	}
 
 	if !k.TieneProcesos(estadoOrigen) {
 		mutex_ProcesoPorEstado[EstadoNew].Unlock()
 		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
+		slog.Debug("Debug - (IntentarEnviarProcesoAReady) - No hay procesos en estado",
+			"estado", estadoOrigen,
+			"pid", pidQuiereEntrar,
+		)
 		return false
 	}
 
 	if !k.hayQuePlanificarAccesoAReady(estadoOrigen, pidQuiereEntrar) {
+
+		slog.Debug("Debug - (IntentarEnviarProcesoAReady) - No te toca fernandio",
+			"estado", estadoOrigen,
+			"pid", pidQuiereEntrar,
+		)
 		mutex_ProcesoPorEstado[EstadoNew].Unlock()
 		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
 		return false
@@ -101,6 +121,10 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 
 	// Verifico que el primer proceso candidato sea el que quiere entrar
 	if procCandidatoAReady.Pid != pidQuiereEntrar {
+		slog.Debug("Error - (IntentarEnviarProcesoAReady) - pid distinto del que quiere entrar",
+			"estado", estadoOrigen,
+			"pid", pidQuiereEntrar,
+		)
 		mutex_ProcesoPorEstado[EstadoNew].Unlock()
 		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
 		return false

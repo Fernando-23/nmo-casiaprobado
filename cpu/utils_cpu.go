@@ -91,27 +91,31 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 	case "IO":
 		// ID_CPU PC IO TECLADO 20000
 
-		mensaje_io := fmt.Sprintf("%s %d IO %s %s", cpu.Id, cpu.Proc_ejecutando.Pc, operacion[0], operacion[1])
+		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1 //le mando a kernel la siguiente instruccion
+		mensaje_io := fmt.Sprintf("%s %d IO %s %s", cpu.Id, pc_a_actualizar, operacion[0], operacion[1])
 		cpu.EnviarSyscall("IO", mensaje_io)
 
 		HabilitarInterrupt(true)
 
 	case "INIT_PROC":
 		// ID_CPU PC INIT_PROC proceso1 256
-		mensaje_init_proc := fmt.Sprintf("%s %d INIT_PROC %s %s", cpu.Id, cpu.Proc_ejecutando.Pc, operacion[0], operacion[1])
+		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
+		mensaje_init_proc := fmt.Sprintf("%s %d INIT_PROC %s %s", cpu.Id, pc_a_actualizar, operacion[0], operacion[1])
 		cpu.EnviarSyscall("INIT_PROC", mensaje_init_proc)
 
 		HabilitarInterrupt(false)
 
 	case "DUMP_MEMORY":
 		// ID_CPU PC DUMP_MEMORY
-		mensaje_dump := fmt.Sprintf("%s %d DUMP_MEMORY", cpu.Id, cpu.Proc_ejecutando.Pc)
+		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
+		mensaje_dump := fmt.Sprintf("%s %d DUMP_MEMORY", cpu.Id, pc_a_actualizar)
 		cpu.EnviarSyscall("DUMP_MEMORY", mensaje_dump)
 		HabilitarInterrupt(true)
 
 	case "EXIT":
 		// ID_CPU PC DUMP_MEMORY
-		mensaje_exit := fmt.Sprintf("%s %d EXIT", cpu.Id, cpu.Proc_ejecutando.Pc)
+		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
+		mensaje_exit := fmt.Sprintf("%s %d EXIT", cpu.Id, pc_a_actualizar)
 		cpu.EnviarSyscall("EXIT", mensaje_exit)
 
 		HabilitarInterrupt(true)
@@ -255,3 +259,7 @@ func crearCPU(id string, path_config string) *CPU {
 
 	return cpu
 }
+
+// func (cpu *CPU) MostrarEstadoTLB(){
+// 	slog.Debug("Debug - (MostrarEstadoTLB) - Estado de la TLB:")
+// }

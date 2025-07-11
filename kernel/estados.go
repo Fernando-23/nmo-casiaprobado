@@ -24,7 +24,7 @@ func (k *Kernel) ImprimirPCBsDeEstado(estado int) {
 	listaPCB, ok := k.ProcesoPorEstado[estado]
 
 	if !ok || len(listaPCB) == 0 {
-		slog.Debug("No hay procesos en estado", "estado", estado)
+		slog.Debug("No hay procesos en estado", "estado", estados_proceso[estado])
 		return
 	}
 
@@ -32,7 +32,7 @@ func (k *Kernel) ImprimirPCBsDeEstado(estado int) {
 		if pcb != nil {
 			slog.Debug("PCB",
 				"pid", pcb.Pid,
-				"estado", estado,
+				"estado", estados_proceso[estado],
 				"pc", pcb.Pc)
 		}
 	}

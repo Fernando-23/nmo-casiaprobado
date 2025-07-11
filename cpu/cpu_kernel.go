@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -62,9 +61,4 @@ func (cpu *CPU) EnviarSyscall(cod_op_syscall string, syscall string) {
 
 	slog.Debug("Debug - (enviarSyscall) - Syscall enviado correctamente",
 		"syscall", cod_op_syscall)
-}
-
-func (cpu *CPU) ActualizarContexto() {
-	utils.FormatearUrlYEnviar(cpu.Url_kernel, "/syscall", false, "%d %d", cpu.Proc_ejecutando.Pid, cpu.Proc_ejecutando.Pc)
-	log.Println("Se envio el contexto por interrupcion correctamente")
 }
