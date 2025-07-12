@@ -64,22 +64,22 @@ func (memo *Memo) EscribirProcesoEnSwap(pid int) error {
 	mutex_swap.Lock()
 	defer mutex_swap.Unlock()
 
-	// Buscar espacio libre en la lista de huecos
-	for i, espacio := range memo.swap.espacio_libre {
-		if espacio.tamanio >= tamanio {
-			inicioSwap = espacio.inicio
-			if espacio.tamanio > tamanio {
-				espacio.inicio += tamanio
-				espacio.tamanio -= tamanio
-			} else {
-				memo.swap.espacio_libre = append(memo.swap.espacio_libre[:i], memo.swap.espacio_libre[i+1:]...)
-			}
-			break
-		}
-	}
+	// // Buscar espacio libre en la lista de huecos
+	// for i, espacio := range memo.swap.espacio_libre {
+	// 	if espacio.tamanio >= tamanio {
+	// 		inicioSwap = espacio.inicio
+	// 		if espacio.tamanio > tamanio {
+	// 			espacio.inicio += tamanio
+	// 			espacio.tamanio -= tamanio
+	// 		} else {
+	// 			memo.swap.espacio_libre = append(memo.swap.espacio_libre[:i], memo.swap.espacio_libre[i+1:]...)
+	// 		}
+	// 		break
+	// 	}
+	// }
 
 	// No había espacio libre suficiente: expandimos
-	if inicioSwap == -1 {
+	if inicioSwap == -1 || memo.swap.ultimo_byte == 0 {
 		inicioSwap = memo.swap.ultimo_byte
 		memo.swap.ultimo_byte += tamanio
 	}

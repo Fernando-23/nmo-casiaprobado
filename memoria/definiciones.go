@@ -27,6 +27,12 @@ type Memo struct {
 	Procesos          map[int]*Proceso
 	Frames            []*Frame //sincronizacion
 	metricas          map[int][]int
+	//####################
+	//####################
+	// COSAS MEMORIA_V2
+	//####################
+	//####################
+	//aca llegaron recuerdos de vietnam
 }
 
 type Frame struct {

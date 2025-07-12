@@ -34,10 +34,10 @@ func main() {
 
 	swapfile, err := os.OpenFile(config.Path_swap, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
-		slog.Error("error - abriendo el archivo de swap", err)
+		slog.Error("error - abriendo el archivo de swap", "error", err)
 		return
 	}
-	defer swapfile.Close()
+	//defer swapfile.Close()
 
 	memo := &Memo{
 		memoria_sistema:   make(map[int][]string),

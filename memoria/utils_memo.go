@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -277,6 +278,24 @@ func (memo *Memo) buscarFrameLibre() int {
 }
 
 func (memo *Memo) indicesParaPagina(pagina int) []int {
+
+	// pagina 11 cant niveles 2 entadas poir nivel 4
+	/* i:= 1
+	indices[1] = (11/1) % 4 = 3
+	divisor = 4
+
+	i:= 0
+	indices[0] = (11/4) %4 = 2 % 4 = 2
+	divisor = 16
+
+	[]int{2,3}
+
+
+
+
+
+	*/
+
 	indices := make([]int, memo.Config.Cant_niveles)
 	divisor := 1
 	for i := memo.Config.Cant_niveles - 1; i >= 0; i-- {
@@ -492,7 +511,7 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 
 	pid, err1 := strconv.Atoi(aux[0])
 	nivelSolicitado, err2 := strconv.Atoi(aux[1])
-	entrada, err3 := strconv.Atoi(aux[2])
+	paginaLogica, err3 := strconv.Atoi(aux[2])
 
 	if err1 != nil || err2 != nil || err3 != nil {
 		slog.Error("Error - (buscarEnTablaAsociadoAProceso) - Argumentos inválidos")
@@ -519,11 +538,19 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 
 	// Navegar desde nivel 1 hasta nivelSolicitado - 1
 	for nivel := 1; nivel < nivelSolicitado; nivel++ {
-		if tablaActual.Entradas == nil || entrada >= len(tablaActual.Entradas) {
-			slog.Error("Error - (buscarEnTablaAsociadoAProceso) - Entrada invalida de Nivel", "nivel", nivel, "pid", pid)
+
+		entrada := (paginaLogica / int(math.Pow(float64(memo.Config.EntradasPorNivel), float64(memo.Config.Cant_niveles-nivel)))) % memo.Config.EntradasPorNivel
+
+		if entrada < 0 || entrada >= len(tablaActual.Entradas) {
+			slog.Error("Error - (buscarEnTablaAsociadoAProceso) - Entrada invalida de Nivel", "nivel", nivel, "entrada", entrada, "pid", pid)
 			http.Error(w, "Entrada invalida en nivel", http.StatusBadRequest)
 			return
 		}
+		slog.Debug("Debug - (buscarEnTablaAsociadoAProceso) - Entrada actual",
+			"nivel", nivel, "entrada", entrada,
+			"len(tablaActual.Entradas)", len(tablaActual.Entradas),
+			"entradaTabla es nil", tablaActual.Entradas[entrada] == nil)
+
 		entradaTabla := tablaActual.Entradas[entrada]
 		if entradaTabla == nil || entradaTabla.SiguienteNivel == nil {
 			slog.Error("Error - (buscarEnTablaAsociadoAProceso) - NO hay siguiente nivel", "nivel", nivel, "pid", pid)
@@ -531,6 +558,14 @@ func (memo *Memo) buscarEnTablaAsociadoAProceso(w http.ResponseWriter, r *http.R
 			return
 		}
 		tablaActual = entradaTabla.SiguienteNivel
+	}
+
+	entrada := (paginaLogica / int(math.Pow(float64(memo.Config.EntradasPorNivel), float64(memo.Config.Cant_niveles-nivelSolicitado)))) % memo.Config.EntradasPorNivel
+
+	if entrada < 0 || entrada >= len(tablaActual.Entradas) {
+		slog.Error("Error - (buscarEnTablaAsociadoAProceso) - Entrada invalida de Nivel", "nivel", nivelSolicitado, "entrada", entrada, "pid", pid)
+		http.Error(w, "Entrada invalida en nivel", http.StatusBadRequest)
+		return
 	}
 
 	// Si no es último nivel, decir que siga consultando

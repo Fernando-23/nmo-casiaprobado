@@ -286,6 +286,7 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 			return
 		}
 		utils.LoggerConFormato("## (%d) - DumpMemory finalizado correctamente", pid)
+		k.IntentarEnviarProcesoAExecute()
 	}(pid)
 
 }

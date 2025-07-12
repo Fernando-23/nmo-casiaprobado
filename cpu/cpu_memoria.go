@@ -14,6 +14,7 @@ import (
 func (cpu *CPU) RequestWRITE(direccion_logica int, datos string) (string, DireccionFisica) {
 
 	desplazamiento := int(direccion_logica) % int(tam_pag)
+
 	nro_pagina := math.Floor(float64(direccion_logica) / float64(tam_pag))
 
 	frame, contenido := cpu.BusquedaMemoriaFrame(int(nro_pagina), "WRITE") //el contenido es solo para cache pags activa
@@ -48,6 +49,7 @@ func (cpu *CPU) RequestWRITE(direccion_logica int, datos string) (string, Direcc
 func (cpu *CPU) RequestREAD(direccion_logica int, tamanio int) (string, DireccionFisica) {
 
 	desplazamiento := int(direccion_logica) % int(tam_pag)
+	//64 32 0
 	nro_pagina := math.Floor(float64(direccion_logica) / float64(tam_pag))
 
 	frame, contenido := cpu.BusquedaMemoriaFrame(int(nro_pagina), "READ") //el contenido es solo para cache pags activa
@@ -75,13 +77,15 @@ func (cpu *CPU) BusquedaFrameAMemoria(nro_pagina float64) int {
 
 	frame := -1
 
-	for nivel_actual := 1; nivel_actual <= int(cant_niveles); nivel_actual++ {
+	for nivel_actual := 1; nivel_actual <= cant_niveles; nivel_actual++ {
 		//Santi: Lo mas hardcodeado que vi
-		entrada_nivel_final := int(math.Floor(nro_pagina/math.Pow(float64(cant_entradas_tpag), float64((cant_niveles-nivel_actual))))) % int(cant_entradas_tpag)
+		entrada_nivel_X := int(math.Floor(nro_pagina/math.Pow(float64(cant_entradas_tpag), float64((cant_niveles-nivel_actual))))) % int(cant_entradas_tpag)
 
-		respuesta := cpu.BusquedaTabla(cpu.Proc_ejecutando.Pid, nivel_actual, entrada_nivel_final)
+		respuesta := cpu.BusquedaTabla(cpu.Proc_ejecutando.Pid, nivel_actual, entrada_nivel_X)
 		//    "SEGUI" Todo bien, sigo al sgte nivel
 		// != "SEGUI" Es un frame, lo devuelvo
+		slog.Debug("Debug - (BusquedaFrameAMemoria) - Respuesta de busqueda de tabla",
+			"nivel_actual", nivel_actual, "respuesta", respuesta)
 		if respuesta != "SEGUI" {
 			frame, _ := strconv.Atoi(respuesta)
 			utils.LoggerConFormato("PID : %d - OBTENER MARCO - Página: %d - Marco: %d", cpu.Proc_ejecutando.Pid, int(nro_pagina), frame)
@@ -205,7 +209,7 @@ func (cpu *CPU) CambiarEstadoMarco(nro_pagina int, frame int, entrada_tlb int) {
 }
 
 func (cpu *CPU) ChequearEspacioEnTLB() (bool, int) {
-	for i := 0; i <= cpu.Config_CPU.Cant_entradas_TLB; i++ {
+	for i := 0; i < cpu.Config_CPU.Cant_entradas_TLB; i++ {
 		if cpu.Tlb[i].pagina < 0 {
 			return true, i
 		}
