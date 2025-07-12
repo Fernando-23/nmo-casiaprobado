@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 	"strconv"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
@@ -87,6 +88,14 @@ func main() {
 	utils.LoggerConFormato("## (%d) Se crea el proceso - Estado: NEW", pid)
 
 	unElemento, estaEnReady := kernel.UnicoEnNewYNadaEnSuspReady()
+
+	go func{
+		for {
+			time.Sleep(5000)
+			kernel.IntentarEnviarProcesoAExecute()
+			
+		}
+	}
 
 	if !estaEnReady || !unElemento {
 		slog.Error("Condición inválida al iniciar planificación", "motivo", "primer proceso y no es único del sistema")
