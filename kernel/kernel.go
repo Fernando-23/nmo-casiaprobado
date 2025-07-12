@@ -89,13 +89,6 @@ func main() {
 
 	unElemento, estaEnReady := kernel.UnicoEnNewYNadaEnSuspReady()
 
-	go func() {
-		for {
-			time.Sleep(15 * time.Second)
-			kernel.IntentarEnviarProcesoAExecute()
-		}
-	}()
-
 
 	if !estaEnReady || !unElemento {
 		slog.Error("Condición inválida al iniciar planificación", "motivo", "primer proceso y no es único del sistema")
