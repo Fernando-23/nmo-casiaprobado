@@ -15,16 +15,18 @@ func main() {
 
 	args := os.Args
 
-	if len(os.Args) != 2 { // ruta archivo-pseudo tamanio
+	if len(os.Args) < 3 { // ruta archivo-pseudo tamanio
 		fmt.Println("Cantidad de argumentos incorrecta. Uso: ruta <archivo-pseudo> <tamanio>")
 		os.Exit(1)
 		return
 	}
 
 	nombre_io = args[1]
+	instancia := args[2]
+	ruta_config := fmt.Sprintf("io%s.json", instancia)
 	config_io = &ConfigIO{}
 
-	err := utils.IniciarConfiguracion("io.json", config_io)
+	err := utils.IniciarConfiguracion(ruta_config, config_io)
 
 	if err != nil {
 		fmt.Printf("Error al iniciar config, error: %e", err)

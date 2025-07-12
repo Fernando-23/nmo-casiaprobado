@@ -11,9 +11,18 @@ import (
 
 func main() {
 
-	config := new(ConfigMemo)
+	args := os.Args
 
-	if err := utils.IniciarConfiguracion("memoria.json", config); err != nil {
+	if len(args) < 2 {
+		fmt.Printf("falta el nombre pipi")
+		os.Exit(1)
+	}
+
+	instancia := args[1]
+	ruta_config := fmt.Sprintf("%s.json", instancia)
+
+	config := new(ConfigMemo)
+	if err := utils.IniciarConfiguracion(ruta_config, config); err != nil {
 		fmt.Println("Error cargando config memoria: ", err)
 		return
 	}
@@ -77,7 +86,7 @@ func main() {
 
 	url := fmt.Sprintf(":%d", memo.Config.Puerto_mem)
 
-	slog.Debug("Iniciando servidor")
+	slog.Info("Iniciando servidor")
 	go http.ListenAndServe(url, mux)
 
 	select {}

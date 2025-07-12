@@ -82,6 +82,7 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB, liberaMemoria bool) {
 
 	if liberaMemoria {
 		k.IntentarEnviarProcesosAReady()
+		k.IntentarEnviarProcesoAExecute()
 	}
 }
 

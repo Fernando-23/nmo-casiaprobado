@@ -20,7 +20,19 @@ func main() {
 		Configuracion:  new(ConfigKernel),
 		DispositivosIO: make(map[string]*InstanciasPorDispositivo),
 	}
-	err := IniciarConfiguracion("kernel.json", kernel.Configuracion)
+
+	if len(os.Args) < 4 { // ruta archivo-pseudo tamanio
+		slog.Error("[main] Cantidad de argumentos incorrecta. Uso: ruta <archivo-pseudo> <tamanio>")
+		os.Exit(1)
+	}
+	args := os.Args
+
+	archivoPseudo := args[1]
+	tamanio, _ := strconv.Atoi(args[2])
+	instancia := args[3]
+	ruta_config := fmt.Sprintf("%s.json", instancia)
+
+	err := IniciarConfiguracion(ruta_config, kernel.Configuracion)
 	url_memo = fmt.Sprintf("http://%s:%d/memoria", kernel.Configuracion.Ip_memoria, kernel.Configuracion.Puerto_Memoria)
 	kernel.InicializarMapaDeEstados()
 
@@ -34,15 +46,6 @@ func main() {
 		fmt.Println("[main] Error al configurar logger:", err)
 		os.Exit(1)
 	}
-
-	if len(os.Args) < 3 { // ruta archivo-pseudo tamanio
-		slog.Error("[main] Cantidad de argumentos incorrecta. Uso: ruta <archivo-pseudo> <tamanio>")
-		os.Exit(1)
-	}
-	args := os.Args
-
-	archivoPseudo := args[1]
-	tamanio, _ := strconv.Atoi(args[2])
 
 	slog.Debug("Parámetros iniciales", "archivo", archivoPseudo, "tamanio", tamanio)
 

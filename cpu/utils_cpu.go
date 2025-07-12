@@ -60,7 +60,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		tamanio, err2 := strconv.Atoi(operacion[1])
 
 		if err1 != nil || err2 != nil {
-			slog.Error("Error - (Execute) - Pansando a int la direnccion logica o tamanio")
+			slog.Error("Error - (Execute) - Pasando a int la direnccion logica o tamanio")
 			return
 		}
 

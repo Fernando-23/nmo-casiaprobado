@@ -15,15 +15,15 @@ import (
 func main() {
 	fmt.Println("Iniciando CPU...")
 
-	if len(os.Args) < 2 {
-		fmt.Println("Falta el identificador de la CPU como argumento")
+	if len(os.Args) < 3 {
+		fmt.Println("Faltan argumentos")
 		os.Exit(1)
 	}
 
 	// Preparacion incial
 	id_cpu := os.Args[1]
-
-	path_config_cpu := fmt.Sprintf("cpu%s.json", id_cpu)
+	instancia := os.Args[2]
+	path_config_cpu := fmt.Sprintf("%s.json", instancia)
 	noticiero_metereologico = time.Now()
 
 	cpu := crearCPU(id_cpu, path_config_cpu)
