@@ -16,7 +16,7 @@ import (
 )
 
 func CargarArchivoPseudocodigo(path string) ([]string, error) {
-	path_completo := "/home/utnso/pruebas/" + path
+	path_completo := "home/utnso/the-last-of-c-pruebas/" + path
 	//path_completo := "/home/liam/Data/Ftd/ISI/Proyectos/tp-2025-1c-Nombre-muy-original/pruebas/" + path
 
 	archivo, err := os.Open(path_completo)
