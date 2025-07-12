@@ -15,12 +15,6 @@ import (
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-// =================================================================================
-// =================================================================================
-// Hola soy liam, lo comentado es porque ya no se usa y me dio cosa borrarlo mirenlo
-// =================================================================================
-// =================================================================================
-
 func CargarArchivoPseudocodigo(path string) ([]string, error) {
 	path_completo := "/home/utnso/pruebas/" + path
 	//path_completo := "/home/liam/Data/Ftd/ISI/Proyectos/tp-2025-1c-Nombre-muy-original/pruebas/" + path
@@ -380,17 +374,14 @@ func (memo *Memo) ResponderHandshakeA(modulo string, w http.ResponseWriter) {
 func (memo *Memo) buscarFrameLibrePara(pid int, pageNum int) int {
 	for i, frame := range memo.Frames {
 		if !frame.Usado {
-			memo.Frames[i] = &Frame{
-				Usado:        true,
-				PidOcupante:  pid,
-				NumeroPagina: pageNum,
-			}
+			frame.Usado = true
+			frame.PidOcupante = pid
+			frame.NumeroPagina = pageNum
 			return i
 		}
 	}
 	return -1
 }
-
 func (memo *Memo) AsignarFramesAProceso(pid int) error {
 	mutex_framesDisponibles.Lock()
 	defer mutex_framesDisponibles.Unlock()

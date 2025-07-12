@@ -79,9 +79,9 @@ func (cpu *CPU) BusquedaFrameAMemoria(nro_pagina float64) int {
 
 	for nivel_actual := 1; nivel_actual <= cant_niveles; nivel_actual++ {
 		//Santi: Lo mas hardcodeado que vi
-		entrada_nivel_X := int(math.Floor(nro_pagina/math.Pow(float64(cant_entradas_tpag), float64((cant_niveles-nivel_actual))))) % int(cant_entradas_tpag)
+		//entrada_nivel_X := int(math.Floor(nro_pagina/math.Pow(float64(cant_entradas_tpag), float64((cant_niveles-nivel_actual))))) % int(cant_entradas_tpag)
 
-		respuesta := cpu.BusquedaTabla(cpu.Proc_ejecutando.Pid, nivel_actual, entrada_nivel_X)
+		respuesta := cpu.BusquedaTabla(cpu.Proc_ejecutando.Pid, nivel_actual, int(nro_pagina))
 		//    "SEGUI" Todo bien, sigo al sgte nivel
 		// != "SEGUI" Es un frame, lo devuelvo
 		slog.Debug("Debug - (BusquedaFrameAMemoria) - Respuesta de busqueda de tabla",
