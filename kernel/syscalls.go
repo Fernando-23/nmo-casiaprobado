@@ -142,6 +142,7 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 		k.liberarCPU(idCPU)
 		slog.Debug("Debug - (GestionarSyscall) - Se libero la cpu por Syscall IO",
 			"id_cpu", idCPU)
+
 		return false, nil // la CPU debe replanificar
 
 	case "INIT_PROC":
