@@ -215,9 +215,7 @@ func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
 		//==================== LOG OBLIGATORIO ====================
 		utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY_SUSPENDED", pid)
 		//=========================================================
-		if k.IntentarEnviarProcesoAReady(EstadoReadySuspended, pid) {
-			k.IntentarEnviarProcesoAExecute()
-		}
+		k.IntentarEnviarProcesoAReady(EstadoReadySuspended, pid)
 
 	} else {
 		slog.Error("Error - (liberarInstanciaIO) - Pid no estaba en BLOCK ni BLOCK_SUSP",

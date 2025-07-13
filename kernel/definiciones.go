@@ -78,6 +78,7 @@ var (
 	mutex_ProcesoPorEstado          [cantEstados]sync.Mutex
 	mutex_DispositivosIO            sync.Mutex
 	url_memo                        string
+	ch_aviso_cpu_libre              chan struct{}
 )
 
 // PROCESO MAS CHICO PRIMERO

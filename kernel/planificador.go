@@ -75,7 +75,7 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, bool) { //el primero es si 
 	return false, false
 }
 
-func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar int) bool {
+func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar int) {
 	slog.Debug("uh mal ahi huayo, habia procesos en new o el susp ready", "pid", pidQuiereEntrar)
 
 	mutex_peticionHayEspacioMemoria.Lock()
@@ -89,7 +89,7 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 		mutex_ProcesoPorEstado[EstadoNew].Unlock()
 		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
 		slog.Debug("Debug - (IntentarEnviarProcesoAReady) - proceso en NEW y hay procesos en SUSP-READY", "pid", pidQuiereEntrar)
-		return false
+		return
 	}
 
 	if !k.TieneProcesos(estadoOrigen) {
@@ -99,7 +99,7 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 			"estado", estados_proceso[estadoOrigen],
 			"pid", pidQuiereEntrar,
 		)
-		return false
+		return
 	}
 
 	if !k.hayQuePlanificarAccesoAReady(estadoOrigen, pidQuiereEntrar) {
@@ -110,7 +110,7 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 		)
 		mutex_ProcesoPorEstado[EstadoNew].Unlock()
 		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
-		return false
+		return
 	}
 
 	if k.Configuracion.Ready_ingress_algorithm == "PCMP" {
@@ -127,7 +127,7 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 		)
 		mutex_ProcesoPorEstado[EstadoNew].Unlock()
 		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
-		return false
+		return
 	}
 
 	// me clono los datos por las dudas no vaya ser que el puntero apunte a otro lado
@@ -143,9 +143,15 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 	entro, err := k.gestionarAccesoAReady(pid, tamanio, arch_pseudo, estadoOrigen)
 	if err != nil {
 		slog.Error("Error", "error", err)
-		return false
+		return
 	}
-	return entro
+
+	if entro {
+		k.IntentarEnviarProcesoAExecute()
+		return
+	}
+	slog.Debug("Debug - (IntentarEnviarProcesoAReady) - No paso a READY ",
+		"pid", pid, "estado_origen", estadoOrigen)
 }
 
 func (k *Kernel) IntentarEnviarProcesosAReady() {
@@ -173,6 +179,7 @@ func (k *Kernel) IntentarEnviarProcesosAReady() {
 			exito, err := k.gestionarAccesoAReady(pid, tamanio, arch_pseudo, estado)
 			if err != nil {
 				slog.Error("Error en gestionarAccesoAReady", "error", err)
+				return
 			}
 
 			if !exito {
@@ -258,7 +265,7 @@ func (k *Kernel) gestionarAccesoAReady(pid int, tamanio int, arch_pseudo string,
 		return true, nil
 	}
 
-	slog.Debug("No hay espacio en memoria para mover el proceso a READY",
+	slog.Debug("Debug - (gestionarAccesoAReady) - No hay espacio en memoria para mover el proceso a READY",
 		"pid", pid,
 		"estado_origen", estados_proceso[estadoOrigen],
 	)
@@ -269,7 +276,7 @@ func (k *Kernel) gestionarAccesoAReady(pid int, tamanio int, arch_pseudo string,
 func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	mutex_ProcesoPorEstado[EstadoReady].Lock()
 	if !k.TieneProcesos(EstadoReady) {
-		slog.Debug("(IntentarEnviarProcesoAExecute) No hay procesos en READY")
+		slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay procesos en READY")
 		mutex_ProcesoPorEstado[EstadoReady].Unlock()
 		return
 	}
@@ -287,7 +294,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 		}
 	}
 	if pcb == nil {
-		slog.Debug("(IntentarEnviarProcesoAExecute) No hay procesos disponibles en READY todos reservados")
+		slog.Debug("Debug - (IntentarEnviarProcesoAExecute) No hay procesos disponibles en READY todos reservados")
 		mutex_ProcesoPorEstado[EstadoReady].Unlock()
 		return
 	}
@@ -305,14 +312,14 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 
 	if cpu_seleccionada == nil { //no hay cpu libre
 		if hay_que_chequear_desalojo {
-			slog.Debug("No hay CPU libre, intentando desalojo por SRT", "pid", pid)
+			slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay CPU libre, intentando desalojo por SRT", "pid", pid)
 			if !k.IntentarDesalojoSRT(pid) {
-				slog.Debug("(IntentarEnviarProcesoAExecute) - No hay que desalojar", "pid", pid)
+				slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay que desalojar", "pid", pid)
 				MarcarProcesoReservado(pcb, "NO")
 			}
 
 		} else {
-			slog.Debug("No hay CPU libre y no se requiere desalojo", "pid", pid)
+			slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay CPU libre y no se requiere desalojo", "pid", pid)
 			MarcarProcesoReservado(pcb, "NO")
 		}
 
@@ -336,7 +343,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	procVerificadoAExecute := k.QuitarYObtenerPCB(EstadoReady, pid, false)
 
 	if procVerificadoAExecute == nil {
-		slog.Error("Error - (IntentarEnviarProcesoAExecute) - El proceso no esta en la lista Ready", "pid", pid)
+		slog.Warn("Cuidadito - (IntentarEnviarProcesoAExecute) - El proceso no esta en la lista Ready", "pid", pid)
 
 		return
 	}
@@ -346,7 +353,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 
 	MarcarProcesoReservado(procVerificadoAExecute, "NO")
 
-	slog.Debug("Proceso enviado a EXECUTE", "pid", pid, "cpu_id", idCPU)
+	slog.Debug("Debug - (IntentarEnviarProcesoAExecute)- Proceso enviado a EXECUTE", "pid", pid, "cpu_id", idCPU)
 
 }
 

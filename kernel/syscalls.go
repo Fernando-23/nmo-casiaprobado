@@ -21,6 +21,7 @@ func (k *Kernel) liberarCPU(idCPU int) {
 		return
 	}
 	actualizarCPU(cpu, -1, 0, true)
+	ch_aviso_cpu_libre <- struct{}{}
 }
 
 func (k *Kernel) ActualizarPC(idCPU int, pc int) {
@@ -250,14 +251,10 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int) {
 	unElemento, _ := k.UnicoEnNewYNadaEnSuspReady()
 
 	if !unElemento {
-		if !k.IntentarEnviarProcesoAReady(EstadoNew, pid) {
-			slog.Error("No se pudo enviar el proceso a ready", "pid", pid)
-			return
-		}
+		k.IntentarEnviarProcesoAReady(EstadoNew, pid)
 	}
 
-	k.IntentarEnviarProcesosAReady()
-	k.IntentarEnviarProcesoAExecute()
+	// k.IntentarEnviarProcesosAReady()
 	// cpu_ejecutando.Pc = pc //Actualizar pc para cpu
 }
 

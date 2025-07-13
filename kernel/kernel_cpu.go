@@ -70,11 +70,12 @@ func (k *Kernel) registrarNuevaCPU(mensajeCPU string) bool {
 
 func crearCPU(id int, url string) *CPU {
 	nueva_cpu := &CPU{
-		ID:         id,
-		Url:        url,
-		Pid:        -1,
-		Pc:         0,
-		Esta_libre: true,
+		ID:            id,
+		Url:           url,
+		Pid:           -1,
+		Pc:            0,
+		ADesalojarPor: -1,
+		Esta_libre:    true,
 	}
 	return nueva_cpu
 
@@ -112,6 +113,7 @@ func actualizarCPU(cpu *CPU, pid int, pc int, liberar bool) {
 func RegistrarCPUaLibre(cpu_a_liberar *CPU) {
 	cpu_a_liberar.Esta_libre = true
 	cpu_a_liberar.Pid = -1
+
 }
 
 func handleDispatch(pid int, pc int, url string) {
@@ -125,3 +127,25 @@ func handleDispatch(pid int, pc int, url string) {
 func reservarCPU(cpu *CPU, pid int) {
 	cpu.ADesalojarPor = pid
 }
+
+// func (k *Kernel) LlegaAvisoCPULibre(w http.ResponseWriter, r *http.Request) { // Handshake
+
+// 	body_Bytes, err := io.ReadAll(r.Body)
+// 	if err != nil {
+// 		slog.Error("Error - (LlegaNuevaCPU) - Leyendo la solicitud", "error", err)
+// 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
+// 		return
+// 	}
+// 	defer r.Body.Close()
+
+// 	mensajeCPU := string(body_Bytes)
+
+// 	slog.Debug("Llegó nueva cpu", "mensaje", mensajeCPU)
+
+// 	if !k.registrarNuevaCPU(mensajeCPU) {
+// 		http.Error(w, "No se pudo registar la CPU", http.StatusBadRequest)
+// 		return
+// 	}
+// 	w.WriteHeader(http.StatusOK)
+// 	w.Write([]byte(RESPUESTA_OK))
+// }

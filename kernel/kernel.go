@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"time"
 	"strconv"
+	"time"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 	servidor "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Servidor"
@@ -73,6 +73,7 @@ func main() {
 	slog.Info("Estado inicial del planificador largo plazo", "estado", "STOP")
 
 	waitEnter := make(chan struct{}, 1)
+	ch_aviso_cpu_libre = make(chan struct{})
 
 	// Lanzamos la rutina que espera el ENTER
 	go esperarEnter(waitEnter)
@@ -89,13 +90,26 @@ func main() {
 
 	unElemento, estaEnReady := kernel.UnicoEnNewYNadaEnSuspReady()
 
-
 	if !estaEnReady || !unElemento {
 		slog.Error("Condición inválida al iniciar planificación", "motivo", "primer proceso y no es único del sistema")
 		return
 	}
 
 	kernel.IntentarEnviarProcesoAExecute()
+
+	go func() {
+		for {
+			<-ch_aviso_cpu_libre
+			kernel.IntentarEnviarProcesoAExecute()
+		}
+	}()
+
+	go func() {
+		for {
+			time.Sleep(15 * time.Second)
+			kernel.IntentarEnviarProcesoAExecute()
+		}
+	}()
 
 	select {}
 }
