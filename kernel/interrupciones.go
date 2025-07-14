@@ -121,7 +121,7 @@ func (k *Kernel) CambiosEnElPlantel(cpuPosicion *CPU, procesoTitular *PCB, proce
 		return false
 	}
 
-	MarcarProcesoReservado(procVerificadoAExecute, "NO")
+	ReservarSRT(procVerificadoAExecute, "NO")
 
 	k.AgregarAEstado(EstadoExecute, procVerificadoAExecute, false)
 

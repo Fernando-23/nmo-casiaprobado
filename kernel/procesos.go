@@ -86,7 +86,7 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB, liberaMemoria bool) {
 	}
 }
 
-func MarcarProcesoReservado(pcb *PCB, reservado string) {
+func ReservarSRT(pcb *PCB, reservado string) {
 	pcb.Reservado = reservado
 }
 func EstaReservado(pcb *PCB) bool {

@@ -99,15 +99,18 @@ func main() {
 
 	go func() {
 		for {
-			<-ch_aviso_cpu_libre
-			kernel.IntentarEnviarProcesoAExecute()
+			fmt.Println("imprimiendoestados")
+			time.Sleep(5 * time.Second)
+			kernel.ImprimirPCBsDeEstado(EstadoNew)
+			kernel.ImprimirPCBsDeEstado(EstadoReady)
+			kernel.ImprimirPCBsDeEstado(EstadoBlock)
+			//kernel.IntentarEnviarProcesoAExecute()
 		}
 	}()
-
 	go func() {
 		for {
-			time.Sleep(15 * time.Second)
-			//kernel.IntentarEnviarProcesoAExecute()
+			<-ch_aviso_cpu_libre
+			kernel.IntentarEnviarProcesoAExecute()
 		}
 	}()
 

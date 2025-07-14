@@ -127,25 +127,3 @@ func handleDispatch(pid int, pc int, url string) {
 func reservarCPU(cpu *CPU, pid int) {
 	cpu.ADesalojarPor = pid
 }
-
-// func (k *Kernel) LlegaAvisoCPULibre(w http.ResponseWriter, r *http.Request) { // Handshake
-
-// 	body_Bytes, err := io.ReadAll(r.Body)
-// 	if err != nil {
-// 		slog.Error("Error - (LlegaNuevaCPU) - Leyendo la solicitud", "error", err)
-// 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
-// 		return
-// 	}
-// 	defer r.Body.Close()
-
-// 	mensajeCPU := string(body_Bytes)
-
-// 	slog.Debug("Llegó nueva cpu", "mensaje", mensajeCPU)
-
-// 	if !k.registrarNuevaCPU(mensajeCPU) {
-// 		http.Error(w, "No se pudo registar la CPU", http.StatusBadRequest)
-// 		return
-// 	}
-// 	w.WriteHeader(http.StatusOK)
-// 	w.Write([]byte(RESPUESTA_OK))
-// }

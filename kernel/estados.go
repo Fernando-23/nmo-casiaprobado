@@ -21,16 +21,18 @@ func (k *Kernel) ImprimirPCBsDeEstado(estado int) {
 	mutex_ProcesoPorEstado[estado].Lock()
 	defer mutex_ProcesoPorEstado[estado].Unlock()
 
+	slog.Warn("Cuidadito - (ImprimirPCBsDeEstado) -Aca imprimire muchas cosas raras")
+
 	listaPCB, ok := k.ProcesoPorEstado[estado]
 
 	if !ok || len(listaPCB) == 0 {
-		slog.Debug("No hay procesos en estado", "estado", estados_proceso[estado])
+		slog.Warn("Cuidadito - (ImprimirPCBsDeEstado) - No hay procesos en estado", "estado", estados_proceso[estado])
 		return
 	}
 
 	for _, pcb := range listaPCB {
 		if pcb != nil {
-			slog.Debug("PCB",
+			slog.Warn("PCB",
 				"pid", pcb.Pid,
 				"estado", estados_proceso[estado],
 				"pc", pcb.Pc)
