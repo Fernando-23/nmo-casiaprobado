@@ -63,6 +63,7 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, bool) { //el primero es si 
 		}
 
 		if entro {
+			k.IntentarEnviarProcesoAExecute()
 			return true, true
 		}
 		return true, false

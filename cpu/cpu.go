@@ -103,7 +103,6 @@ func main() {
 
 		}
 		slog.Debug("Debug - (CicloInstruccion) - Se va a cambiar el contexto")
-		// cpu.EstoyLibre()
 		cpu.LiberarCaches()
 		HabilitarInterrupt(false)
 

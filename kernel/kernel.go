@@ -95,7 +95,7 @@ func main() {
 		return
 	}
 
-	kernel.IntentarEnviarProcesoAExecute()
+	//kernel.IntentarEnviarProcesoAExecute()
 
 	go func() {
 		for {
@@ -107,7 +107,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(15 * time.Second)
-			kernel.IntentarEnviarProcesoAExecute()
+			//kernel.IntentarEnviarProcesoAExecute()
 		}
 	}()
 
