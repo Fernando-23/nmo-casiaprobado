@@ -105,7 +105,7 @@ func main() {
 		slog.Debug("Debug - (CicloInstruccion) - Se va a cambiar el contexto")
 		cpu.LiberarCaches()
 		HabilitarInterrupt(false)
-
+		// check
 		utils.LoggerConFormato("## PID: %d - Finaliza la ejecucion", cpu.Proc_ejecutando.Pid)
 	}
 }

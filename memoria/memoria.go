@@ -40,7 +40,7 @@ func main() {
 			NumeroPagina: -1,
 		}
 	}
-
+	//check
 	swapfile, err := os.OpenFile(config.Path_swap, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		slog.Error("error - abriendo el archivo de swap", "error", err)
