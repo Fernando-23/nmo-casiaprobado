@@ -81,6 +81,7 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB, liberaMemoria bool) {
 	}
 
 	if liberaMemoria {
+		slog.Debug("Debug - (EliminarProceso) - Libere memoria, voy a proceder a hacer mis cositas")
 		k.IntentarEnviarProcesosAReady()
 		k.IntentarEnviarProcesoAExecute()
 	}
@@ -89,16 +90,17 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB, liberaMemoria bool) {
 func ReservarSRT(pcb *PCB, reservado string) {
 	pcb.Reservado = reservado
 }
+
 func EstaReservado(pcb *PCB) bool {
 	return pcb.Reservado != "NO"
 }
 
 func (k *Kernel) esProcesoMasChico(pid int, estadoOrigen int) bool {
-	procQuiereDestronar := k.BuscarPorPidSinLock(estadoOrigen, pid)
+	procQuiereDetonar := k.BuscarPorPidSinLock(estadoOrigen, pid)
 	procMasChico := k.PrimerElementoSinSacar(estadoOrigen)
 
 	//Si es mas chico
-	if procQuiereDestronar.Tamanio < procMasChico.Tamanio {
+	if procQuiereDetonar.Tamanio < procMasChico.Tamanio {
 		return true
 	}
 	return false

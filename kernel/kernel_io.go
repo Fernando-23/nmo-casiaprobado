@@ -175,6 +175,18 @@ func (k *Kernel) registrarNuevaIO(nombre, ip, puerto string) { // Handshake
 	}
 
 	//////// Intentar enviar proceso a io si hay esperando y se presiono el ENTER //////
+	//hecha, copiada y pegada
+	if len(k.DispositivosIO[nombre].ColaEspera) != 0 {
+		//desencolar el 1ro
+		proceso_sgte := k.DispositivosIO[nombre].ColaEspera[0]
+		k.DispositivosIO[nombre].ColaEspera = k.DispositivosIO[nombre].ColaEspera[1:]
+
+		nuevaInstancia.Actualizar(proceso_sgte.Pid, false)
+
+		// mandarlo a io
+
+		enviarProcesoAIO(nuevaInstancia, proceso_sgte.TiempoIO)
+	}
 }
 
 func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {
@@ -206,12 +218,18 @@ func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {
 
 func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
 	if k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, true) {
+		slog.Debug("Debug - (liberarInstanciaIO) - Pude mover de BLOCK a READY",
+			"pid", pid)
+
 		//==================== LOG OBLIGATORIO ====================
 		utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY", pid)
 		//=========================================================
 		k.IntentarEnviarProcesoAExecute()
 
 	} else if k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid, true) {
+		slog.Debug("Debug - (liberarInstanciaIO) - Pude mover de BLOCK_SUSP a READY_SUSPENDED",
+			"pid", pid)
+
 		//==================== LOG OBLIGATORIO ====================
 		utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY_SUSPENDED", pid)
 		//=========================================================
@@ -221,7 +239,6 @@ func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
 		slog.Error("Error - (liberarInstanciaIO) - Pid no estaba en BLOCK ni BLOCK_SUSP",
 			"pid_io", pid)
 		return
-
 	}
 
 	if err := k.ActualizarIO(nombre, pid); err != nil {
@@ -253,6 +270,7 @@ func (k *Kernel) ActualizarIO(nombreIO string, pid int) error {
 	if ioUsada == nil {
 		return fmt.Errorf("no se encontró instancia con pid %d", pid)
 	}
+
 	ioUsada.Actualizar(-1, true)
 
 	if len(ios.ColaEspera) != 0 {

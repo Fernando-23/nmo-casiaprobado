@@ -11,19 +11,6 @@ import (
 	utils "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-func (k *Kernel) liberarCPU(idCPU int) {
-	mutex_CPUsConectadas.Lock()
-	defer mutex_CPUsConectadas.Unlock()
-
-	cpu, ok := k.CPUsConectadas[idCPU]
-	if !ok {
-		slog.Error("No se encontró CPU al liberar", "idCPU", idCPU)
-		return
-	}
-	actualizarCPU(cpu, -1, 0, true)
-	ch_aviso_cpu_libre <- struct{}{}
-}
-
 func (k *Kernel) ActualizarPC(idCPU int, pc int) {
 	cpu, ok := k.CPUsConectadas[idCPU]
 	if !ok {
@@ -34,6 +21,8 @@ func (k *Kernel) ActualizarPC(idCPU int, pc int) {
 	cpu.Pc = pc
 
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
+	defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+
 	procesoEjecutando := k.BuscarPorPidSinLock(EstadoExecute, cpu.Pid)
 
 	if procesoEjecutando == nil {
@@ -41,13 +30,10 @@ func (k *Kernel) ActualizarPC(idCPU int, pc int) {
 			"idCPU", idCPU,
 			"pid", cpu.Pid,
 		)
-		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
-
 		return
 	}
-	procesoEjecutando.Pc = pc
 
-	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+	procesoEjecutando.Pc = pc
 
 	slog.Debug("PC actualizado",
 		"id_cpu", idCPU,
@@ -64,6 +50,7 @@ func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
 		return
 	}
+
 	defer r.Body.Close()
 
 	mensaje := string(body_Bytes)
@@ -141,6 +128,7 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 		}
 		k.GestionarIO(nombre, pid, tiempo, idCPU)
 		k.liberarCPU(idCPU)
+
 		slog.Debug("Debug - (GestionarSyscall) - Se libero la cpu por Syscall IO",
 			"id_cpu", idCPU)
 
@@ -248,14 +236,12 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int) {
 	k.AgregarAEstado(EstadoNew, nuevo_pcb, true)
 	utils.LoggerConFormato(" (%d) Se crea el proceso - Estado: NEW", pid)
 
-	unElemento, _ := k.UnicoEnNewYNadaEnSuspReady()
+	unElemento, _ := k.UnicoEnNewYNadaEnSuspReady() //intenta con esta funcion (le da un cachetazo, lo tantea haber si puede entrar)
 
-	if !unElemento {
+	if !unElemento { //sino, intenta con esta funcion kjahsdkjashd
 		k.IntentarEnviarProcesoAReady(EstadoNew, pid)
 	}
 
-	// k.IntentarEnviarProcesosAReady()
-	// cpu_ejecutando.Pc = pc //Actualizar pc para cpu
 }
 
 func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
@@ -276,6 +262,7 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 
 		if !EnviarMemoryDump(pid) {
 			k.GestionarEXIT(pid, idCpu)
+			return
 		}
 
 		if !k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, true) {
@@ -283,6 +270,7 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 				"pid", pid)
 			return
 		}
+
 		utils.LoggerConFormato("## (%d) - DumpMemory finalizado correctamente", pid)
 		k.IntentarEnviarProcesoAExecute()
 	}(pid)
@@ -300,5 +288,8 @@ func (k *Kernel) GestionarEXIT(pid int, idCPU int) {
 		return
 	}
 	//envio solicitud para eliminar proceso
+	//y hace un par de cosas
+	//intenta enviarAReady y tmb a Execute
+	//por el flag en true
 	go k.EliminarProceso(pcb, true)
 }

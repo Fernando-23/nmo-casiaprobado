@@ -249,7 +249,7 @@ func (cpu *CPU) AplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int,
 
 	switch algoritmo {
 	case "CLOCK":
-		for i := range cant_entradas_cache {
+		for i := 0; i < cant_entradas_cache; i++ {
 			if cpu.Cache_pags[i].bit_uso == 0 {
 				cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
 				return

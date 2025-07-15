@@ -99,12 +99,12 @@ func main() {
 
 	go func() {
 		for {
-			fmt.Println("imprimiendoestados")
-			time.Sleep(5 * time.Second)
+			// 		//fmt.Println("imprimiendoestados")
+			time.Sleep(10 * time.Second)
 			kernel.ImprimirPCBsDeEstado(EstadoNew)
 			kernel.ImprimirPCBsDeEstado(EstadoReady)
 			kernel.ImprimirPCBsDeEstado(EstadoBlock)
-			//kernel.IntentarEnviarProcesoAExecute()
+			kernel.IntentarEnviarProcesoAExecute()
 		}
 	}()
 	go func() {

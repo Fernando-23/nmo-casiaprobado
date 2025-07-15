@@ -13,7 +13,7 @@ func (k *Kernel) HandshakeMemoria() error {
 		return fmt.Errorf("memoria no responde: %w", err)
 	}
 
-	if respuesta != "OK" {
+	if respuesta != RESPUESTA_OK {
 		return fmt.Errorf("respuesta inesperada de memoria: %s", respuesta)
 	}
 
@@ -88,7 +88,7 @@ func EnviarDesuspension(pid int) (bool, error) {
 		return false, err
 	}
 
-	if resp != "OK" {
+	if resp != RESPUESTA_OK {
 		slog.Warn("Advertencia - (EnviarDesuspension) - Respuesta inesperada", "pid", pid, "respuesta", resp)
 		return false, nil
 	}
@@ -105,8 +105,8 @@ func (k *Kernel) MemoHayEspacio(pid int, tamanio int, archivoPseudo string) (boo
 		return false, err
 	}
 
-	if resp != "OK" {
-		slog.Warn("Advertencia - (MemoHayEspacio) - Respuesta inesperada", "pid", pid, "respuesta", resp)
+	if resp != RESPUESTA_OK {
+		slog.Warn("Cuidadito - (MemoHayEspacio) - Respuesta inesperada", "pid", pid, "respuesta", resp)
 		return false, nil
 	}
 

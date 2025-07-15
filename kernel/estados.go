@@ -21,7 +21,7 @@ func (k *Kernel) ImprimirPCBsDeEstado(estado int) {
 	mutex_ProcesoPorEstado[estado].Lock()
 	defer mutex_ProcesoPorEstado[estado].Unlock()
 
-	slog.Warn("Cuidadito - (ImprimirPCBsDeEstado) -Aca imprimire muchas cosas raras")
+	slog.Warn("Cuidadito - (ImprimirPCBsDeEstado) - Aca imprimire muchas cosas raras")
 
 	listaPCB, ok := k.ProcesoPorEstado[estado]
 
@@ -60,18 +60,20 @@ func (k *Kernel) QuitarYObtenerPCB(estado int, pid int, hacerSincro bool) *PCB {
 
 	}
 
-	procesos := k.ProcesoPorEstado[estado]
-	for i, pcb := range procesos {
+	lista_procesos_en_estado := k.ProcesoPorEstado[estado] // esto es la lista del estado correspondiente
+	for i, pcb := range lista_procesos_en_estado {
+
 		if pcb.Pid == pid {
 
 			// Actualizamos la metrica de tiempo de dicho estado
 			actualizarMetricasTiempo(pcb, estado)
 
 			// Sacar el proceso de la lista del estado
-			k.ProcesoPorEstado[estado] = slices.Delete(procesos, i, i+1)
+			k.ProcesoPorEstado[estado] = slices.Delete(lista_procesos_en_estado, i, i+1)
 			return pcb
 		}
 	}
+
 	return nil //no se encontro
 }
 
@@ -110,7 +112,7 @@ func (k *Kernel) PrimerElementoSinSacar(estado int) *PCB {
 
 }
 
-func (k *Kernel) ElementoNSinSacar(estado int, n int) *PCB {
+func (k *Kernel) ElementoNSinSacar(estado int, n int) *PCB { // devuelve el pcb enesimo
 
 	pcbs := k.ProcesoPorEstado[estado]
 
@@ -149,6 +151,7 @@ func duracionEnEstado(pPcb *PCB) time.Duration {
 
 func actualizarMetricasEstado(pPcb *PCB, posEstado int) {
 	pPcb.Me[posEstado]++ //ver si puede quedar mas lindo
+	//---------------------update, quedo mas lindo
 
 }
 

@@ -41,7 +41,7 @@ type SJF struct {
 type CPU struct {
 	ID            int
 	Url           string
-	Pid           int
+	Pid           int // Es -1 si no hay nadie
 	Pc            int
 	ADesalojarPor int
 	Esta_libre    bool

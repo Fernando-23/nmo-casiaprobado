@@ -124,6 +124,22 @@ func handleDispatch(pid int, pc int, url string) {
 	utils.EnviarStringSinEsperar("POST", fullURL, datos)
 }
 
+// potente a desalojar por papa noel
 func reservarCPU(cpu *CPU, pid int) {
 	cpu.ADesalojarPor = pid
+}
+
+func (k *Kernel) liberarCPU(idCPU int) {
+	mutex_CPUsConectadas.Lock()
+	defer mutex_CPUsConectadas.Unlock()
+
+	cpu, ok := k.CPUsConectadas[idCPU]
+
+	if !ok {
+		slog.Error("No se encontró CPU al liberar", "idCPU", idCPU)
+		return
+	}
+
+	actualizarCPU(cpu, -1, 0, true)
+	ch_aviso_cpu_libre <- struct{}{}
 }
