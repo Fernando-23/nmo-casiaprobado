@@ -46,13 +46,13 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		}
 		datos := operacion[1]
 
-		respuesta, dir_fisica := cpu.RequestWRITE(dir_logica, datos)
+		_, dir_fisica := cpu.RequestWRITE(dir_logica, datos)
 
 		utils.LoggerConFormato("PID: %d - Acción: ESCRITURA - Dirección Física: [ %d |  %d  ] - Valor: %s",
 			cpu.Proc_ejecutando.Pid,
 			dir_fisica.frame,
 			dir_fisica.offset,
-			respuesta,
+			datos,
 		)
 
 	case "READ":
@@ -202,6 +202,8 @@ func (cpu *CPU) LiberarCachePags() {
 		}
 		cpu.Cache_pags[i].pagina = -1
 		cpu.Cache_pags[i].contenido = ""
+		cpu.Cache_pags[i].bit_modificado = 0
+		cpu.Cache_pags[i].bit_uso = 0
 	}
 
 }

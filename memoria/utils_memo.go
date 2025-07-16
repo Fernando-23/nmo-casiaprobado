@@ -896,3 +896,76 @@ func (memo *Memo) FinalizarProceso(w http.ResponseWriter, r *http.Request) {
 func (memo *Memo) IncrementarMetrica(pid int, cod_metrica int) {
 	memo.metricas[pid][cod_metrica]++
 }
+
+func (memo *Memo) ActualizarEntradaCache(w http.ResponseWriter, r *http.Request) {
+
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (ActualizarEntradaCache) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	mensaje := string(body_Bytes)
+
+	slog.Debug("Debug - (ActualizarEntradaCache) -Llego peticion escribir en memoria", "mensaje", mensaje)
+
+	aux := strings.Split(mensaje, " ")
+
+	if len(aux) < 3 {
+		http.Error(w, "Faltan argumentos (pid frame offset datos)", http.StatusBadRequest)
+		return
+	}
+
+	pid, err1 := strconv.Atoi(aux[0])
+	frameIdx, err2 := strconv.Atoi(aux[1])
+	datosStr := aux[2] // El resto es el dato a escribir
+
+	if err1 != nil || err2 != nil {
+		slog.Error("Error - (ActualizarEntradaCache) - Conversiones a int")
+		return
+	}
+
+	datos := []byte(datosStr)
+
+	mutex_framesDisponibles.Lock()
+	defer mutex_framesDisponibles.Unlock()
+
+	if frameIdx < 0 || frameIdx >= len(memo.Frames) {
+		http.Error(w, "Frame fuera de rango", http.StatusBadRequest)
+		return
+	}
+
+	frame := memo.Frames[frameIdx]
+
+	if !frame.Usado || frame.PidOcupante != pid {
+		http.Error(w, "Frame no asignado a ese proceso", http.StatusForbidden)
+		return
+	}
+
+	tamPag := memo.Config.Tamanio_pag
+
+	direccionFisica := frameIdx * tamPag
+
+	mutex_memoriaPrincipal.Lock()
+	defer mutex_memoriaPrincipal.Unlock()
+
+	// if direccionFisica+tamanioEscritura > len(memo.memoria_principal) {
+	// 	http.Error(w, "Escritura fuera del rango de memoria fisica", http.StatusBadRequest)
+	// 	return
+	// }
+
+	// Copiar datos a memoria física
+	copy(memo.memoria_principal[direccionFisica:direccionFisica+tamPag], datos)
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+
+	mutex_metricas.Lock()
+	memo.IncrementarMetrica(pid, Cant_write)
+	mutex_metricas.Unlock()
+
+	utils.LoggerConFormato("## PID: %d - Escritura - Dir. Fisica: [ %d |  0  ] - Tamaño: %d ", pid, frameIdx, tamPag)
+
+}
