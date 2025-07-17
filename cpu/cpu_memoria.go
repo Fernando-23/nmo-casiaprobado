@@ -66,8 +66,11 @@ func (cpu *CPU) RequestREAD(direccion_logica int, tamanio int) (string, Direccio
 	dir_fisica := cpu.MMU(frame, desplazamiento)
 
 	// Encuentro en cache pags
-	if contenido != "NO_ENCONTRE" {
+	if contenido != "NO_ENCONTRE" && cache_pags_activa {
 		utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", cpu.Proc_ejecutando.Pid, int(nro_pagina), frame)
+		if cpu.ActualizarBitUsoPorNroPag(int(nro_pagina)) != nil {
+			slog.Error("Error - (ActualizarBitUsoPorNroPag) - Despues de ejecutar esta func en RequestREAD, no encontre la entrada por alguna razon que no se")
+		}
 		return contenido, dir_fisica
 	}
 
@@ -78,7 +81,8 @@ func (cpu *CPU) RequestREAD(direccion_logica int, tamanio int) (string, Direccio
 	}
 
 	utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", cpu.Proc_ejecutando.Pid, int(nro_pagina), frame)
-	log.Printf("Se esta intentando leer en la direccion fisica [ %d | %d ]", dir_fisica.frame, dir_fisica.offset)
+	slog.Debug("Debug - (RequestREAD) - Se esta intentando leer en la direccion fisica ", "frame", dir_fisica.frame,
+		"offset", dir_fisica.offset)
 
 	return respuesta, dir_fisica
 }
@@ -117,7 +121,7 @@ func (cpu *CPU) BuscarEnTLB(nro_pagina int) int {
 		if cpu.Tlb[i].pagina == nro_pagina {
 			// Caso TLB HIT
 			utils.LoggerConFormato("PID: %d - TLB HIT - Pagina: %d", cpu.Proc_ejecutando.Pid, nro_pagina)
-			if tlb_activa {
+			if cpu.Config_CPU.Alg_repl_TLB == "LRU" {
 				cpu.Tlb[i].last_recently_used = time.Now()
 			}
 
@@ -134,7 +138,7 @@ func (cpu *CPU) BuscarEnTLB(nro_pagina int) int {
 		return frame
 	}
 
-	cpu.AplicarAlgoritmoTLB()
+	cpu.AplicarAlgoritmoTLB(nro_pagina, frame)
 	return frame
 }
 
@@ -168,7 +172,7 @@ func (cpu *CPU) BuscarEnCachePags(nro_pagina int) (int, string) {
 
 }
 
-func (cpu *CPU) AplicarAlgoritmoTLB() error {
+func (cpu *CPU) AplicarAlgoritmoTLB(pagina_nueva, frame_nuevo int) error {
 	alg_reemplazo := cpu.Config_CPU.Alg_repl_TLB
 	switch alg_reemplazo {
 	case "FIFO":
@@ -185,7 +189,7 @@ func (cpu *CPU) AplicarAlgoritmoTLB() error {
 			}
 		}
 
-		cpu.CambiarEstadoMarco(aux.pagina, aux.frame, aux_entrada)
+		cpu.CambiarEstadoMarco(pagina_nueva, frame_nuevo, aux_entrada)
 
 		aux.tiempo_vida = time.Now()
 		return nil
@@ -204,7 +208,7 @@ func (cpu *CPU) AplicarAlgoritmoTLB() error {
 			}
 		}
 
-		cpu.CambiarEstadoMarco(aux.pagina, aux.frame, aux_entrada)
+		cpu.CambiarEstadoMarco(pagina_nueva, frame_nuevo, aux_entrada)
 		aux.last_recently_used = time.Now()
 
 		return nil
@@ -216,7 +220,7 @@ func (cpu *CPU) AplicarAlgoritmoTLB() error {
 func (cpu *CPU) CambiarEstadoMarco(nro_pagina int, frame int, entrada_tlb int) {
 	cpu.Tlb[entrada_tlb].pagina = nro_pagina
 	cpu.Tlb[entrada_tlb].frame = frame
-	utils.LoggerConFormato("Se realizo un cambio de marco en la TLB correctamente")
+	slog.Debug("Debug - (CambiarEstadoMarco) - Se realizo un cambio de marco en la TLB correctamente")
 }
 
 func (cpu *CPU) ChequearEspacioEnTLB() (bool, int) {
@@ -241,13 +245,13 @@ func (cpu *CPU) BusquedaMemoriaFrame(nro_pagina int) (int, string) {
 
 	if tlb_activa {
 		frame := cpu.BuscarEnTLB(nro_pagina)
-		return frame, ""
+		return frame, "NO_ENCONTRE"
 
 	}
 
 	frame := cpu.BusquedaFrameAMemoria(float64(nro_pagina))
 
-	return frame, ""
+	return frame, "NO_ENCONTRE"
 }
 
 func (cpu *CPU) AplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int, contenido string, accion string) {
@@ -403,11 +407,25 @@ func (cpu *CPU) MMU(frame int, offset int) DireccionFisica {
 }
 
 func (cpu *CPU) ActualizarPagCompleta(entrada_a_actualizar *EntradaCachePag) {
-	utils.FormatearUrlYEnviar(cpu.Url_memoria, "/actualizar_entrada_cache", false, "%d %d",
+	utils.FormatearUrlYEnviar(cpu.Url_memoria, "/actualizar_entrada_cache", false, "%d %d %d %s",
 		cpu.Proc_ejecutando.Pid,
 		entrada_a_actualizar.frame,
+		entrada_a_actualizar.offset,
+		entrada_a_actualizar.contenido,
 	)
 
 	utils.LoggerConFormato("PID: %d - Memory Update - Página: %d - Frame: %d",
 		cpu.Proc_ejecutando.Pid, entrada_a_actualizar.pagina, entrada_a_actualizar.frame)
+}
+
+func (cpu *CPU) ActualizarBitUsoPorNroPag(nro_pagina int) error {
+	for i := range cpu.Cache_pags {
+		if cpu.Cache_pags[i].pagina == nro_pagina {
+			cpu.Cache_pags[i].bit_uso = 1
+			slog.Debug("Debug - (ActualizarBitUsoPorNroPag) - Actualice correctamente la entrada", "entrada", i,
+				"nro_pag", nro_pagina, "contenido", cpu.Cache_pags[i].contenido, "frame", cpu.Cache_pags[i].frame)
+			return nil
+		}
+	}
+	return fmt.Errorf("error - (ActualizarBitUsoPorNroPag) - Por alguna razon, no encontramos la entrada por nro pagina")
 }

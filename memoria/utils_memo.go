@@ -913,22 +913,23 @@ func (memo *Memo) ActualizarEntradaCache(w http.ResponseWriter, r *http.Request)
 
 	aux := strings.Split(mensaje, " ")
 
-	if len(aux) < 3 {
+	if len(aux) < 4 {
 		http.Error(w, "Faltan argumentos (pid frame offset datos)", http.StatusBadRequest)
 		return
 	}
 
 	pid, err1 := strconv.Atoi(aux[0])
 	frameIdx, err2 := strconv.Atoi(aux[1])
-	datosStr := aux[2] // El resto es el dato a escribir
+	offset, err3 := strconv.Atoi(aux[2])
+	datosStr := aux[3] // El resto es el dato a escribir
 
-	if err1 != nil || err2 != nil {
-		slog.Error("Error - (ActualizarEntradaCache) - Conversiones a int")
+	if err1 != nil || err2 != nil || err3 != nil {
+		slog.Error("Error - (EscribirEnMemoria) - Conversiones a int")
 		return
 	}
 
 	datos := []byte(datosStr)
-
+	tamanioEscritura := len(datos)
 	mutex_framesDisponibles.Lock()
 	defer mutex_framesDisponibles.Unlock()
 
@@ -945,19 +946,27 @@ func (memo *Memo) ActualizarEntradaCache(w http.ResponseWriter, r *http.Request)
 	}
 
 	tamPag := memo.Config.Tamanio_pag
+	if offset < 0 || offset >= tamPag {
+		http.Error(w, "Offset fuera de rango", http.StatusBadRequest)
+		return
+	}
+	if offset+tamanioEscritura > tamPag {
+		http.Error(w, "Datos exceden tamanio de pagina", http.StatusBadRequest)
+		return
+	}
 
-	direccionFisica := frameIdx * tamPag
+	direccionFisica := frameIdx*tamPag + offset
 
 	mutex_memoriaPrincipal.Lock()
 	defer mutex_memoriaPrincipal.Unlock()
 
-	// if direccionFisica+tamanioEscritura > len(memo.memoria_principal) {
-	// 	http.Error(w, "Escritura fuera del rango de memoria fisica", http.StatusBadRequest)
-	// 	return
-	// }
+	if direccionFisica+tamanioEscritura > len(memo.memoria_principal) {
+		http.Error(w, "Escritura fuera del rango de memoria fisica", http.StatusBadRequest)
+		return
+	}
 
 	// Copiar datos a memoria física
-	copy(memo.memoria_principal[direccionFisica:direccionFisica+tamPag], datos)
+	copy(memo.memoria_principal[direccionFisica:direccionFisica+tamanioEscritura], datos)
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
@@ -966,6 +975,5 @@ func (memo *Memo) ActualizarEntradaCache(w http.ResponseWriter, r *http.Request)
 	memo.IncrementarMetrica(pid, Cant_write)
 	mutex_metricas.Unlock()
 
-	utils.LoggerConFormato("## PID: %d - Escritura - Dir. Fisica: [ %d |  0  ] - Tamaño: %d ", pid, frameIdx, tamPag)
-
+	utils.LoggerConFormato("## PID: %d - Escritura - Dir. Fisica: [ %d |  0  ] - Tamaño: %d ", pid, frameIdx, memo.Config.Tamanio_pag)
 }

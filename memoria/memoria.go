@@ -74,7 +74,7 @@ func main() {
 	mux.HandleFunc("/memoria/busqueda_tabla", memo.buscarEnTablaAsociadoAProceso) //----sincronizado
 	mux.HandleFunc("/memoria/READ", memo.LeerEnMemoria)                           //----sincronizado
 	mux.HandleFunc("/memoria/WRITE", memo.EscribirEnMemoria)                      //----sincronizado
-	// mux.HandleFunc("/memoria/actualizar_entrada_cache", memo.ActualizarEntradaCache)
+	mux.HandleFunc("/memoria/actualizar_entrada_cache", memo.ActualizarEntradaCache)
 	// ===========
 	// APIs Kernel
 	// ===========
