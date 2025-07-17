@@ -174,6 +174,9 @@ func (k *Kernel) IntentarEnviarProcesosAReady() {
 	slog.Debug("Debug - (IntentarEnviarProcesosAReady) - Como minimo, entre a esta funcion")
 	estados := []int{EstadoReadySuspended, EstadoNew}
 
+	//k.PlanificarLargoPorLista(EstadoReadySuspended)
+	//k.PlanificarLargoPorLista(EstadoNew)
+
 	for _, estado := range estados {
 		mutex_ProcesoPorEstado[estado].Lock()
 
@@ -217,8 +220,8 @@ func (k *Kernel) IntentarEnviarProcesosAReady() {
 
 func (k *Kernel) PlanificarLargoPorLista(codLista int) {
 
-	//si el algoritmo es PCMP, ordenamos antes de tomar el primero
-	if k.Configuracion.Ready_ingress_algorithm == "PCMP" {
+	//si el algoritmo es PMCP, ordenamos antes de tomar el primero
+	if k.Configuracion.Ready_ingress_algorithm == "PMCP" {
 		sort.Sort(PorTamanio(k.ProcesoPorEstado[codLista]))
 	}
 }

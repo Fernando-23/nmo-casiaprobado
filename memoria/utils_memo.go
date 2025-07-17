@@ -154,6 +154,9 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 	arch_pseudo := aux[2]
 
 	mutex_tamanioMemoActual.Lock()
+	slog.Debug("Debug - (VerificarHayLugar) - Voy a realizar la func HayEspacio",
+		"pid", pid, "tamanio", tamanio,
+		"espacio_actual", gb_tam_memo_actual)
 	hayEspacio := HayEspacio(tamanio)
 	mutex_tamanioMemoActual.Unlock()
 
@@ -190,6 +193,8 @@ func (memo *Memo) VerificarHayLugar(w http.ResponseWriter, r *http.Request) {
 	// Actualizar memoria usada (la variable global)
 	mutex_tamanioMemoActual.Lock()
 	gb_tam_memo_actual -= tamanio
+	slog.Debug("Debug - (VerificarHayLugar) - Nuevo tamanio de la memoria principal",
+		"gb_tam_memo_actual", gb_tam_memo_actual)
 	mutex_tamanioMemoActual.Unlock()
 
 	// Inicializar metricas

@@ -133,6 +133,8 @@ func (memo *Memo) EscribirProcesoEnSwap(pid int) error {
 
 	mutex_tamanioMemoActual.Lock()
 	gb_tam_memo_actual += tamanio
+	slog.Debug("Debug - (EscribirProcesoEnSwap) - Nuevo tamanio de memoria actual",
+		"gb_tam_memo_actual", gb_tam_memo_actual)
 	mutex_tamanioMemoActual.Unlock()
 
 	utils.LoggerConFormato("PID %d - Proceso escrito en swap desde byte %d a %d", pid, inicioSwap, offsetSwap)
@@ -261,6 +263,7 @@ func (memo *Memo) RestaurarProcesoDesdeSwap(pid int) error {
 
 	mutex_tamanioMemoActual.Lock()
 	gb_tam_memo_actual -= proc.Tamanio
+	slog.Debug("Debug - (RestaurarProcesoDesdeSwap) - Nuevo tamanio de la memoria principal", "gb_tam_memo_actual", gb_tam_memo_actual)
 	mutex_tamanioMemoActual.Unlock()
 
 	mutex_metricas.Lock()
@@ -387,6 +390,9 @@ func (memo *Memo) EliminarProceso(pid int) error {
 		return fmt.Errorf("Proceso %d no existe", pid)
 	}
 
+	slog.Debug("Debug - (EliminarProceso) - Encontre el proceso, voy a proceder a eliminarlo",
+		"pid", pid)
+
 	mutex_framesDisponibles.Lock()
 	for _, frame := range memo.Frames {
 		if frame.Usado && frame.PidOcupante == pid {
@@ -408,7 +414,14 @@ func (memo *Memo) EliminarProceso(pid int) error {
 		})
 		delete(memo.swap.espacio_contiguo, pid)
 	}
+	// hay mas memoria, actualizo la global
+
 	mutex_swap.Unlock()
+	mutex_tamanioMemoActual.Lock()
+	gb_tam_memo_actual += proc.Tamanio
+	slog.Debug("Debug - (EliminarProceso) - Nuevo tamanio de memoria principal despues de un EXIT",
+		"pid", pid, "gb_tam_memo_actual", gb_tam_memo_actual)
+	mutex_tamanioMemoActual.Unlock()
 
 	memo.recursivamenteLiberarTabla(proc.TablaPagsRaiz)
 

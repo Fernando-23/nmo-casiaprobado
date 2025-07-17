@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 	servidor "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Servidor"
@@ -97,16 +96,16 @@ func main() {
 
 	//kernel.IntentarEnviarProcesoAExecute()
 
-	go func() {
-		for {
-			// 		//fmt.Println("imprimiendoestados")
-			time.Sleep(10 * time.Second)
-			kernel.ImprimirPCBsDeEstado(EstadoNew)
-			kernel.ImprimirPCBsDeEstado(EstadoReady)
-			kernel.ImprimirPCBsDeEstado(EstadoBlock)
-			kernel.IntentarEnviarProcesoAExecute()
-		}
-	}()
+	// go func() {
+	// 	for {
+	// 		// 		//fmt.Println("imprimiendoestados")
+	// 		time.Sleep(10 * time.Second)
+	// 		kernel.ImprimirPCBsDeEstado(EstadoNew)
+	// 		kernel.ImprimirPCBsDeEstado(EstadoReady)
+	// 		kernel.ImprimirPCBsDeEstado(EstadoBlock)
+	// 		kernel.IntentarEnviarProcesoAExecute()
+	// 	}
+	// }()
 	go func() {
 		for {
 			<-ch_aviso_cpu_libre
