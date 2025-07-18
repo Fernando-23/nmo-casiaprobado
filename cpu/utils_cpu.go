@@ -101,6 +101,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		// ID_CPU PC INIT_PROC proceso1 256
 		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
 		mensaje_init_proc := fmt.Sprintf("%s %d INIT_PROC %s %s", cpu.Id, pc_a_actualizar, operacion[0], operacion[1])
+
 		cpu.EnviarSyscall("INIT_PROC", mensaje_init_proc)
 
 		HabilitarInterrupt(false)
@@ -143,13 +144,21 @@ func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
 
 	mensajeKernel := string(body_Bytes)
 
-	slog.Debug("Llego interrrupción desde kernel", "mensaje", mensajeKernel)
+	slog.Debug("Debug - (RecibirInterrupt) - Llego interrrupción desde kernel", "mensaje", mensajeKernel)
 
 	if mensajeKernel == "OK" {
 		HabilitarInterrupt(true)
-		utils.FormatearUrlYEnviar(cpu.Url_kernel, "/interrumpido", false, "%s %d %d", cpu.Id, cpu.Proc_ejecutando.Pid, cpu.Proc_ejecutando.Pc)
+		nuevo_pc_actualizado_a_enviar := cpu.Proc_ejecutando.Pc
+		respuesta := strconv.Itoa(nuevo_pc_actualizado_a_enviar)
+		//utils.FormatearUrlYEnviar(cpu.Url_kernel, "/interrumpido", false, "%s %d %d", cpu.Id, cpu.Proc_ejecutando.Pid, cpu.Proc_ejecutando.Pc)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(respuesta))
 		return
 	}
+
+	slog.Error("Error - (RecibirInterrupt) - No llego un OK, cpu sigue ejecutando el mismo proceso")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ERROR"))
 }
 
 func (cpu *CPU) ChequarTLBActiva() {

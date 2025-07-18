@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
@@ -21,7 +22,7 @@ func (k *Kernel) llegaFinInterrupcion(w http.ResponseWriter, r *http.Request) {
 
 	mensajeCPU := string(body_Bytes)
 
-	slog.Debug("Llego fin interrupcion", "mensaje", mensajeCPU)
+	slog.Debug("Debug - (llegaFinInterrupcion) - Llego fin interrupcion", "mensaje", mensajeCPU)
 
 	idCPU, pidDesalojado, pcActualizado, err := decodificarMensajeFinInterrupcion(mensajeCPU)
 
@@ -91,6 +92,7 @@ func (k *Kernel) AtenderFinInterrupcion(idCPU, pidDesalojado, pcActualizado int)
 func (k *Kernel) CambiosEnElPlantel(cpuPosicion *CPU, procesoTitular *PCB, procesoSuplente *PCB) bool {
 	// Debutante
 	// CALIENTA KAROL
+	// Actualizacion 17/7 - El jugador Karol se retiro del futbol
 
 	// Actualizamos pc en el pcb del proceso que estaba ejecutando
 	procesoTitular.Pc = cpuPosicion.Pc
@@ -138,14 +140,18 @@ func (k *Kernel) CambiosEnElPlantel(cpuPosicion *CPU, procesoTitular *PCB, proce
 	return true
 }
 
-func EnviarInterrupt(cpu *CPU) { // yo te hablo por la puerta interrupt y me desocupo
-	fullURL := fmt.Sprintf("%s/interrupt", cpu.Url)
-	utils.EnviarStringSinEsperar("POST", fullURL, "")
+func EnviarInterrupt(cpu *CPU) int { // yo te hablo por la puerta interrupt y me desocupo
+	nuevo_pc_actualizado_str, _ := utils.FormatearUrlYEnviar(cpu.Url, "/interrupt", true, "OK")
+	if nuevo_pc_actualizado_str == "ERROR" {
+		slog.Error("Erorr - (EnviarInterrupt) - Recibi un ERROR de parte de CPU al intentar desalojarlo")
+	}
+	nuevo_pc_actualizado, _ := strconv.Atoi(nuevo_pc_actualizado_str)
+	return nuevo_pc_actualizado
 }
 
-func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) bool {
+func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) (int, bool) {
 
-	slog.Debug("(IntentarDesalojoSRT) - Llegue hasta esta funcion", "pid", pidQuiereDesalojar)
+	slog.Debug("Debug - (IntentarDesalojoSRT) - Llegue hasta esta funcion", "pid", pidQuiereDesalojar)
 
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 	defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
@@ -154,17 +160,17 @@ func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) bool {
 	defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
 
 	if !k.TieneProcesos(EstadoReady) {
-		slog.Error("Error - (IntentarDEsalojoSRT) - no hay proceso en READY",
+		slog.Error("Error - (IntentarDesalojoSRT) - no hay proceso en READY",
 			"pid_quiere_desalojar", pidQuiereDesalojar,
 		)
-		return false //no hay procesos en READY, no tiene sentido desalojar
+		return -1, false //no hay procesos en READY, no tiene sentido desalojar
 	}
 
 	procesoCandidato := k.BuscarPorPidSinLock(EstadoReady, pidQuiereDesalojar)
 
 	if procesoCandidato == nil {
 		slog.Error("Error - (IntentarDesalojoSRT) - Proceso ya no está en READY", "pid", pidQuiereDesalojar)
-		return false
+		return -1, false
 	}
 	estimacionReady := procesoCandidato.SJF.Estimado_actual
 
@@ -173,13 +179,14 @@ func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) bool {
 
 	for _, cpu := range k.CPUsConectadas {
 		if cpu.ADesalojarPor != -1 { //si esta a la espera de ser desalojada
+			slog.Debug("Debug - (IntentarDesalojoSRT) - CPU reservada, sigo buscando", "cpu", cpu.ID)
 			continue
 		}
 		procesoEjecutando := k.BuscarPorPidSinLock(EstadoExecute, cpu.Pid)
 
 		if procesoEjecutando == nil {
 			slog.Error("Error - (IntentarDesalojoSRT) - El proceso no esta en la lista execute, incosistencia interna")
-			return false
+			return -1, false
 		}
 
 		tiempoEjecutando := duracionEnEstado(procesoEjecutando)
@@ -205,10 +212,11 @@ func (k *Kernel) IntentarDesalojoSRT(pidQuiereDesalojar int) bool {
 		)
 
 		reservarCPU(cpuElegida, pidQuiereDesalojar)
-		EnviarInterrupt(cpuElegida)
+		pc_a_actualizar := EnviarInterrupt(cpuElegida)
 
-		return true
+		return pc_a_actualizar, true
 	}
-	return false
+
+	return -1, false
 
 }

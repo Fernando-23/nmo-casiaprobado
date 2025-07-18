@@ -96,22 +96,22 @@ func main() {
 
 	//kernel.IntentarEnviarProcesoAExecute()
 
-	// go func() {
-	// 	for {
-	// 		// 		//fmt.Println("imprimiendoestados")
-	// 		time.Sleep(10 * time.Second)
-	// 		kernel.ImprimirPCBsDeEstado(EstadoNew)
-	// 		kernel.ImprimirPCBsDeEstado(EstadoReady)
-	// 		kernel.ImprimirPCBsDeEstado(EstadoBlock)
-	// 		kernel.IntentarEnviarProcesoAExecute()
-	// 	}
-	// }()
 	go func() {
 		for {
 			<-ch_aviso_cpu_libre
 			kernel.IntentarEnviarProcesoAExecute()
 		}
 	}()
+	// go func() {
+	// 	for {
+	// 		//		// 		//fmt.Println("imprimiendoestados")
+	// 		time.Sleep(10 * time.Second)
+	// 		// 		kernel.ImprimirPCBsDeEstado(EstadoNew)
+	// 		// 		kernel.ImprimirPCBsDeEstado(EstadoReady)
+	// 		// 		kernel.ImprimirPCBsDeEstado(EstadoBlock)
+	// 		kernel.IntentarEnviarProcesoAExecute()
+	// 	}
+	// }()
 
 	select {}
 }

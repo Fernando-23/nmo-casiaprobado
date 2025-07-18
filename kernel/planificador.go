@@ -294,6 +294,10 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	}
 
 	hay_que_chequear_desalojo := k.PlaniCortoPlazo()
+	if k.Configuracion.Algoritmo_Plani == "SRT" {
+		slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - Con SRT, el valor de hay_que_chequear_desalojo es",
+			"hay_que_chequear_desalojo", hay_que_chequear_desalojo)
+	}
 
 	//Tomamos el primer PCB "NO" reservado tras la planificacion
 	var pcb *PCB
@@ -331,25 +335,59 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	defer mutex_CPUsConectadas.Unlock()
 	cpu_seleccionada := k.ObtenerCPULibre()
 
+	// Auxiliares para SRT
+	var hice_desalojo bool = false
+	var nuevo_pc_desalojo int = -1
+
 	if cpu_seleccionada == nil { //no hay cpu libre
 		if hay_que_chequear_desalojo {
 			slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay CPU libre, intentando desalojo por SRT", "pid", pid)
-			if !k.IntentarDesalojoSRT(pid) {
+			nuevo_pc_desalojo, hice_desalojo = k.IntentarDesalojoSRT(pid)
+			if !hice_desalojo {
 				slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay que desalojar", "pid", pid)
 				ReservarSRT(pcb, "NO") //ahora pequenio pcb es un ninio bueno, lo saco de la lista negra
+				return
 			}
 
 		} else {
-			slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay CPU libre y no se requiere desalojo", "pid", pid)
+			slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay CPU libre", "pid", pid)
 			ReservarSRT(pcb, "NO") //ahora pequenio pcb es un ninio bueno, lo saco de la lista negra
+			return
 		}
-
-		return
 	}
 
-	//voy a reservar la cpu
-	if k.Configuracion.Algoritmo_Plani == "SRT" {
-		reservarCPU(cpu_seleccionada, pid) //ahora pequenio pcb es un ninio bueno, lo saco de la lista negra
+	time.Sleep(2 * time.Second)
+	// CASO SRT Y DESALOJE UN PROCESO DE UNA CPU
+	// voy a reservar la cpu
+	if k.Configuracion.Algoritmo_Plani == "SRT" && hice_desalojo {
+		mutex_ProcesoPorEstado[EstadoExecute].Lock()
+		defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+		mutex_ProcesoPorEstado[EstadoReady].Lock()
+		defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
+
+		procesoEjecutando := k.BuscarPorPidSinLock(EstadoExecute, cpu_seleccionada.Pid)
+
+		if procesoEjecutando == nil {
+			slog.Error("Error - (antenderFinInterrupcion) - NO se encontró el proceso en Execute",
+				"pid", cpu_seleccionada.Pid,
+			)
+			return
+		}
+		procesoQuiereEjecutar := k.BuscarPorPidSinLock(EstadoReady, pid)
+
+		if procesoQuiereEjecutar == nil {
+			slog.Error("Error - (antenderFinInterrupcion) - NO se encontró el proceso a ejecutar",
+				"pid", pid,
+			)
+			return
+		}
+
+		cpu_seleccionada.Pc = nuevo_pc_desalojo
+		k.CambiosEnElPlantel(cpu_seleccionada, procesoEjecutando, procesoQuiereEjecutar)
+		//ahora pequenio pcb es un ninio bueno, lo saco de la lista negra
+		cpu_seleccionada.ADesalojarPor = -1
+		cpu_seleccionada.Esta_libre = false
+		return
 	}
 
 	idCPU := cpu_seleccionada.ID
@@ -371,7 +409,8 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 
 		return
 	}
-	actualizarCPU(cpu_seleccionada, pid, pc, false)
+
+	actualizarCPU(cpu_seleccionada, pid, pc, false) //des reserva la cpu
 
 	k.AgregarAEstado(EstadoExecute, procVerificadoAExecute, false)
 
@@ -391,11 +430,14 @@ func (k *Kernel) PlaniCortoPlazo() bool {
 
 		sort.Sort(PorSJF(lista_ready)) //SJF distinto de nil
 
-		if k.Configuracion.Algoritmo_Plani == "SRT" && pcb_nuevo_pid == lista_ready[0].Pid { //  10 15 18 31 32 500
-			slog.Debug("(PlaniCortoPlazo) - Hay que desalojar", "pid", pcb_nuevo_pid)
+		mutex_ProcesoPorEstado[EstadoExecute].Lock()
+		defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+		if k.Configuracion.Algoritmo_Plani == "SRT" && pcb_nuevo_pid == lista_ready[0].Pid && len(k.ProcesoPorEstado[EstadoExecute]) > 0 { //  10 15 18 31 32 500
+			slog.Debug("Debug - (PlaniCortoPlazo) - Hay que chequear desalojar", "pid", pcb_nuevo_pid)
 			return true
 		}
 	}
+
 	return false
 }
 

@@ -140,6 +140,10 @@ func (k *Kernel) liberarCPU(idCPU int) {
 		return
 	}
 
-	actualizarCPU(cpu, -1, 0, true)
-	ch_aviso_cpu_libre <- struct{}{}
+	if cpu.ADesalojarPor != -1 {
+		ch_aviso_cpu_libre <- struct{}{}
+		actualizarCPU(cpu, -1, 0, true)
+		return
+	}
+
 }
