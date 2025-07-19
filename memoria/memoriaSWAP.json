@@ -6,8 +6,8 @@
     "entries_per_page": 32,
     "number_of_levels": 1,
     "memory_delay": 500,
-    "swapfile_path": "/home/utnso/swapfile.bin",
+    "swapfile_path": "/home/utnso/tp-2025-1c-Nombre-muy-original/swapfile.bin",
     "swap_delay": 2500,
     "log_level": "INFO",
-    "dump_path": "/home/utnso/dump_files/"
+    "dump_path": "/home/utnso/tp-2025-1c-Nombre-muy-original/"
 }
