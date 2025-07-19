@@ -70,7 +70,9 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, bool) { //el primero es si 
 		if entro {
 			slog.Warn("Cuidadito - (ListaNewSoloYo) - Mande de NEW a READY",
 				"pid", pid)
+
 			k.IntentarEnviarProcesoAExecute()
+
 			return true, true
 		}
 		return true, false
@@ -160,7 +162,9 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 	if entro {
 		slog.Warn("Cuidadito - (IntentarEnviarProcesoAReady) - Mande de NEW a READY",
 			"pid", pid)
+
 		k.IntentarEnviarProcesoAExecute()
+
 		return
 	}
 	slog.Debug("Debug - (IntentarEnviarProcesoAReady) - No paso a READY ",
@@ -287,6 +291,7 @@ func (k *Kernel) gestionarAccesoAReady(pid int, tamanio int, arch_pseudo string,
 // podria recibir el pid
 func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	mutex_ProcesoPorEstado[EstadoReady].Lock()
+
 	if !k.TieneProcesos(EstadoReady) {
 		slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay procesos en READY")
 		mutex_ProcesoPorEstado[EstadoReady].Unlock()
@@ -325,7 +330,6 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	pid := pcb.Pid
 	pc := pcb.Pc
 	mutex_ProcesoPorEstado[EstadoReady].Unlock()
-
 	// intentamos asignarle cpu
 	mutex_CPUsConectadas.Lock()
 	defer mutex_CPUsConectadas.Unlock()
@@ -359,10 +363,8 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 	defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
-
 	mutex_ProcesoPorEstado[EstadoReady].Lock()
 	defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
-
 	//Checkeo por las dudas que sigue en la misma posicion de memoria
 	procVerificadoAExecute := k.QuitarYObtenerPCB(EstadoReady, pid, false)
 
@@ -428,4 +430,52 @@ func (k *Kernel) temporizadorSuspension(pid int) {
 		EnviarSuspension(pid)
 		return
 	}
+}
+
+func (kernel *Kernel) IntentarEnviarProcesoAExecutePorCPU(cpu_a_dispatch *CPU) {
+
+	//caso FIFO
+	mutex_ProcesoPorEstado[EstadoReady].Lock()
+	defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
+	//chequeo como primero si hay alguien en READY
+	//no tiene sentido seguir si no hay nadie en READY
+	if !kernel.TieneProcesos(EstadoReady) {
+		slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorIDCPU) - No hay procesos en READY")
+		return
+	}
+
+	//chequeo, por alguna razon (capaz Liam ya me contagio)
+	//si hay un pcb en READY
+	pcb_a_mover := kernel.PrimerElementoSinSacar(EstadoReady)
+	if pcb_a_mover == nil {
+		slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorIDCPU) - No hay procesos disponibles en READY")
+		return
+	}
+
+	pid_a_despachar := pcb_a_mover.Pid
+	pc_a_despachar := pcb_a_mover.Pc
+
+	handleDispatch(pid_a_despachar, pc_a_despachar, cpu_a_dispatch.Url)
+
+	mutex_ProcesoPorEstado[EstadoExecute].Lock()
+	defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+	//aca SI lo saco de READY
+	//mucho cuidado pq la unica referencia de ese pcb esta ACA
+	proc_a_execute := kernel.QuitarYObtenerPCB(EstadoReady, pid_a_despachar, false)
+
+	//otro chequeo
+	if proc_a_execute == nil {
+		slog.Warn("Cuidadito - (IntentarEnviarProcesoAExecutePorIDCPU) - El proceso no esta en la lista Ready despues de 2 chequeos verificados que SI ESTABA (Porque escogi esta carrera?)",
+			"pid", pid_a_despachar)
+		return
+	}
+
+	//actualizo la cpu con el que despache en el handleDispatch
+	actualizarCPU(cpu_a_dispatch, pid_a_despachar, pc_a_despachar, false)
+
+	//finalmete el pcb lo muevo a execute
+	kernel.AgregarAEstado(EstadoExecute, proc_a_execute, false)
+	slog.Debug("Debug - (IntentarEnviarProcesoAExecute)- Proceso enviado a EXECUTE",
+		"pid", pid_a_despachar,
+		"cpu_id", cpu_a_dispatch.ID)
 }

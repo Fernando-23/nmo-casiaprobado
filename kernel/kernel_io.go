@@ -224,6 +224,7 @@ func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
 		//==================== LOG OBLIGATORIO ====================
 		utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY", pid)
 		//=========================================================
+
 		k.IntentarEnviarProcesoAExecute()
 
 	} else if k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid, true) {

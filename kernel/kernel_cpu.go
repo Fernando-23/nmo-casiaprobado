@@ -29,6 +29,7 @@ func (k *Kernel) LlegaNuevaCPU(w http.ResponseWriter, r *http.Request) { // Hand
 		http.Error(w, "No se pudo registar la CPU", http.StatusBadRequest)
 		return
 	}
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(RESPUESTA_OK))
 }
@@ -64,7 +65,9 @@ func (k *Kernel) registrarNuevaCPU(mensajeCPU string) bool {
 	k.CPUsConectadas[nueva_ID_CPU] = crearCPU(nueva_ID_CPU, url)
 
 	fmt.Printf("Se conecto una nueva CPU con ID %d en %s\n", nueva_ID_CPU, url)
-
+	mutex_chCPUs.Lock()
+	ch_avisoCPULibrePorId[nueva_ID_CPU] = make(chan struct{})
+	mutex_chCPUs.Unlock()
 	return true
 }
 
@@ -141,5 +144,6 @@ func (k *Kernel) liberarCPU(idCPU int) {
 	}
 
 	actualizarCPU(cpu, -1, 0, true)
-	ch_aviso_cpu_libre <- struct{}{}
+	ch_avisoCPULibrePorId[idCPU] <- struct{}{}
+	//ch_aviso_cpu_libre <- struct{}{}
 }

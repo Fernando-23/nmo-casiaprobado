@@ -47,6 +47,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	gb_cant_cpus_conectadas = 0
 	slog.Debug("Parámetros iniciales", "archivo", archivoPseudo, "tamanio", tamanio)
 
 	//Iniciar servidor
@@ -72,7 +73,8 @@ func main() {
 	slog.Info("Estado inicial del planificador largo plazo", "estado", "STOP")
 
 	waitEnter := make(chan struct{}, 1)
-	ch_aviso_cpu_libre = make(chan struct{})
+	ch_avisoCPULibrePorId = make(map[int]chan struct{})
+	//ch_aviso_cpu_libre = make(chan struct{})
 
 	// Lanzamos la rutina que espera el ENTER
 	go esperarEnter(waitEnter)
@@ -96,22 +98,39 @@ func main() {
 
 	//kernel.IntentarEnviarProcesoAExecute()
 
+	//aca iria al magia
+
+	for i := 1; i <= gb_cant_cpus_conectadas; i++ {
+		go func(i int) {
+			var cpu *CPU
+			for {
+				<-ch_avisoCPULibrePorId[i]
+				mutex_CPUsConectadas.Lock()
+				cpu = kernel.BuscarCPUPorID(i)
+
+				kernel.IntentarEnviarProcesoAExecutePorCPU(cpu)
+
+				mutex_CPUsConectadas.Unlock()
+			}
+		}(i)
+	}
+
 	// go func() {
 	// 	for {
-	// 		// 		//fmt.Println("imprimiendoestados")
-	// 		time.Sleep(10 * time.Second)
-	// 		kernel.ImprimirPCBsDeEstado(EstadoNew)
-	// 		kernel.ImprimirPCBsDeEstado(EstadoReady)
-	// 		kernel.ImprimirPCBsDeEstado(EstadoBlock)
+	// 		<-ch_aviso_cpu_libre
 	// 		kernel.IntentarEnviarProcesoAExecute()
 	// 	}
 	// }()
-	go func() {
-		for {
-			<-ch_aviso_cpu_libre
-			kernel.IntentarEnviarProcesoAExecute()
-		}
-	}()
 
 	select {}
 }
+
+//por si la cosa no mejora...
+//if archivoPseudo == "PLANI_CORTO_PLAZO" || archivoPseudo == "ESTABILIDAD_GENERAL" {
+//go func() {
+// 	for {
+// 		time.Sleep(2 * time.Second)
+// 		kernel.IntentarEnviarProcesoAExecute()
+// 	}
+// }()
+//}
