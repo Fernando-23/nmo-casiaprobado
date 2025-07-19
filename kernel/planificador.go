@@ -68,7 +68,7 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, bool) { //el primero es si 
 		}
 
 		if entro {
-			slog.Warn("Cuidadito - (ListaNewSoloYo) - Mande de NEW a READY",
+			slog.Debug("Debug - (ListaNewSoloYo) - Mande de NEW a READY",
 				"pid", pid)
 			k.IntentarEnviarProcesoAExecute()
 			return true, true
@@ -158,7 +158,7 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 	}
 
 	if entro {
-		slog.Warn("Cuidadito - (IntentarEnviarProcesoAReady) - Mande de NEW a READY",
+		slog.Debug("Cuidadito - (IntentarEnviarProcesoAReady) - Mande de NEW a READY",
 			"pid", pid)
 		k.IntentarEnviarProcesoAExecute()
 		return
@@ -205,7 +205,7 @@ func (k *Kernel) IntentarEnviarProcesosAReady() {
 				return
 			}
 
-			slog.Warn("Cuidadito - (IntentarEnviarProcesosAReady) - Mande de NEW a READY",
+			slog.Debug("Cuidadito - (IntentarEnviarProcesosAReady) - Mande de NEW a READY",
 				"pid", pid)
 
 			k.IntentarEnviarProcesoAExecute()
@@ -367,7 +367,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecute() {
 	procVerificadoAExecute := k.QuitarYObtenerPCB(EstadoReady, pid, false)
 
 	if procVerificadoAExecute == nil {
-		slog.Warn("Cuidadito - (IntentarEnviarProcesoAExecute) - El proceso no esta en la lista Ready", "pid", pid)
+		slog.Debug("Cuidadito - (IntentarEnviarProcesoAExecute) - El proceso no esta en la lista Ready", "pid", pid)
 
 		return
 	}

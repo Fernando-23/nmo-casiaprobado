@@ -263,7 +263,7 @@ func (memo *Memo) crearTablasParaProceso(pid int, tamanioProceso int) *TablaDePa
 			actual.Entradas[ultimoIdx] = &EntradaTablaDePaginas{}
 		}
 	}
-	memo.ImprimirTablasProceso(pid)
+	//memo.ImprimirTablasProceso(pid)
 	return entradaRaiz
 }
 
@@ -446,7 +446,7 @@ func (memo *Memo) LaCuentitaMaestro(tamanio_proc int) int {
 func (memo *Memo) ImprimirTablasProceso(pid int) {
 	proc, ok := memo.Procesos[pid]
 	if !ok {
-		slog.Warn("Cuidadito - (ImprimirTablasProceso) - Proceso NO encontrado", "pid", pid)
+		slog.Debug("Cuidadito - (ImprimirTablasProceso) - Proceso NO encontrado", "pid", pid)
 		return
 	}
 
@@ -830,7 +830,7 @@ func (memo *Memo) DumpMemory(w http.ResponseWriter, r *http.Request) {
 			inicio := idx * tamPag
 			fin := inicio + tamPag
 			if fin > len(memo.memoria_principal) {
-				slog.Warn("Cuidadito - (DumpMemory) - Dump truncado: intento de leer mas alla del limite de memoria")
+				slog.Debug("Cuidadito - (DumpMemory) - Dump truncado: intento de leer mas alla del limite de memoria")
 				continue
 			}
 			_, err := file.Write(memo.memoria_principal[inicio:fin])
@@ -890,7 +890,7 @@ func (memo *Memo) FinalizarProceso(w http.ResponseWriter, r *http.Request) {
 			mt_a_log[Subidas_a_memoria], mt_a_log[Cant_read], mt_a_log[Cant_write])
 		delete(memo.metricas, pid)
 	} else {
-		slog.Warn("Advertencia - (FinalizarProceso) - Metricas no encontradas para PID", "pid", pid)
+		slog.Debug("Debug - (FinalizarProceso) - Metricas no encontradas para PID", "pid", pid)
 	}
 
 	w.WriteHeader(http.StatusOK)

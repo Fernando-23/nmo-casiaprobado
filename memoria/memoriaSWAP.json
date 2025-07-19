@@ -8,6 +8,6 @@
     "memory_delay": 500,
     "swapfile_path": "/home/utnso/swapfile.bin",
     "swap_delay": 2500,
-    "log_level": "DEBUG",
+    "log_level": "INFO",
     "dump_path": "/home/utnso/dump_files/"
 }

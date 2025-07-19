@@ -31,7 +31,7 @@ func (cpu *CPU) RequestWRITE(direccion_logica int, datos_a_escribir string) (str
 			dir_fisica.frame, "datos", datos_a_escribir)
 
 		if cpu.ActualizarEntradaCachePorNroPag(int(nro_pagina), dir_fisica.frame, dir_fisica.offset, datos_a_escribir) != nil {
-			slog.Error("Error -(ActualizarEntradaCachePorNroPag)-Despues de ejecutar esta func en RequestWRITE, no encontre la entrada por alguna razon que no se")
+			slog.Error("Error -(ActualizarEntradaCachePorNroPag)- Despues de ejecutar esta func en RequestWRITE, no encontre la entrada por alguna razon que no se")
 		}
 
 		return datos_a_escribir, dir_fisica
@@ -48,7 +48,12 @@ func (cpu *CPU) RequestWRITE(direccion_logica int, datos_a_escribir string) (str
 	}
 
 	if cache_pags_activa {
-		cpu.AplicarAlgoritmoCachePags(int(nro_pagina), frame, dir_fisica.offset, datos_a_escribir, "WRITE")
+		hay_espacio_cache, entrada_candidata := cpu.ChequearEspacioEnCachePags()
+		if hay_espacio_cache {
+			cpu.ActualizarEntradaCache(entrada_candidata, int(nro_pagina), frame, dir_fisica.offset, datos_a_escribir, "WRITE")
+		} else {
+			cpu.AplicarAlgoritmoCachePags(int(nro_pagina), frame, dir_fisica.offset, datos_a_escribir, "WRITE")
+		}
 	}
 
 	utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", cpu.Proc_ejecutando.Pid, int(nro_pagina), frame)
@@ -77,7 +82,12 @@ func (cpu *CPU) RequestREAD(direccion_logica int, tamanio int) (string, Direccio
 	respuesta, _ := utils.FormatearUrlYEnviar(cpu.Url_memoria, "/READ", true, "%d %d %d %d", cpu.Proc_ejecutando.Pid, dir_fisica.frame, dir_fisica.offset, tamanio)
 
 	if cache_pags_activa {
-		cpu.AplicarAlgoritmoCachePags(int(nro_pagina), frame, dir_fisica.offset, respuesta, "READ")
+		hay_espacio_cache, entrada_candidata := cpu.ChequearEspacioEnCachePags()
+		if hay_espacio_cache {
+			cpu.ActualizarEntradaCache(entrada_candidata, int(nro_pagina), frame, dir_fisica.offset, respuesta, "READ")
+		} else {
+			cpu.AplicarAlgoritmoCachePags(int(nro_pagina), frame, dir_fisica.offset, respuesta, "READ")
+		}
 	}
 
 	utils.LoggerConFormato("PID: %d - OBTENER MARCO - Página: %d - Marco: %d", cpu.Proc_ejecutando.Pid, int(nro_pagina), frame)
@@ -226,6 +236,15 @@ func (cpu *CPU) CambiarEstadoMarco(nro_pagina int, frame int, entrada_tlb int) {
 func (cpu *CPU) ChequearEspacioEnTLB() (bool, int) {
 	for i := 0; i < cpu.Config_CPU.Cant_entradas_TLB; i++ {
 		if cpu.Tlb[i].pagina < 0 {
+			return true, i
+		}
+	}
+	return false, -1
+}
+
+func (cpu *CPU) ChequearEspacioEnCachePags() (bool, int) {
+	for i := 0; i < cpu.Config_CPU.Cant_entradas_cache; i++ {
+		if cpu.Cache_pags[i].pagina < 0 {
 			return true, i
 		}
 	}

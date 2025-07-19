@@ -10,5 +10,5 @@
     "cache_entries": 2,
     "cache_replacement": "CLOCK",
     "cache_delay": 250,
-    "log_level": "DEBUG"
+    "log_level": "INFO"
 }
