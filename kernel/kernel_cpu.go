@@ -55,7 +55,6 @@ func (k *Kernel) registrarNuevaCPU(mensajeCPU string) bool {
 	url := fmt.Sprintf("http://%s:%s/cpu", ip, puerto)
 
 	mutex_CPUsConectadas.Lock()
-	defer mutex_CPUsConectadas.Unlock()
 
 	if _, existe := k.CPUsConectadas[nueva_ID_CPU]; existe {
 		fmt.Println("Ya existe una CPU registrada con ese ID")
@@ -65,9 +64,12 @@ func (k *Kernel) registrarNuevaCPU(mensajeCPU string) bool {
 	k.CPUsConectadas[nueva_ID_CPU] = crearCPU(nueva_ID_CPU, url)
 
 	fmt.Printf("Se conecto una nueva CPU con ID %d en %s\n", nueva_ID_CPU, url)
-	mutex_chCPUs.Lock()
-	ch_avisoCPULibrePorId[nueva_ID_CPU] = make(chan struct{})
-	mutex_chCPUs.Unlock()
+	mutex_CPUsConectadas.Unlock()
+	//mutex_chCPUs.Lock()
+	gb_cant_cpus_conectadas++
+	ch_avisoCPULibrePorId[nueva_ID_CPU] = make(chan struct{}, 1)
+	//mutex_cpus[nueva_ID_CPU] = sync.Mutex{}
+	//mutex_chCPUs.Unlock()
 	return true
 }
 
@@ -134,16 +136,17 @@ func reservarCPU(cpu *CPU, pid int) {
 
 func (k *Kernel) liberarCPU(idCPU int) {
 	mutex_CPUsConectadas.Lock()
-	defer mutex_CPUsConectadas.Unlock()
 
 	cpu, ok := k.CPUsConectadas[idCPU]
 
 	if !ok {
 		slog.Error("No se encontró CPU al liberar", "idCPU", idCPU)
+		mutex_CPUsConectadas.Unlock()
 		return
 	}
 
 	actualizarCPU(cpu, -1, 0, true)
+	mutex_CPUsConectadas.Unlock()
 	ch_avisoCPULibrePorId[idCPU] <- struct{}{}
 	//ch_aviso_cpu_libre <- struct{}{}
 }

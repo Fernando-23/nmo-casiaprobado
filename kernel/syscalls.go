@@ -12,6 +12,7 @@ import (
 )
 
 func (k *Kernel) ActualizarPC(idCPU int, pc int) {
+
 	cpu, ok := k.CPUsConectadas[idCPU]
 	if !ok {
 		slog.Error("Error -(ActualizarPc) - No se encontró la CPU", "idCPU", idCPU)
@@ -72,7 +73,7 @@ func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
 
 		slog.Debug("intentando enviar proceso a execute", "mensaje", mensaje)
 
-		k.IntentarEnviarProcesoAExecute()
+		//k.IntentarEnviarProcesoAExecute()
 		w.Write([]byte("REPLANIFICAR"))
 	}
 
@@ -100,17 +101,16 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 
 	mutex_CPUsConectadas.Lock()
 	cpu_ejecutando, existe := k.CPUsConectadas[idCPU]
+
 	if !existe {
 		mutex_CPUsConectadas.Unlock()
 		return false, fmt.Errorf("error - CPU no registrada: %d", idCPU)
 	}
-
 	k.ActualizarPC(idCPU, pc)
 
 	pid := cpu_ejecutando.Pid
 
 	mutex_CPUsConectadas.Unlock()
-
 	cod_op := syscall[CodOp]
 
 	utils.LoggerConFormato("## (%d) - Solicitó syscall: %s", pid, cod_op)
@@ -241,6 +241,8 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int) {
 	if !unElemento { //sino, intenta con esta funcion kjahsdkjashd
 		k.IntentarEnviarProcesoAReady(EstadoNew, pid)
 	}
+	k.IntentarEnviarProcesosAReady()
+	k.IntentarEnviarProcesoAExecutePorCPU(nil)
 
 }
 
@@ -272,7 +274,7 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 		}
 
 		utils.LoggerConFormato("## (%d) - DumpMemory finalizado correctamente", pid)
-		k.IntentarEnviarProcesoAExecute()
+		//k.IntentarEnviarProcesoAExecute()
 	}(pid)
 
 }

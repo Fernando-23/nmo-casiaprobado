@@ -72,8 +72,10 @@ func main() {
 
 	slog.Info("Estado inicial del planificador largo plazo", "estado", "STOP")
 
-	waitEnter := make(chan struct{}, 1)
 	ch_avisoCPULibrePorId = make(map[int]chan struct{})
+	//mutex_cpus = make(map[int]sync.Mutex)
+	waitEnter := make(chan struct{}, 1)
+
 	//ch_aviso_cpu_libre = make(chan struct{})
 
 	// Lanzamos la rutina que espera el ENTER
@@ -104,13 +106,15 @@ func main() {
 		go func(i int) {
 			var cpu *CPU
 			for {
+				slog.Debug("Esperando canal")
 				<-ch_avisoCPULibrePorId[i]
+				slog.Debug("Paso el canal")
 				mutex_CPUsConectadas.Lock()
 				cpu = kernel.BuscarCPUPorID(i)
+				mutex_CPUsConectadas.Unlock()
 
 				kernel.IntentarEnviarProcesoAExecutePorCPU(cpu)
 
-				mutex_CPUsConectadas.Unlock()
 			}
 		}(i)
 	}

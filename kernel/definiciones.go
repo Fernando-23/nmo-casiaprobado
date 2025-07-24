@@ -76,11 +76,13 @@ var (
 	mutex_SiguientePid              sync.Mutex
 	mutex_CPUsConectadas            sync.Mutex
 	mutex_ProcesoPorEstado          [cantEstados]sync.Mutex
-	mutex_DispositivosIO            sync.Mutex
-	mutex_chCPUs                    sync.Mutex
-	url_memo                        string
-	gb_cant_cpus_conectadas         int
-	ch_avisoCPULibrePorId           map[int]chan struct{}
+	//	mutex_cpus                      map[int]sync.Mutex
+	mutex_DispositivosIO    sync.Mutex
+	mutex_chCPUs            sync.Mutex
+	url_memo                string
+	gb_cant_cpus_conectadas int
+	ch_avisoCPULibrePorId   map[int]chan struct{}
+	mutex_handleDispatch    sync.Mutex
 	//ch_aviso_cpu_libre              chan struct{}
 )
 
