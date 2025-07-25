@@ -47,7 +47,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	gb_cant_cpus_conectadas = 0
 	slog.Debug("Parámetros iniciales", "archivo", archivoPseudo, "tamanio", tamanio)
 
 	//Iniciar servidor
@@ -72,8 +71,6 @@ func main() {
 
 	slog.Info("Estado inicial del planificador largo plazo", "estado", "STOP")
 
-	ch_avisoCPULibrePorId = make(map[int]chan struct{})
-	//mutex_cpus = make(map[int]sync.Mutex)
 	waitEnter := make(chan struct{}, 1)
 
 	//ch_aviso_cpu_libre = make(chan struct{})
@@ -98,43 +95,21 @@ func main() {
 		return
 	}
 
-	//kernel.IntentarEnviarProcesoAExecute()
+	//time.Sleep(2 * time.Second)
+	go func() {
 
-	//aca iria al magia
+		for {
+			slog.Debug("Debug - (Main) - Esperando canal de aviso de cpu")
 
-	for i := 1; i <= gb_cant_cpus_conectadas; i++ {
-		go func(i int) {
-			var cpu *CPU
-			for {
-				slog.Debug("Esperando canal")
-				<-ch_avisoCPULibrePorId[i]
-				slog.Debug("Paso el canal")
-				mutex_CPUsConectadas.Lock()
-				cpu = kernel.BuscarCPUPorID(i)
-				mutex_CPUsConectadas.Unlock()
+			id := <-ch_avisoCPULibre
 
-				kernel.IntentarEnviarProcesoAExecutePorCPU(cpu)
+			slog.Debug("Debug - (Main) - Me llego algo al canal de aviso de cpu",
+				"valor obtenido", id)
 
-			}
-		}(i)
-	}
+			go kernel.GestionDeExecute(id)
 
-	// go func() {
-	// 	for {
-	// 		<-ch_aviso_cpu_libre
-	// 		kernel.IntentarEnviarProcesoAExecute()
-	// 	}
-	// }()
+		}
+	}()
 
 	select {}
 }
-
-//por si la cosa no mejora...
-//if archivoPseudo == "PLANI_CORTO_PLAZO" || archivoPseudo == "ESTABILIDAD_GENERAL" {
-//go func() {
-// 	for {
-// 		time.Sleep(2 * time.Second)
-// 		kernel.IntentarEnviarProcesoAExecute()
-// 	}
-// }()
-//}

@@ -243,7 +243,6 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int) {
 	}
 	k.IntentarEnviarProcesosAReady()
 	k.IntentarEnviarProcesoAExecutePorCPU(nil)
-
 }
 
 func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {

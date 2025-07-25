@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
@@ -65,22 +66,19 @@ func (k *Kernel) registrarNuevaCPU(mensajeCPU string) bool {
 
 	fmt.Printf("Se conecto una nueva CPU con ID %d en %s\n", nueva_ID_CPU, url)
 	mutex_CPUsConectadas.Unlock()
-	//mutex_chCPUs.Lock()
-	gb_cant_cpus_conectadas++
-	ch_avisoCPULibrePorId[nueva_ID_CPU] = make(chan struct{}, 1)
-	//mutex_cpus[nueva_ID_CPU] = sync.Mutex{}
-	//mutex_chCPUs.Unlock()
+
+	mutex_CPUsConectadasPorId[nueva_ID_CPU] = sync.Mutex{}
+
 	return true
 }
 
 func crearCPU(id int, url string) *CPU {
 	nueva_cpu := &CPU{
-		ID:            id,
-		Url:           url,
-		Pid:           -1,
-		Pc:            0,
-		ADesalojarPor: -1,
-		Esta_libre:    true,
+		ID:         id,
+		Url:        url,
+		Pid:        -1,
+		Pc:         0,
+		Esta_libre: true,
 	}
 	return nueva_cpu
 
@@ -108,11 +106,10 @@ func (k *Kernel) BuscarCPUPorID(id int) *CPU {
 	return cpu
 }
 
-func actualizarCPU(cpu *CPU, pid int, pc int, liberar bool) {
-	cpu.Esta_libre = liberar
+func actualizarCPU(cpu *CPU, pid int, pc int, nuevo_valor_esta_libre bool) {
 	cpu.Pid = pid
 	cpu.Pc = pc
-	cpu.ADesalojarPor = -1
+	cpu.Esta_libre = nuevo_valor_esta_libre
 }
 
 func RegistrarCPUaLibre(cpu_a_liberar *CPU) {
@@ -129,24 +126,18 @@ func handleDispatch(pid int, pc int, url string) {
 	utils.EnviarStringSinEsperar("POST", fullURL, datos)
 }
 
-// potente a desalojar por papa noel
-func reservarCPU(cpu *CPU, pid int) {
-	cpu.ADesalojarPor = pid
-}
-
 func (k *Kernel) liberarCPU(idCPU int) {
 	mutex_CPUsConectadas.Lock()
 
 	cpu, ok := k.CPUsConectadas[idCPU]
 
 	if !ok {
-		slog.Error("No se encontró CPU al liberar", "idCPU", idCPU)
+		slog.Error("Error - (liberarCPU) -No se encontró CPU al liberar", "idCPU", idCPU)
 		mutex_CPUsConectadas.Unlock()
 		return
 	}
 
 	actualizarCPU(cpu, -1, 0, true)
 	mutex_CPUsConectadas.Unlock()
-	ch_avisoCPULibrePorId[idCPU] <- struct{}{}
-	//ch_aviso_cpu_libre <- struct{}{}
+	ch_avisoCPULibre <- cpu.ID
 }

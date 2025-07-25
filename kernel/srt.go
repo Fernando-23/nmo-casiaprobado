@@ -10,7 +10,7 @@ import (
 
 // Ya esta previamente tomado el mutex CPUsCnectadas
 // ya esta previamente tomado el mutex de EXECUTE
-func (k *Kernel) ChequearDesalojo(proceso_suplente *PCB) (bool, *CPU) {
+func (k *Kernel) ChequearDesalojo(proceso_suplente *PCB) *CPU {
 	//1er check - Buscar CPU candidata
 	//Auxs
 	var nuevo_estimado_actual_en_exec float64
@@ -24,7 +24,8 @@ func (k *Kernel) ChequearDesalojo(proceso_suplente *PCB) (bool, *CPU) {
 	for _, cpu := range k.CPUsConectadas {
 		pcb_aux = k.BuscarPorPidSinLock(EstadoExecute, cpu.Pid)
 
-		nuevo_estimado_actual_en_exec = k.CalcularEstSJF_sinModifPCB(pcb_aux.SJF.Estimado_anterior, pcb_aux.SJF.Real_anterior)
+		// calculamos
+		nuevo_estimado_actual_en_exec = pcb_aux.SJF.Estimado_actual - float64(duracionEnEstado(pcb_aux)) //a chequear
 
 		if proceso_suplente.SJF.Estimado_actual < nuevo_estimado_actual_en_exec {
 			slog.Debug("Debug - (ChequearDesalojo) - Consegui un posible candidato",
@@ -36,11 +37,11 @@ func (k *Kernel) ChequearDesalojo(proceso_suplente *PCB) (bool, *CPU) {
 	//-------Si no encontre
 	if cpu_candidata == nil && pcb_a_desalojar == nil {
 		slog.Debug("Debug - (ChequearDesalojo) - Ninguna cpu cumplica con condicion de estimacion, no hubo desalojo")
-		return false, nil
+		return nil
 	}
 
 	//-------Si encontre
-	return true, cpu_candidata
+	return cpu_candidata
 }
 
 func (k *Kernel) RealizarDesalojo(cpu_a_detonar *CPU, pid_a_entrar int) {
@@ -53,6 +54,8 @@ func (k *Kernel) RealizarDesalojo(cpu_a_detonar *CPU, pid_a_entrar int) {
 			"pid que tenia que desalojar", pid_a_entrar)
 		return
 	}
+	slog.Debug("Debug - (RealizarDesalojo) - Pude desalojar correctamente, jupiiiii",
+		"pid que entro", pid_a_entrar, "cpu detonada", cpu_a_detonar.ID)
 
 }
 

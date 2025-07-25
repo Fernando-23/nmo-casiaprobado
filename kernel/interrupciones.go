@@ -86,6 +86,8 @@ func (k *Kernel) AtenderFinInterrupcion(idCPU, pidDesalojado, pcActualizado int)
 	actualizarCPU(cpu, cpu.ADesalojarPor, pcActualizado, false)
 }
 
+//-------------------------------------------EL BASURERO DE KERNEL-------------------------------------------
+
 // // -----------Informa el Club Atletico Velez Sarsfield------------
 // func (k *Kernel) CambiosEnElPlantel(cpuPosicion *CPU, procesoTitular *PCB, procesoSuplente *PCB) bool {
 // 	// Debutante
@@ -210,4 +212,101 @@ func (k *Kernel) AtenderFinInterrupcion(idCPU, pidDesalojado, pcActualizado int)
 // 	}
 // 	return false
 
+// }
+
+// // No hay pid, no hay cpu, bien general y no muy linda
+// func (k *Kernel) IntentarEnviarProcesoAExecute() {
+// 	mutex_ProcesoPorEstado[EstadoReady].Lock()
+
+// 	if !k.TieneProcesos(EstadoReady) {
+// 		slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay procesos en READY")
+// 		mutex_ProcesoPorEstado[EstadoReady].Unlock()
+// 		return
+// 	}
+// 	// QUE DEVUELVA EL 1ER ELEMENTO DE READY, ASI ORGANIZAMOS BIEN
+// 	hay_que_chequear_desalojo := k.OrdenarPorAlgoritmoREADY()
+
+// 	//tomamos al primer PCB no reservado para la planificacion
+// 	var pcb *PCB
+// 	listaReady := k.ProcesoPorEstado[EstadoReady]
+
+// 	if k.Configuracion.Algoritmo_Plani == "SRT" {
+// 		for _, candidato := range listaReady {
+// 			if !EstaReservado(candidato) { // si esta en la lista negra, no hago nada
+// 				pcb = candidato //si no esta es candidato
+// 				break
+// 			}
+// 		}
+// 	} else {
+// 		// los reales lo hacemos asi, nada de funciones
+// 		pcb = listaReady[0]
+// 		//pcb = k.PrimerElementoSinSacar(EstadoReady)
+
+// 	}
+
+// 	if pcb == nil {
+// 		slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay procesos disponibles en READY")
+// 		mutex_ProcesoPorEstado[EstadoReady].Unlock()
+// 		return
+// 	}
+
+// 	if k.Configuracion.Algoritmo_Plani == "SRT" {
+// 		ReservarSRT(pcb, "ESPERANDO CPU") // lo agregamos a la lista negra
+// 	}
+
+// 	pid := pcb.Pid
+// 	pc := pcb.Pc
+// 	mutex_ProcesoPorEstado[EstadoReady].Unlock()
+
+// 	// buscamos una cpu libre
+// 	mutex_CPUsConectadas.Lock()
+// 	cpu_seleccionada := k.ObtenerCPULibre()
+// 	mutex_CPUsConectadas.Unlock()
+
+// 	if cpu_seleccionada == nil { // si no hay CPU LIBRE
+// 		if hay_que_chequear_desalojo {
+// 			slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay CPU libre, intentando desalojo por SRT", "pid", pid)
+// 			if !k.IntentarDesalojoSRT(pid) {
+// 				ReservarSRT(pcb, "NO") //lo sacamos al vende humo de la lista negra por ahora
+// 			}
+// 		} else {
+// 			slog.Debug("Debug - (IntentarEnviarProcesoAExecute) - No hay CPU libre y no se requiere desalojo", "pid", pid)
+// 			ReservarSRT(pcb, "NO") //lo sacamos al vende humo de la lista negra por ahora
+// 		}
+// 		return
+// 	}
+
+// 	//voy a reservar la cpu
+// 	if k.Configuracion.Algoritmo_Plani == "SRT" {
+// 		reservarCPU(cpu_seleccionada, pid)
+// 	}
+
+// 	idCPU := cpu_seleccionada.ID
+// 	url := cpu_seleccionada.Url
+
+// 	mutex_handleDispatch.Lock()
+// 	handleDispatch(pid, pc, url)
+// 	mutex_handleDispatch.Unlock()
+
+// 	// verifico si esta en el mismo espacio de memoria, lo saco
+// 	mutex_ProcesoPorEstado[EstadoReady].Lock()
+// 	procVerificadoAExecute := k.QuitarYObtenerPCB(EstadoReady, pid, false)
+// 	mutex_ProcesoPorEstado[EstadoReady].Unlock()
+
+// 	if procVerificadoAExecute == nil {
+// 		slog.Warn("Cuidadito - (IntentarEnviarProcesoAExecute) - El proceso no esta en la lista READY", "pid", pid)
+// 		return
+// 	}
+
+// 	mutex_CPUsConectadas.Lock()
+// 	actualizarCPU(cpu_seleccionada, pid, pc, false)
+// 	mutex_CPUsConectadas.Unlock()
+
+// 	//aca lo mandamos a execute
+// 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
+// 	k.AgregarAEstado(EstadoExecute, procVerificadoAExecute, false)
+// 	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+
+// 	ReservarSRT(procVerificadoAExecute, "NO") //ahora pequenio pcb es un ninio bueno, lo saco de la lista negra
+// 	slog.Debug("Debug - (IntentarEnviarProcesoAExecute)- Proceso enviado a EXECUTE", "pid", pid, "cpu_id", idCPU)
 // }
