@@ -14,7 +14,7 @@ func (k *Kernel) hayQuePlanificarAccesoAReady(estadoOrigen int, pid int) bool {
 	algoritmoPlani := k.Configuracion.Ready_ingress_algorithm
 	lProcEstado := k.ProcesoPorEstado[estadoOrigen]
 
-	if len(lProcEstado) > 1 {
+	if len(lProcEstado) >= 1 {
 		return true
 	}
 
