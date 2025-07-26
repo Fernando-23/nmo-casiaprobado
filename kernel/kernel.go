@@ -72,6 +72,7 @@ func main() {
 	slog.Info("Estado inicial del planificador largo plazo", "estado", "STOP")
 
 	waitEnter := make(chan struct{}, 1)
+	ch_avisoCPULibre = make(chan int, 6)
 
 	//ch_aviso_cpu_libre = make(chan struct{})
 
@@ -106,7 +107,7 @@ func main() {
 			slog.Debug("Debug - (Main) - Me llego algo al canal de aviso de cpu",
 				"valor obtenido", id)
 
-			go kernel.GestionDeExecute(id)
+			go kernel.GestionDeAvisoDeCPULibre(id)
 
 		}
 	}()

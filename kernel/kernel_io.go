@@ -205,8 +205,8 @@ func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {
 
 	pid, nombre, err := decodificarMensajeFinIO(mensajeIO)
 
-	k.ImprimirPCBsDeEstado(EstadoBlock)
-	k.ImprimirPCBsDeEstado(EstadoBlockSuspended)
+	//k.ImprimirPCBsDeEstado(EstadoBlock)
+	//k.ImprimirPCBsDeEstado(EstadoBlockSuspended)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -227,10 +227,14 @@ func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
 		//==================== LOG OBLIGATORIO ====================
 		utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY", pid)
 		//=========================================================
-		/*for i := 0; i < len(k.CPUsConectadas); i++ {
-			k.IntentarEnviarProcesoAExecute()
-		}*/
-		//k.IntentarEnviarProcesoAExecutePorCPU(nil)
+
+		puedo_volver_a_execute, pcb := k.SoyPrimeroEnREADYyNadaEnSuspREADY(pid)
+		if puedo_volver_a_execute {
+			mutex_ProcesoPorEstado[EstadoReady].Lock()
+			k.IntentarEnviarProcesoAExecutePorPCB(pcb)
+			mutex_ProcesoPorEstado[EstadoReady].Unlock()
+		}
+
 	} else if k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid, true) {
 		slog.Debug("Debug - (liberarInstanciaIO) - Pude mover de BLOCK_SUSP a READY_SUSPENDED",
 			"pid", pid)

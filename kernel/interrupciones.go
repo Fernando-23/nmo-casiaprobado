@@ -310,3 +310,5 @@ func (k *Kernel) AtenderFinInterrupcion(idCPU, pidDesalojado, pcActualizado int)
 // 	ReservarSRT(procVerificadoAExecute, "NO") //ahora pequenio pcb es un ninio bueno, lo saco de la lista negra
 // 	slog.Debug("Debug - (IntentarEnviarProcesoAExecute)- Proceso enviado a EXECUTE", "pid", pid, "cpu_id", idCPU)
 // }
+
+// Santiago Calizaya

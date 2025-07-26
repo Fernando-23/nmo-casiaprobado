@@ -90,7 +90,6 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB, liberaMemoria bool) {
 	if liberaMemoria {
 		slog.Debug("Debug - (EliminarProceso) - Libere memoria, voy a proceder a hacer mis cositas")
 		k.IntentarEnviarProcesosAReady()
-		//k.IntentarEnviarProcesoAExecute()
 	}
 }
 

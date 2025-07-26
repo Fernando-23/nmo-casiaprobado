@@ -8,7 +8,7 @@ import (
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-// Ya esta previamente tomado el mutex CPUsCnectadas
+// Ya esta previamente tomado el mutex CPUsConectadas
 // ya esta previamente tomado el mutex de EXECUTE
 func (k *Kernel) ChequearDesalojo(proceso_suplente *PCB) *CPU {
 	//1er check - Buscar CPU candidata

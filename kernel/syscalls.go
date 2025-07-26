@@ -65,7 +65,7 @@ func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	k.ImprimirPCBsDeEstado(EstadoReady)
+	//k.ImprimirPCBsDeEstado(EstadoReady)
 
 	if debeContinuar {
 		w.Write([]byte("SEGUI"))
@@ -241,8 +241,8 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int) {
 	if !unElemento { //sino, intenta con esta funcion kjahsdkjashd
 		k.IntentarEnviarProcesoAReady(EstadoNew, pid)
 	}
-	k.IntentarEnviarProcesosAReady()
-	k.IntentarEnviarProcesoAExecutePorCPU(nil)
+
+	//k.IntentarEnviarProcesosAReady()
 }
 
 func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
@@ -273,7 +273,15 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 		}
 
 		utils.LoggerConFormato("## (%d) - DumpMemory finalizado correctamente", pid)
-		//k.IntentarEnviarProcesoAExecute()
+		slog.Debug("Debug - (GestionarDUMP_MEMORY) - A esta altura, se supone que envie a READY al proceso que hizo el Dump")
+		puedo_ejecutar, pcb_candidato := k.SoyPrimeroEnREADYyNadaEnSuspREADY(pid)
+
+		if puedo_ejecutar {
+			mutex_ProcesoPorEstado[EstadoReady].Lock()
+			k.IntentarEnviarProcesoAExecutePorPCB(pcb_candidato)
+			mutex_ProcesoPorEstado[EstadoReady].Unlock()
+		}
+
 	}(pid)
 
 }
