@@ -32,11 +32,12 @@ func (cpu *CPU) Decode(instruccion string) (string, []string) {
 func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa string) {
 
 	utils.LoggerConFormato("## PID: %d - Ejecutando: %s", cpu.Proc_ejecutando.Pid, instruccion_completa)
+	var tipo_instruccion string
 	switch cod_op {
 
 	case "NOOP":
 		//consume el tiempo de ciclo de instruccion
-
+		tipo_instruccion = "REQUIERO_DESALOJO"
 	case "WRITE":
 		dir_logica, err := strconv.Atoi(operacion[0])
 
@@ -54,6 +55,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 			dir_fisica.offset,
 			datos,
 		)
+		tipo_instruccion = "REQUIERO_DESALOJO"
 
 	case "READ":
 		dir_logica, err1 := strconv.Atoi(operacion[0])
@@ -64,10 +66,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 			return
 		}
 
-		//Gestionar mejor el error :p
 		valor_leido, dir_fisica := cpu.RequestREAD(dir_logica, tamanio)
-		//si el valor leido es un aviso de direccionamiento invalido
-		//habilitar un hay_interrupcion
 
 		utils.LoggerConFormato("PID: %d - Acción: LEER - Dirección Física: [ %d |  %d  ] - Valor: %s",
 			cpu.Proc_ejecutando.Pid,
@@ -75,7 +74,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 			dir_fisica.offset,
 			valor_leido,
 		)
-
+		tipo_instruccion = "REQUIERO_DESALOJO"
 	case "GOTO":
 
 		nuevo_pc, err := strconv.Atoi(operacion[0])
@@ -86,7 +85,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		}
 
 		cpu.Proc_ejecutando.Pc = nuevo_pc
-
+		tipo_instruccion = "REQUIERO_DESALOJO"
 	// Syscalls
 	case "IO":
 		// ID_CPU PC IO TECLADO 20000
@@ -98,18 +97,19 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		CambiarValorActualizarContexto(true)
 
 		CambiarValorTengoQueActualizarEnKernel(true)
+		tipo_instruccion = "NO_REQUIERO_DESALOJO"
 
 	case "INIT_PROC":
 		// ID_CPU PC INIT_PROC proceso1 256
 		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
-		mensaje_init_proc := fmt.Sprintf("%s %d INIT_PROC %s %s", cpu.Id, pc_a_actualizar, operacion[0], operacion[1])
+		mensaje_init_proc := fmt.Sprintf("%d %d INIT_PROC %s %s", cpu.Proc_ejecutando.Pid, pc_a_actualizar, operacion[0], operacion[1])
 		cpu.EnviarSyscall("INIT_PROC", mensaje_init_proc)
 
 		//deberia por default estar los 2 en false, peeeero, para asegurarnos, que los setee igual
 		CambiarValorActualizarContexto(false)
 
 		CambiarValorTengoQueActualizarEnKernel(false)
-
+		tipo_instruccion = "REQUIERO_DESALOJO"
 	case "DUMP_MEMORY":
 		// ID_CPU PC DUMP_MEMORY
 		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
@@ -119,6 +119,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		CambiarValorActualizarContexto(true)
 
 		CambiarValorTengoQueActualizarEnKernel(true)
+		tipo_instruccion = "NO_REQUIERO_DESALOJO"
 	case "EXIT":
 		// ID_CPU PC DUMP_MEMORY
 		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
@@ -128,6 +129,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		CambiarValorActualizarContexto(true)
 
 		CambiarValorTengoQueActualizarEnKernel(true)
+		tipo_instruccion = "NO_REQUIERO_DESALOJO"
 
 	default:
 		slog.Error("Error - (Execute) - ingrese una instruccion valida")
@@ -138,7 +140,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		cpu.Proc_ejecutando.Pc++
 	}
 
-	cpu.CheckInterrupt(cpu.Proc_ejecutando.Pc)
+	cpu.CheckInterrupt(cpu.Proc_ejecutando.Pc, tipo_instruccion)
 }
 
 func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
@@ -166,10 +168,11 @@ func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (cpu *CPU) CheckInterrupt(pc_a_actualizar int) {
+func (cpu *CPU) CheckInterrupt(pc_a_actualizar int, tipo_instruccion string) {
 	mutex_tenemosInterrupt.Lock()
 	if tenemos_interrupt {
 		ch_respuesta_interrupt <- pc_a_actualizar
+		ch_tipo_instruccion <- tipo_instruccion
 		mutex_tenemosInterrupt.Unlock()
 
 		CambiarValorActualizarContexto(true)

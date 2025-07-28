@@ -72,6 +72,7 @@ var (
 
 	//MIS MEJORES AMIGOS, LOS CHANNELS
 	ch_respuesta_interrupt chan int
+	ch_tipo_instruccion    chan string
 )
 
 // Mutexs

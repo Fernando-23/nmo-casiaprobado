@@ -88,20 +88,26 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 		return false, fmt.Errorf("error - PC inválido: %s", syscall[PC])
 	}
 
-	mutex_CPUsConectadas.Lock()
-	cpu_ejecutando, existe := k.CPUsConectadas[idCPU]
+	var pid int
+	if syscall[2] != "INIT_PROC" {
+		mutex_CPUsConectadas.Lock()
+		cpu_ejecutando, existe := k.CPUsConectadas[idCPU]
 
-	if !existe {
+		if !existe {
+			mutex_CPUsConectadas.Unlock()
+			return false, fmt.Errorf("error - CPU no registrada: %d", idCPU)
+		}
+
+		pid = cpu_ejecutando.Pid
+
 		mutex_CPUsConectadas.Unlock()
-		return false, fmt.Errorf("error - CPU no registrada: %d", idCPU)
 	}
+	pid, _ = strconv.Atoi(syscall[0])
 
-	pid := cpu_ejecutando.Pid
-
-	mutex_CPUsConectadas.Unlock()
 	cod_op := syscall[CodOp]
 
 	utils.LoggerConFormato("## (%d) - Solicitó syscall: %s", pid, cod_op)
+
 	switch cod_op {
 	case "IO":
 		// 2 20 IO AURICULARES 9000
