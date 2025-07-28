@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
@@ -45,38 +46,53 @@ func (k *Kernel) ChequearDesalojo(proceso_suplente *PCB) *CPU {
 }
 
 func (k *Kernel) RealizarDesalojo(cpu_a_detonar *CPU, pid_a_entrar int) {
-	pc_actualizado := k.EnviarInterrupt(cpu_a_detonar)
+	pc_actualizado, pid_aux_exit := k.EnviarInterrupt(cpu_a_detonar)
 
 	// Actualizamos pc en la cpu que estaba ejecutando
-	desaloje := k.MudancasNoElenco(cpu_a_detonar, pid_a_entrar, pc_actualizado)
+	desaloje := k.MudancasNoElenco(cpu_a_detonar, pid_aux_exit, pid_a_entrar, pc_actualizado)
 	if !desaloje {
 		slog.Error("Error - (RealizarDesalojo) - Por alguna razon, no se pudo desalojar",
 			"pid que tenia que desalojar", pid_a_entrar)
 		return
 	}
+
 	slog.Debug("Debug - (RealizarDesalojo) - Pude desalojar correctamente, jupiiiii",
 		"pid que entro", pid_a_entrar, "cpu detonada", cpu_a_detonar.ID)
 
 }
 
 // -----------------------------Relatorios do Clube Atletico Velez Sarsfield------------------------------
-func (k *Kernel) MudancasNoElenco(cpu_ejecutando *CPU, pid_suplente, pc_titular int) bool {
+func (k *Kernel) MudancasNoElenco(cpu_ejecutando *CPU, pid_aux_exit, pid_suplente, pc_titular int) bool {
 
 	proceso_suplente := k.BuscarPorPidSinLock(EstadoReady, pid_suplente)
 	proceso_titular := k.BuscarPorPidSinLock(EstadoExecute, cpu_ejecutando.Pid)
 
-	// Ahora si desalojamos al pcb correspondiente
-	// SALE KAROL (DO RIO DE JANEIRO), actualizamos datos del pcb titular
-	tiempo_en_cancha := duracionEnEstado(proceso_titular)
-	k.actualizarEstimacionSJF(proceso_titular, tiempo_en_cancha)
-	proceso_titular.Pc = pc_titular
+	fue_expulsado := false
 
-	utils.LoggerConFormato("## (%d) - Desalojado por algoritmo SJF/SRT", proceso_titular.Pid)
+	if proceso_titular == nil {
+		slog.Debug("Debug - (MudancasNoElenco) el procesoEjecutando no esta en la lista EXECUTE, capaaaaaz fue expulsado, procedo a buscarlo")
 
-	if !k.MoverDeEstadoPorPid(EstadoExecute, EstadoReady, proceso_titular.Pid, false) {
-		slog.Error("Error - (MudancasNoElenco) el procesoEjecutando no esta en la lista EXECUTE")
-		return false
+		mutex_expulsadosPorRoja.Lock()
+		encontre := k.buscarEnExpulsados(pid_aux_exit)
+		mutex_expulsadosPorRoja.Unlock()
+
+		if !encontre {
+			slog.Error("Error - (MudancasNoElenco) - El procesoEjecutando no esta ni en la lista EXECUTE ni fue expulsado")
+			return false
+		}
+
+		fue_expulsado = true
 	}
+
+	// SALE KAROL (DO RIO DE JANEIRO), actualizamos datos del pcb titular
+	if !fue_expulsado {
+		tiempo_en_cancha := duracionEnEstado(proceso_titular)
+		k.actualizarEstimacionSJF(proceso_titular, tiempo_en_cancha)
+		proceso_titular.Pc = pc_titular
+		k.MoverDeEstadoPorPid(EstadoExecute, EstadoReady, proceso_titular.Pid, false)
+	}
+
+	utils.LoggerConFormato("## (%d) - Desalojado por algoritmo SJF/SRT", pid_aux_exit)
 
 	// Actualizamos la cpu con el proceso nuevo
 	cpu_ejecutando.Pc = proceso_suplente.Pc
@@ -102,17 +118,40 @@ func (k *Kernel) MudancasNoElenco(cpu_ejecutando *CPU, pid_suplente, pc_titular 
 		estados_proceso[EstadoExecute],
 	)
 
-	fmt.Printf("CAMBIO: Sale %d (est. %.2f), entra %d (est. %.2f)\n", // Leer con voz de gangoso
-		proceso_titular.Pid, proceso_titular.SJF.Estimado_actual,
+	if !fue_expulsado {
+		fmt.Printf("CAMBIO: Sale %d (est. %.2f), entra %d (est. %.2f)\n", // Leer con voz de gangoso
+			proceso_titular.Pid, proceso_titular.SJF.Estimado_actual,
+			proceso_suplente.Pid, proceso_suplente.SJF.Estimado_actual,
+		)
+		return true
+	}
+
+	fmt.Printf("CAMBIO: Sale %d (como fue expulsado, no importa su estimacion, fue un EXIT), entra %d (est. %.2f)\n", // Leer con voz de gangoso
+		pid_aux_exit,
 		proceso_suplente.Pid, proceso_suplente.SJF.Estimado_actual,
 	)
+
 	return true
 }
 
-func (k *Kernel) EnviarInterrupt(cpu_a_detonar *CPU) int {
+func (k *Kernel) EnviarInterrupt(cpu_a_detonar *CPU) (int, int) {
 	respuesta, _ := utils.FormatearUrlYEnviar(cpu_a_detonar.Url, "/interrupt", true, "")
+	aux := strings.Split(respuesta, " ")
 
-	pc_actualizado, _ := strconv.Atoi(respuesta)
+	pc_actualizado, _ := strconv.Atoi(aux[0])
+	pid_aux_exit, _ := strconv.Atoi(aux[1])
 
-	return pc_actualizado
+	return pc_actualizado, pid_aux_exit
+}
+
+func (k *Kernel) buscarEnExpulsados(pid_expulsado_a_buscar int) bool {
+
+	for i := 0; i < len(k.ExpulsadosPorRoja); i++ {
+		if k.ExpulsadosPorRoja[i] == pid_expulsado_a_buscar {
+			k.ExpulsadosPorRoja = append(k.ExpulsadosPorRoja[:i], k.ExpulsadosPorRoja[i+1:]...)
+			return true
+		}
+	}
+
+	return false
 }

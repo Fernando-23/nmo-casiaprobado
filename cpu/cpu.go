@@ -51,7 +51,7 @@ func main() {
 
 	aux_datos_mmu := strings.Split(handshake_memoria, " ")
 	cant_niveles, _ = strconv.Atoi(aux_datos_mmu[0])
-	cant_entradas_tpag, _ = strconv.Atoi(aux_datos_mmu[1])
+	//cant_entradas_tpag, _ = strconv.Atoi(aux_datos_mmu[1])
 	tam_pag, _ = strconv.Atoi(aux_datos_mmu[2])
 
 	// Conexion con Kernel
@@ -65,7 +65,10 @@ func main() {
 
 	var instruccion string
 
-	hay_interrupcion = false
+	//inicializo flags pq despues me olvido
+	hay_que_actualizar_contexto = false
+	tenemos_interrupt = false
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/cpu/dispatch", cpu.EsperarDatosKernel)
 	mux.HandleFunc("/cpu/interrupt", cpu.RecibirInterrupt)
@@ -74,13 +77,14 @@ func main() {
 	go http.ListenAndServe(socket_cpu, mux)
 	// Ciclo de instruccion
 	ch_esperar_datos = make(chan struct{})
+	ch_respuesta_interrupt = make(chan int, 6)
 
 	for {
 		slog.Debug("Debug - (CicloInstruccion) - Esperando datos de kernel",
 			"cpu", id_cpu)
 		<-ch_esperar_datos
 
-		for !hay_interrupcion { //consulta el valor en un tiempo t no necesito sincronizar
+		for !hay_que_actualizar_contexto { //consulta el valor en un tiempo t no necesito sincronizar
 			instruccion = cpu.Fetch()
 
 			if instruccion == "TODO MAL" {
@@ -88,24 +92,28 @@ func main() {
 				return
 			}
 
-			utils.LoggerConFormato("## PID: %d - FETCH - Program Counter: %d",
-				cpu.Proc_ejecutando.Pid, cpu.Proc_ejecutando.Pc)
-
 			if instruccion == "" {
 				slog.Error("No hay una instruccion valida asociado a este Program Counter.")
-				break
+				return
 			}
+
+			utils.LoggerConFormato("## PID: %d - FETCH - Program Counter: %d",
+				cpu.Proc_ejecutando.Pid, cpu.Proc_ejecutando.Pc)
 
 			cod_op, operacion := cpu.Decode(instruccion)
 			slog.Debug("Debug - (CicloInstruccion) - Instruccion a ejecutar",
 				"instruccion", instruccion)
-			cpu.Execute(cod_op, operacion, instruccion)
 
+			cpu.Execute(cod_op, operacion, instruccion)
 		}
+
 		slog.Debug("Debug - (CicloInstruccion) - Se va a cambiar el contexto")
 		cpu.LiberarCaches()
-		HabilitarInterrupt(false)
-		// check
+
+		CambiarValorActualizarContexto(false)
+
+		cpu.ChequearSiTengoQueActualizarEnKernel()
+
 		utils.LoggerConFormato("## PID: %d - Finaliza la ejecucion", cpu.Proc_ejecutando.Pid)
 	}
 }

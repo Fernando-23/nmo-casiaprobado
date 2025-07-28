@@ -224,9 +224,9 @@ func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
 		slog.Debug("Debug - (liberarInstanciaIO) - Pude mover de BLOCK a READY",
 			"pid", pid)
 
-		//==================== LOG OBLIGATORIO ====================
+		//======================= LOG OBLIGATORIO =======================
 		utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY", pid)
-		//=========================================================
+		//===============================================================
 
 		puedo_volver_a_execute, pcb := k.SoyPrimeroEnREADYyNadaEnSuspREADY(pid)
 		if puedo_volver_a_execute {

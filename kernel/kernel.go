@@ -16,9 +16,10 @@ func main() {
 	fmt.Println("Iniciando Kernel...")
 	//cliente.ConfigurarLogger("kernel")
 	kernel := &Kernel{
-		CPUsConectadas: make(map[int]*CPU),
-		Configuracion:  new(ConfigKernel),
-		DispositivosIO: make(map[string]*InstanciasPorDispositivo),
+		CPUsConectadas:    make(map[int]*CPU),
+		Configuracion:     new(ConfigKernel),
+		DispositivosIO:    make(map[string]*InstanciasPorDispositivo),
+		ExpulsadosPorRoja: []int{},
 	}
 
 	if len(os.Args) < 4 { // ruta archivo-pseudo tamanio
@@ -53,7 +54,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/kernel/registrar_cpu", kernel.LlegaNuevaCPU) //SINCRO HECHA
-	mux.HandleFunc("/kernel/interrupido", kernel.llegaFinInterrupcion)
+	mux.HandleFunc("/kernel/actualizar_contexto", kernel.ActualizarContexto)
 	mux.HandleFunc("/kernel/syscall", kernel.llegaSyscallCPU)
 	mux.HandleFunc("/kernel/registrar_io", kernel.llegaNuevaIO)         // SINCRO HECHA
 	mux.HandleFunc("/kernel/desconectar_io", kernel.llegaDesconexionIO) // revisado y corregido 20/6

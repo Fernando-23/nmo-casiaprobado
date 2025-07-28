@@ -29,7 +29,6 @@ type PCB struct {
 	Arch_pseudo        string
 	HoraIngresoAEstado time.Time //revisar a futuro
 	SJF                *SJF      //Estimaciones para planificacion SJF
-	Reservado          string
 }
 
 type SJF struct {
@@ -43,7 +42,7 @@ type CPU struct {
 	Url           string
 	Pid           int // Es -1 si no hay nadie
 	Pc            int
-	ADesalojarPor int
+	ADesalojarPor int // no veo la hora de quitar esta linea tbh
 	Esta_libre    bool
 }
 
@@ -64,11 +63,12 @@ type DispositivoIO struct {
 }
 
 type Kernel struct {
-	ProcesoPorEstado map[int][]*PCB
-	CPUsConectadas   map[int]*CPU
-	DispositivosIO   map[string]*InstanciasPorDispositivo
-	Configuracion    *ConfigKernel
-	SiguientePID     int
+	ProcesoPorEstado  map[int][]*PCB
+	CPUsConectadas    map[int]*CPU
+	DispositivosIO    map[string]*InstanciasPorDispositivo
+	ExpulsadosPorRoja []int
+	Configuracion     *ConfigKernel
+	SiguientePID      int
 }
 
 var (
@@ -78,8 +78,11 @@ var (
 	mutex_ProcesoPorEstado          [cantEstados]sync.Mutex
 	mutex_CPUsConectadasPorId       [6]sync.Mutex
 	mutex_DispositivosIO            sync.Mutex
+	mutex_expulsadosPorRoja         sync.Mutex
 	url_memo                        string
 	ch_avisoCPULibre                chan int
+
+	//mutex_compartidoCPUS sync.RWMutex
 )
 
 // PROCESO MAS CHICO PRIMERO

@@ -1,7 +1,11 @@
 package main
 
 import (
+	"io"
 	"log/slog"
+	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
@@ -23,7 +27,6 @@ func (k *Kernel) CrearPCB(tamanio int, arch_pseudo string) *PCB {
 		Tamanio:     tamanio,
 		Arch_pseudo: arch_pseudo,
 		Pc:          0,
-		Reservado:   "NO",
 	}
 
 	if k.Configuracion.Algoritmo_Plani == "SJF" || k.Configuracion.Algoritmo_Plani == "SRT" {
@@ -93,14 +96,6 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB, liberaMemoria bool) {
 	}
 }
 
-func ReservarSRT(pcb *PCB, reservado string) {
-	pcb.Reservado = reservado
-}
-
-func EstaReservado(pcb *PCB) bool {
-	return pcb.Reservado != "NO"
-}
-
 func (k *Kernel) esProcesoMasChico(pid int, estadoOrigen int) bool {
 	procQuiereDetonar := k.BuscarPorPidSinLock(estadoOrigen, pid)
 	procMasChico := k.PrimerElementoSinSacar(estadoOrigen)
@@ -110,4 +105,33 @@ func (k *Kernel) esProcesoMasChico(pid int, estadoOrigen int) bool {
 		return true
 	}
 	return false
+}
+
+func (k *Kernel) ActualizarContexto(w http.ResponseWriter, r *http.Request) {
+
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (ActualizarContexto) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	mensajeCPU := string(body_Bytes)
+	aux := strings.Split(mensajeCPU, " ") // IDCPU PC
+
+	id_cpu, _ := strconv.Atoi(aux[0])
+	pc, _ := strconv.Atoi(aux[1])
+
+	exito := k.RenovacionDeCPU(id_cpu, pc)
+
+	if !exito {
+		slog.Error("Error - (ActualizarContexto) - Error en actualizar contexto", "id recibido", id_cpu,
+			"pc recibido", pc)
+		return
+	}
+
+	slog.Debug("Debug - (ActualizarContexto) - Actualice correctamente el contexto",
+		"id cpu actualizada", id_cpu)
+
 }

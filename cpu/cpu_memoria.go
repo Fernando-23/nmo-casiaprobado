@@ -262,6 +262,10 @@ func (cpu *CPU) AplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int,
 	case "CLOCK":
 		for i := 0; i < cant_entradas_cache; i++ {
 			if cpu.Cache_pags[i].bit_uso == 0 {
+				if cpu.Cache_pags[i].bit_modificado == 1 {
+					utils.FormatearUrlYEnviar(cpu.Url_memoria, "/WRITE", true, "%d %d %d %s", cpu.Proc_ejecutando.Pid, cpu.Cache_pags[i].frame, cpu.Cache_pags[i].offset, cpu.Cache_pags[i].contenido)
+				}
+
 				cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
 				slog.Debug("Debug - (AplicarAlgoritmoCachePags) - Realice el reemplazo en la 1ra pasada de CLOCK comun")
 				return
@@ -271,6 +275,11 @@ func (cpu *CPU) AplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int,
 
 		for i := 0; i < cpu.Config_CPU.Cant_entradas_cache; i++ {
 			if cpu.Cache_pags[i].bit_uso == 0 {
+
+				if cpu.Cache_pags[i].bit_modificado == 1 {
+					utils.FormatearUrlYEnviar(cpu.Url_memoria, "/WRITE", true, "%d %d %d %s", cpu.Proc_ejecutando.Pid, cpu.Cache_pags[i].frame, cpu.Cache_pags[i].offset, cpu.Cache_pags[i].contenido)
+				}
+
 				cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
 				slog.Debug("Debug - (AplicarAlgoritmoCachePags) - Realice el reemplazo en la 2da pasada de CLOCK comun")
 				return

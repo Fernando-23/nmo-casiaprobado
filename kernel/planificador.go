@@ -14,7 +14,7 @@ func (k *Kernel) hayQuePlanificarAccesoAReady(estadoOrigen int, pid int) bool {
 	algoritmoPlani := k.Configuracion.Ready_ingress_algorithm
 	lProcEstado := k.ProcesoPorEstado[estadoOrigen]
 
-	if len(lProcEstado) > 1 {
+	if len(lProcEstado) >= 1 {
 		return true
 	}
 
@@ -443,7 +443,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecutePorPCB(proc_a_dispatch *PCB) {
 			//esto no esta chequeado, chequear bien como usamos cpu_desalojo
 			mutex_ProcesoPorEstado[EstadoExecute].Lock()
 			cpu_desalojo := k.ChequearDesalojo(proc_a_dispatch)
-			if cpu_desalojo != nil {
+			if cpu_desalojo == nil {
 				slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorPCB) - En ChequearDesalojo, se retorno false y no hay que desalojar")
 				mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 				mutex_CPUsConectadas.Unlock()
@@ -545,90 +545,3 @@ func (k *Kernel) GestionDeAvisoDeCPULibre(id int) {
 	mutex_CPUsConectadasPorId[cpu.ID].Unlock()
 
 }
-
-/*
-
-cod_op := "SOY_UNA_CPU"
-
-	if id == -2 && k.Configuracion.Algoritmo_Plani == "SRT" {
-		cod_op = "NO_SOY_UNA_CPU_Y_QUIERO_INTENTAR_DESALOJO"
-	} else if id == -2 {
-		cod_op = "NO_SOY_UNA_CPU_Y_ALGUIEN_LLEGO_A_READY"
-	}
-
-	switch cod_op {
-	//CASO 1, EL MAS LINDO, UN SIMPLE DISPATCH
-	case "SOY_UNA_CPU":
-		mutex_CPUsConectadas.Lock()
-		cpu := k.CPUsConectadas[id]
-		mutex_CPUsConectadas.Unlock()
-
-		mutex_CPUsConectadasPorId[cpu.ID].Lock()
-		k.IntentarEnviarProcesoAExecutePorCPU(cpu)
-		mutex_CPUsConectadasPorId[cpu.ID].Unlock()
-//CASO 2, ALGUIEN LLEGO A READY Y TENGO CPUs LIBRES
-case "NO_SOY_UNA_CPU_Y_ALGUIEN_LLEGO_A_READY":
-	mutex_CPUsConectadas.Lock()
-	potencial_cpu_libre := k.ObtenerCPULibre()
-	mutex_CPUsConectadas.Unlock()
-
-	if potencial_cpu_libre == nil {
-		slog.Debug("Debug - (GestionDeExecute) - Tengo procesos en READY, no hay alg de desalojo, pero no tengo CPUs disponibles")
-		return
-	}
-
-	mutex_CPUsConectadasPorId[potencial_cpu_libre.ID].Lock()
-	k.IntentarEnviarProcesoAExecutePorCPU(potencial_cpu_libre)
-	mutex_CPUsConectadasPorId[potencial_cpu_libre.ID].Unlock()
-
-//CASO 3, EL CONTROVERSIAL. ALGUIEN LLEGO A READY Y ENCIMA HAY ALGORITMO SRT
-case "NO_SOY_UNA_CPU_Y_QUIERO_INTENTAR_DESALOJO":
-	mutex_CPUsConectadas.Lock()
-	potencial_cpu_libre := k.ObtenerCPULibre()
-	mutex_CPUsConectadas.Unlock()
-
-	//CASO 3.1 - FEO - ALGORITMO SRT Y NO HAY CPU LIBRE
-	if potencial_cpu_libre == nil {
-
-		slog.Debug("Debug - (GestionDeExecute) - Tengo procesos en READY y tengo alg READY SRT, voy a chequear desalojo")
-		mutex_ProcesoPorEstado[EstadoReady].Lock()
-		defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
-		k.OrdenarPorAlgoritmoREADY()
-		slog.Debug("Debug - (GestionDeExecute) - Ordene la lista READY para potencial desalojo")
-		primer_elemento_READY := k.ProcesoPorEstado[EstadoReady][0]
-
-		mutex_CPUsConectadas.Lock()
-		mutex_ProcesoPorEstado[EstadoExecute].Lock()
-		cpu_potencial_a_desalojar := k.ChequearDesalojo(primer_elemento_READY)
-		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
-
-		if cpu_potencial_a_desalojar != nil {
-			slog.Debug("Debug - (GestionDeExecute) - Hay que desalojar, cumple condicion de menor estimacion",
-				"pid a entrar", primer_elemento_READY.Pid, "id de cpu a detonar", cpu_potencial_a_desalojar.ID, "pid a detonar", cpu_potencial_a_desalojar.Pid)
-
-			//me "reservo" la cpu antes de liberar la global de cpu
-			mutex_CPUsConectadasPorId[cpu_potencial_a_desalojar.ID].Lock()
-			cpu_potencial_a_desalojar.Esta_libre = false
-			//ahora si, dejo libre la global para otros
-			mutex_CPUsConectadas.Unlock()
-
-			mutex_ProcesoPorEstado[EstadoExecute].Lock()
-			k.RealizarDesalojo(cpu_potencial_a_desalojar, primer_elemento_READY.Pid)
-			mutex_ProcesoPorEstado[EstadoExecute].Unlock()
-
-			mutex_CPUsConectadasPorId[cpu_potencial_a_desalojar.ID].Unlock()
-			return
-		}
-
-		slog.Debug("Debug - (GestionDeExecute) - No hay que desalojar, no cumple condicion de menor estimacion",
-			"pid candidato que fallo", primer_elemento_READY.Pid)
-		mutex_CPUsConectadas.Unlock()
-		return
-	}
-
-	//CASO 3.2 - LINDO - ES ALGORITMO SRT PERO HAY CPU LIBRE
-	mutex_CPUsConectadasPorId[potencial_cpu_libre.ID].Lock()
-	k.IntentarEnviarProcesoAExecutePorCPU(potencial_cpu_libre)
-	mutex_CPUsConectadasPorId[potencial_cpu_libre.ID].Unlock()
-}
-*/

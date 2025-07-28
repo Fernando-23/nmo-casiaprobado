@@ -141,3 +141,64 @@ func (k *Kernel) liberarCPU(idCPU int) {
 	mutex_CPUsConectadas.Unlock()
 	ch_avisoCPULibre <- cpu.ID
 }
+
+// actualizar el pcb en execute Y liberarCPU
+func (k *Kernel) RenovacionDeCPU(idCPU, pc int) bool {
+	mutex_CPUsConectadasPorId[idCPU].Lock()
+
+	cpu, ok := k.CPUsConectadas[idCPU]
+
+	if !ok {
+		slog.Error("Error - (RenovacionDeCPU) - No se encontró CPU al liberar", "idCPU", idCPU)
+		mutex_CPUsConectadasPorId[idCPU].Unlock()
+		return false
+	}
+
+	mutex_ProcesoPorEstado[EstadoExecute].Lock()
+
+	proceso_ejecutando := k.BuscarPorPidSinLock(EstadoExecute, cpu.Pid)
+
+	if proceso_ejecutando == nil {
+
+		mutex_expulsadosPorRoja.Lock()
+		if !k.buscarEnExpulsados(cpu.Pid) {
+			slog.Error("Error -(RenovacionDeCPU) - No se encontró el proceso en ejecucion para esa CPU",
+				"idCPU", idCPU,
+				"pid", cpu.Pid,
+			)
+			mutex_expulsadosPorRoja.Unlock()
+			mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+			mutex_CPUsConectadasPorId[idCPU].Unlock()
+			return false
+		}
+		mutex_expulsadosPorRoja.Unlock()
+		slog.Debug("Debug - (RenovacionDeCPU) - PC actualizado",
+			"id_cpu", idCPU, "pid", cpu.Pid, "pc", pc)
+
+		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+		//liberas la cpu como todo un campeon
+		actualizarCPU(cpu, -1, 0, true)
+
+		mutex_CPUsConectadasPorId[idCPU].Unlock()
+
+		ch_avisoCPULibre <- cpu.ID
+
+		return true
+	}
+
+	//actualizas el enorme y extenso contexto de 1 valor al pcb
+	proceso_ejecutando.Pc = pc
+
+	slog.Debug("Debug - (RenovacionDeCPU) - PC actualizado",
+		"id_cpu", idCPU, "pid", cpu.Pid, "pc", pc)
+
+	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+	//liberas la cpu como todo un campeon
+	actualizarCPU(cpu, -1, 0, true)
+
+	mutex_CPUsConectadasPorId[idCPU].Unlock()
+
+	ch_avisoCPULibre <- cpu.ID
+
+	return true
+}

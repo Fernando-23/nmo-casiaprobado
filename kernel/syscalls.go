@@ -11,34 +11,24 @@ import (
 	utils "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-func (k *Kernel) ActualizarPC(idCPU int, pc int) {
-
-	cpu, ok := k.CPUsConectadas[idCPU]
-	if !ok {
-		slog.Error("Error -(ActualizarPc) - No se encontró la CPU", "idCPU", idCPU)
-		return
-	}
-
-	cpu.Pc = pc
+func (k *Kernel) ActualizarPCEnExec(pid, pc int) {
 
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 	defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 
-	procesoEjecutando := k.BuscarPorPidSinLock(EstadoExecute, cpu.Pid)
+	procesoEjecutando := k.BuscarPorPidSinLock(EstadoExecute, pid)
 
 	if procesoEjecutando == nil {
-		slog.Error("Error -(ActualizarPc) - No se encontró el proceso en ejecucion para esa CPU",
-			"idCPU", idCPU,
-			"pid", cpu.Pid,
+		slog.Error("Error -(ActualizarPCEnExec) - No se encontró el proceso en ejecucion para esa CPU",
+			"pid", pid,
 		)
 		return
 	}
 
 	procesoEjecutando.Pc = pc
 
-	slog.Debug("PC actualizado",
-		"id_cpu", idCPU,
-		"pid", cpu.Pid,
+	slog.Debug("Debug - (ActualizarPCEnExec) - PC actualizado",
+		"pid", pid,
 		"pc", pc,
 	)
 }
@@ -71,18 +61,17 @@ func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("SEGUI"))
 	} else {
 
-		slog.Debug("intentando enviar proceso a execute", "mensaje", mensaje)
+		//slog.Debug("intentando enviar proceso a execute", "mensaje", mensaje)
 
-		//k.IntentarEnviarProcesoAExecute()
 		w.Write([]byte("REPLANIFICAR"))
 	}
 
 }
 
 func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
-	//mutex_syscall.Lock()
+
 	syscall := strings.Split(respuesta, " ")
-	//mutex_syscall.Unlock()
+
 	if len(syscall) < 3 {
 		return false, fmt.Errorf("error - syscall incompleta: %v", respuesta)
 	}
@@ -106,7 +95,6 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 		mutex_CPUsConectadas.Unlock()
 		return false, fmt.Errorf("error - CPU no registrada: %d", idCPU)
 	}
-	k.ActualizarPC(idCPU, pc)
 
 	pid := cpu_ejecutando.Pid
 
@@ -127,7 +115,7 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 			return false, fmt.Errorf("error - syscall IO - tiempo inválido: %s", syscall[4])
 		}
 		k.GestionarIO(nombre, pid, tiempo, idCPU)
-		k.liberarCPU(idCPU)
+		//k.liberarCPU(idCPU)
 
 		slog.Debug("Debug - (GestionarSyscall) - Se libero la cpu por Syscall IO",
 			"id_cpu", idCPU)
@@ -147,6 +135,8 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 			return false, fmt.Errorf("error - syscall IO - tamaño inválido: %s", syscall[4])
 		}
 
+		k.ActualizarPCEnExec(pid, pc)
+
 		k.GestionarINIT_PROC(nombre_arch, tamanio)
 
 		return true, nil // la CPU debe seguir con el proceso
@@ -154,7 +144,8 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 	case "DUMP_MEMORY":
 		// 2 30 DUMP_MEMORY
 		k.GestionarDUMP_MEMORY(pid, idCPU)
-		k.liberarCPU(idCPU)
+
+		//k.liberarCPU(idCPU)
 
 		slog.Debug("Debug - (GestionarSyscall) - Se libero la cpu por Syscall DUMP_MEMORY",
 			"id_cpu", idCPU)
@@ -163,7 +154,7 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 	case "EXIT":
 		// 2 30 EXIT
 		k.GestionarEXIT(pid, idCPU)
-		k.liberarCPU(idCPU)
+		//k.liberarCPU(idCPU)
 
 		slog.Debug("Debug - (GestionarSyscall) - Se libero la cpu por Syscall EXIT",
 			"id_cpu", idCPU)
@@ -288,17 +279,22 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 
 func (k *Kernel) GestionarEXIT(pid int, idCPU int) {
 	//saco de execute el proceso que esta ejecutando y lo obtengo
-	pcb := k.QuitarYObtenerPCB(EstadoExecute, pid, true)
+	mutex_ProcesoPorEstado[EstadoExecute].Lock()
+	pcb := k.QuitarYObtenerPCB(EstadoExecute, pid, false)
 	if pcb == nil {
 		slog.Error("Error - (GestionarEXIT) - No se encontró el pid asociado a la cpu en Execute",
 			"pid", pid,
 			"cpu", idCPU,
 		)
+		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 		return
 	}
-	//envio solicitud para eliminar proceso
-	//y hace un par de cosas
-	//intenta enviarAReady y tmb a Execute
-	//por el flag en true
+
+	mutex_expulsadosPorRoja.Lock()
+	k.ExpulsadosPorRoja = append(k.ExpulsadosPorRoja, pid)
+	mutex_expulsadosPorRoja.Unlock()
+
+	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+
 	go k.EliminarProceso(pcb, true)
 }

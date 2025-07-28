@@ -95,7 +95,9 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		mensaje_io := fmt.Sprintf("%s %d IO %s %s", cpu.Id, pc_a_actualizar, operacion[0], operacion[1])
 		cpu.EnviarSyscall("IO", mensaje_io)
 
-		HabilitarInterrupt(true)
+		CambiarValorActualizarContexto(true)
+
+		CambiarValorTengoQueActualizarEnKernel(true)
 
 	case "INIT_PROC":
 		// ID_CPU PC INIT_PROC proceso1 256
@@ -103,22 +105,29 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		mensaje_init_proc := fmt.Sprintf("%s %d INIT_PROC %s %s", cpu.Id, pc_a_actualizar, operacion[0], operacion[1])
 		cpu.EnviarSyscall("INIT_PROC", mensaje_init_proc)
 
-		HabilitarInterrupt(false)
+		//deberia por default estar los 2 en false, peeeero, para asegurarnos, que los setee igual
+		CambiarValorActualizarContexto(false)
+
+		CambiarValorTengoQueActualizarEnKernel(false)
 
 	case "DUMP_MEMORY":
 		// ID_CPU PC DUMP_MEMORY
 		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
 		mensaje_dump := fmt.Sprintf("%s %d DUMP_MEMORY", cpu.Id, pc_a_actualizar)
 		cpu.EnviarSyscall("DUMP_MEMORY", mensaje_dump)
-		HabilitarInterrupt(true)
 
+		CambiarValorActualizarContexto(true)
+
+		CambiarValorTengoQueActualizarEnKernel(true)
 	case "EXIT":
 		// ID_CPU PC DUMP_MEMORY
 		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
 		mensaje_exit := fmt.Sprintf("%s %d EXIT", cpu.Id, pc_a_actualizar)
 		cpu.EnviarSyscall("EXIT", mensaje_exit)
 
-		HabilitarInterrupt(true)
+		CambiarValorActualizarContexto(true)
+
+		CambiarValorTengoQueActualizarEnKernel(true)
 
 	default:
 		slog.Error("Error - (Execute) - ingrese una instruccion valida")
@@ -129,7 +138,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		cpu.Proc_ejecutando.Pc++
 	}
 
-	//checkInterrupt()
+	cpu.CheckInterrupt(cpu.Proc_ejecutando.Pc)
 }
 
 func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
@@ -144,15 +153,66 @@ func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
 
 	mensajeKernel := string(body_Bytes)
 
-	slog.Debug("Llego interrrupción desde kernel", "mensaje", mensajeKernel)
+	slog.Debug("Llego interrupción desde kernel", "mensaje", mensajeKernel)
+	mutex_tenemosInterrupt.Lock()
+	tenemos_interrupt = true
+	mutex_tenemosInterrupt.Unlock()
 
-	if mensajeKernel == "OK" {
-		HabilitarInterrupt(true)
-		//esto va a ser un w.Write()
-		//utils.FormatearUrlYEnviar(cpu.Url_kernel, "/interrumpido", false, "%s %d %d", cpu.Id, cpu.Proc_ejecutando.Pid, cpu.Proc_ejecutando.Pc)
+	nuevo_pc := <-ch_respuesta_interrupt
+	mensaje_a_enviar := fmt.Sprintf("%d %d", nuevo_pc, cpu.Proc_ejecutando.Pid)
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(mensaje_a_enviar))
+
+}
+
+func (cpu *CPU) CheckInterrupt(pc_a_actualizar int) {
+	mutex_tenemosInterrupt.Lock()
+	if tenemos_interrupt {
+		ch_respuesta_interrupt <- pc_a_actualizar
+		mutex_tenemosInterrupt.Unlock()
+
+		CambiarValorActualizarContexto(true)
+
+		CambiarValorTengoQueActualizarEnKernel(false)
+
 		return
 	}
+	mutex_tenemosInterrupt.Unlock()
 }
+
+func CambiarValorActualizarContexto(nuevo_valor bool) {
+	mutex_hayQueActualizarContexto.Lock()
+	hay_que_actualizar_contexto = nuevo_valor
+	mutex_hayQueActualizarContexto.Unlock()
+}
+
+func CambiarValorTengoQueActualizarEnKernel(nuevo_valor bool) {
+	mutex_tengoQueActualizarEnKernel.Lock()
+	tengo_que_actualizar_en_kernel = true
+	mutex_tengoQueActualizarEnKernel.Unlock()
+}
+
+func (cpu *CPU) ChequearSiTengoQueActualizarEnKernel() {
+	mutex_tengoQueActualizarEnKernel.Lock()
+	if tengo_que_actualizar_en_kernel {
+		mutex_tengoQueActualizarEnKernel.Unlock()
+		cpu.ActualizarContexto()
+		slog.Debug("Debug - (ChequearSiTengoQueActualizarEnKernel) - No hubo interrupcion, mando senial para liberarme")
+		return
+	}
+	mutex_tengoQueActualizarEnKernel.Unlock()
+
+	slog.Debug("Debug - (ChequearSiTengoQueActualizarEnKernel) - Probablemente hubo una interrupcion")
+}
+
+func (cpu *CPU) ActualizarContexto() {
+	utils.FormatearUrlYEnviar(cpu.Url_kernel, "/actualizar_contexto", false, "%s %d", cpu.Id, cpu.Proc_ejecutando.Pc)
+}
+
+//###################################################
+//#####
+//###################################################
 
 func (cpu *CPU) ChequarTLBActiva() {
 	tlb_activa = false
@@ -219,12 +279,6 @@ func (cpu *CPU) LiberarCaches() {
 	if cache_pags_activa {
 		cpu.LiberarCachePags()
 	}
-}
-
-func HabilitarInterrupt(valor_vg bool) {
-	mutex_hay_interrupcion.Lock()
-	hay_interrupcion = valor_vg
-	mutex_hay_interrupcion.Unlock()
 }
 
 // var hola int = 0

@@ -59,19 +59,26 @@ type Proceso struct {
 var (
 	noticiero_metereologico time.Time
 
-	hay_interrupcion  bool
-	tlb_activa        bool
-	cache_pags_activa bool
+	hay_que_actualizar_contexto    bool
+	tenemos_interrupt              bool
+	tengo_que_actualizar_en_kernel bool
+	tlb_activa                     bool
+	cache_pags_activa              bool
 
 	//No hace falta sincronizar
-	cant_niveles       int
-	cant_entradas_tpag int
-	tam_pag            int
+	cant_niveles int
+	//cant_entradas_tpag int
+	tam_pag int
+
+	//MIS MEJORES AMIGOS, LOS CHANNELS
+	ch_respuesta_interrupt chan int
 )
 
 // Mutexs
 // a fer le gustan las bariavlhez glovaldez
 var (
-	ch_esperar_datos       chan struct{}
-	mutex_hay_interrupcion sync.Mutex
+	ch_esperar_datos                 chan struct{}
+	mutex_hayQueActualizarContexto   sync.Mutex
+	mutex_tenemosInterrupt           sync.Mutex
+	mutex_tengoQueActualizarEnKernel sync.Mutex
 )
