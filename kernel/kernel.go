@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 	servidor "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Servidor"
@@ -73,7 +72,9 @@ func main() {
 	slog.Info("Estado inicial del planificador largo plazo", "estado", "STOP")
 
 	waitEnter := make(chan struct{}, 1)
-	ch_aviso_cpu_libre = make(chan struct{})
+	ch_avisoCPULibre = make(chan int, 6)
+
+	//ch_aviso_cpu_libre = make(chan struct{})
 
 	// Lanzamos la rutina que espera el ENTER
 	go esperarEnter(waitEnter)
@@ -95,27 +96,21 @@ func main() {
 		return
 	}
 
-	//kernel.IntentarEnviarProcesoAExecute()
-
+	//time.Sleep(2 * time.Second)
 	go func() {
+
 		for {
-			<-ch_aviso_cpu_libre
-			kernel.IntentarEnviarProcesoAExecute()
+			slog.Debug("Debug - (Main) - Esperando canal de aviso de cpu")
+
+			id := <-ch_avisoCPULibre
+
+			slog.Debug("Debug - (Main) - Me llego algo al canal de aviso de cpu",
+				"valor obtenido", id)
+
+			go kernel.GestionDeAvisoDeCPULibre(id)
+
 		}
 	}()
-
-	if archivoPseudo == "PLANI_CORTO_PLAZO" && kernel.Configuracion.Algoritmo_Plani == "FIFO" || archivoPseudo == "ESTABILIDAD_GENERAL" {
-		go func() {
-			for {
-				//fmt.Println("imprimiendoestados")
-				time.Sleep(3 * time.Second)
-				// 		kernel.ImprimirPCBsDeEstado(EstadoNew)
-				// 		kernel.ImprimirPCBsDeEstado(EstadoReady)
-				// 		kernel.ImprimirPCBsDeEstado(EstadoBlock)
-				kernel.IntentarEnviarProcesoAExecute()
-			}
-		}()
-	}
 
 	select {}
 }

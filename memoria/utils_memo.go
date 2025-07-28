@@ -113,7 +113,7 @@ func (memo *Memo) Fetch(w http.ResponseWriter, r *http.Request) {
 	//==================== LOG OBLIGATORIO ====================
 	utils.LoggerConFormato("## PID: %d - Obtener instrucción: %d - Instrucción: %s", pid, pc, instruccion)
 	//=========================================================
-
+	memo.HacerRetardo()
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(instruccion))
 }

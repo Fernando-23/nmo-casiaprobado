@@ -56,6 +56,13 @@ func (k *Kernel) actualizarEstimacionSJF(pcb *PCB, tiempoEnExecute time.Duration
 	sjf.Estimado_anterior = aux
 }
 
+func (k *Kernel) CalcularEstSJF_sinModifPCB(estimado_anterior, real_anterior float64) float64 {
+	alpha := k.Configuracion.Alfa
+	nuevo_estimado_actual := (alpha * real_anterior) + ((1 - alpha) * estimado_anterior)
+
+	return nuevo_estimado_actual
+}
+
 func (k *Kernel) EliminarProceso(procesoAEliminar *PCB, liberaMemoria bool) {
 
 	if err := k.solicitudEliminarProceso(procesoAEliminar.Pid); err != nil {
@@ -83,7 +90,6 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB, liberaMemoria bool) {
 	if liberaMemoria {
 		slog.Debug("Debug - (EliminarProceso) - Libere memoria, voy a proceder a hacer mis cositas")
 		k.IntentarEnviarProcesosAReady()
-		k.IntentarEnviarProcesoAExecute()
 	}
 }
 

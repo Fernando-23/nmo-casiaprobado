@@ -18,15 +18,14 @@ func (k *Kernel) InicializarMapaDeEstados() {
 }
 
 func (k *Kernel) ImprimirPCBsDeEstado(estado int) {
+
+	slog.Warn("Cuidadito - (ImprimirPCBsDeEstado) - Aca imprimire muchas cosas raras")
 	mutex_ProcesoPorEstado[estado].Lock()
-	defer mutex_ProcesoPorEstado[estado].Unlock()
-
-	slog.Debug("Cuidadito - (ImprimirPCBsDeEstado) - Aca imprimire muchas cosas raras")
-
 	listaPCB, ok := k.ProcesoPorEstado[estado]
+	mutex_ProcesoPorEstado[estado].Unlock()
 
 	if !ok || len(listaPCB) == 0 {
-		slog.Debug("Cuidadito - (ImprimirPCBsDeEstado) - No hay procesos en estado", "estado", estados_proceso[estado])
+		slog.Warn("Cuidadito - (ImprimirPCBsDeEstado) - No hay procesos en estado", "estado", estados_proceso[estado])
 		return
 	}
 
@@ -149,6 +148,7 @@ func duracionEnEstado(pPcb *PCB) time.Duration {
 	return time.Since(pPcb.HoraIngresoAEstado)
 }
 
+// potencial a sincronizar
 func actualizarMetricasEstado(pPcb *PCB, posEstado int) {
 	pPcb.Me[posEstado]++ //ver si puede quedar mas lindo
 	//---------------------update, quedo mas lindo

@@ -129,6 +129,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		cpu.Proc_ejecutando.Pc++
 	}
 
+	//checkInterrupt()
 }
 
 func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +148,8 @@ func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
 
 	if mensajeKernel == "OK" {
 		HabilitarInterrupt(true)
-		utils.FormatearUrlYEnviar(cpu.Url_kernel, "/interrumpido", false, "%s %d %d", cpu.Id, cpu.Proc_ejecutando.Pid, cpu.Proc_ejecutando.Pc)
+		//esto va a ser un w.Write()
+		//utils.FormatearUrlYEnviar(cpu.Url_kernel, "/interrumpido", false, "%s %d %d", cpu.Id, cpu.Proc_ejecutando.Pid, cpu.Proc_ejecutando.Pc)
 		return
 	}
 }

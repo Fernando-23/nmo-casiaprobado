@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
@@ -29,6 +30,7 @@ func (k *Kernel) LlegaNuevaCPU(w http.ResponseWriter, r *http.Request) { // Hand
 		http.Error(w, "No se pudo registar la CPU", http.StatusBadRequest)
 		return
 	}
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(RESPUESTA_OK))
 }
@@ -54,7 +56,6 @@ func (k *Kernel) registrarNuevaCPU(mensajeCPU string) bool {
 	url := fmt.Sprintf("http://%s:%s/cpu", ip, puerto)
 
 	mutex_CPUsConectadas.Lock()
-	defer mutex_CPUsConectadas.Unlock()
 
 	if _, existe := k.CPUsConectadas[nueva_ID_CPU]; existe {
 		fmt.Println("Ya existe una CPU registrada con ese ID")
@@ -64,18 +65,20 @@ func (k *Kernel) registrarNuevaCPU(mensajeCPU string) bool {
 	k.CPUsConectadas[nueva_ID_CPU] = crearCPU(nueva_ID_CPU, url)
 
 	fmt.Printf("Se conecto una nueva CPU con ID %d en %s\n", nueva_ID_CPU, url)
+	mutex_CPUsConectadas.Unlock()
+
+	mutex_CPUsConectadasPorId[nueva_ID_CPU] = sync.Mutex{}
 
 	return true
 }
 
 func crearCPU(id int, url string) *CPU {
 	nueva_cpu := &CPU{
-		ID:            id,
-		Url:           url,
-		Pid:           -1,
-		Pc:            0,
-		ADesalojarPor: -1,
-		Esta_libre:    true,
+		ID:         id,
+		Url:        url,
+		Pid:        -1,
+		Pc:         0,
+		Esta_libre: true,
 	}
 	return nueva_cpu
 
@@ -103,11 +106,10 @@ func (k *Kernel) BuscarCPUPorID(id int) *CPU {
 	return cpu
 }
 
-func actualizarCPU(cpu *CPU, pid int, pc int, liberar bool) {
-	cpu.Esta_libre = liberar
+func actualizarCPU(cpu *CPU, pid int, pc int, nuevo_valor_esta_libre bool) {
 	cpu.Pid = pid
 	cpu.Pc = pc
-	cpu.ADesalojarPor = -1
+	cpu.Esta_libre = nuevo_valor_esta_libre
 }
 
 func RegistrarCPUaLibre(cpu_a_liberar *CPU) {
@@ -124,22 +126,18 @@ func handleDispatch(pid int, pc int, url string) {
 	utils.EnviarStringSinEsperar("POST", fullURL, datos)
 }
 
-// potente a desalojar por papa noel
-func reservarCPU(cpu *CPU, pid int) {
-	cpu.ADesalojarPor = pid
-}
-
 func (k *Kernel) liberarCPU(idCPU int) {
 	mutex_CPUsConectadas.Lock()
-	defer mutex_CPUsConectadas.Unlock()
 
 	cpu, ok := k.CPUsConectadas[idCPU]
 
 	if !ok {
-		slog.Error("No se encontró CPU al liberar", "idCPU", idCPU)
+		slog.Error("Error - (liberarCPU) -No se encontró CPU al liberar", "idCPU", idCPU)
+		mutex_CPUsConectadas.Unlock()
 		return
 	}
 
 	actualizarCPU(cpu, -1, 0, true)
-	ch_aviso_cpu_libre <- struct{}{}
+	mutex_CPUsConectadas.Unlock()
+	ch_avisoCPULibre <- cpu.ID
 }
