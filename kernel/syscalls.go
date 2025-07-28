@@ -89,6 +89,7 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 	}
 
 	var pid int
+	//Parchesito no muy lindo, pero al menos no es tanto como antes jashdkjah
 	if syscall[2] != "INIT_PROC" {
 		mutex_CPUsConectadas.Lock()
 		cpu_ejecutando, existe := k.CPUsConectadas[idCPU]
@@ -101,8 +102,9 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 		pid = cpu_ejecutando.Pid
 
 		mutex_CPUsConectadas.Unlock()
+	} else {
+		pid, _ = strconv.Atoi(syscall[0])
 	}
-	pid, _ = strconv.Atoi(syscall[0])
 
 	cod_op := syscall[CodOp]
 
