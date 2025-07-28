@@ -62,6 +62,11 @@ type DispositivoIO struct {
 	PidOcupante int
 	Libre       bool
 }
+type DispositivoIOAux struct {
+	Url         string
+	PidOcupante int
+	Duracion    int
+}
 
 type Kernel struct {
 	ProcesoPorEstado map[int][]*PCB
@@ -80,6 +85,7 @@ var (
 	mutex_DispositivosIO            sync.Mutex
 	url_memo                        string
 	ch_avisoCPULibre                chan int
+	ch_conexionIOenMarcha           chan DispositivoIOAux
 )
 
 // PROCESO MAS CHICO PRIMERO

@@ -184,8 +184,14 @@ func (k *Kernel) registrarNuevaIO(nombre, ip, puerto string) { // Handshake
 		nuevaInstancia.Actualizar(proceso_sgte.Pid, false)
 
 		// mandarlo a io
+		io_aux := DispositivoIOAux{
+			Url:         nuevaInstancia.Url,
+			PidOcupante: nuevaInstancia.PidOcupante,
+			Duracion:    proceso_sgte.TiempoIO,
+		}
 
-		enviarProcesoAIO(nuevaInstancia, proceso_sgte.TiempoIO)
+		ch_conexionIOenMarcha <- io_aux
+		//enviarProcesoAIO(nuevaInstancia, proceso_sgte.TiempoIO)
 	}
 }
 
@@ -323,4 +329,15 @@ func enviarProcesoAIO(dispositivo *DispositivoIO, duracion int) {
 	)
 
 	utils.LoggerConFormato("## (%d) - Se envió proceso a IO en %s", dispositivo.PidOcupante, dispositivo.Url)
+}
+
+func enviarProcesoAIOsinIOSTRUCT(url string, pid, duracion int) {
+
+	utils.FormatearUrlYEnviar(url, "/io/hace_algo", false, "%d %d",
+		pid,
+		duracion,
+	)
+
+	utils.LoggerConFormato("## (%d) - Se envió proceso a IO en %s", pid, url)
+
 }

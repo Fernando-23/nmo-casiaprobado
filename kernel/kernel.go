@@ -73,6 +73,7 @@ func main() {
 
 	waitEnter := make(chan struct{}, 1)
 	ch_avisoCPULibre = make(chan int, 6)
+	ch_conexionIOenMarcha = make(chan DispositivoIOAux, 2)
 
 	//ch_aviso_cpu_libre = make(chan struct{})
 
@@ -109,6 +110,16 @@ func main() {
 
 			go kernel.GestionDeAvisoDeCPULibre(id)
 
+		}
+	}()
+
+	go func() {
+		for {
+			slog.Debug("Debug - (Main) - Esperando canal de conexion de io en marcha de kernel")
+			io := <-ch_conexionIOenMarcha
+			//time.Sleep(1 * time.Second)
+			slog.Debug("Debug - (Main) - Recibi una io en marcha de kernel")
+			enviarProcesoAIOsinIOSTRUCT(io.Url, io.PidOcupante, io.Duracion)
 		}
 	}()
 
