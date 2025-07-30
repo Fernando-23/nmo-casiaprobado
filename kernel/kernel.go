@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 	servidor "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils/Servidor"
@@ -117,7 +118,7 @@ func main() {
 		for {
 			slog.Debug("Debug - (Main) - Esperando canal de conexion de io en marcha de kernel")
 			io := <-ch_conexionIOenMarcha
-			//time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 			slog.Debug("Debug - (Main) - Recibi una io en marcha de kernel")
 			enviarProcesoAIOsinIOSTRUCT(io.Url, io.PidOcupante, io.Duracion)
 		}
