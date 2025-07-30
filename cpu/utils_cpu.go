@@ -218,6 +218,7 @@ func (cpu *CPU) LiberarCaches() {
 
 	if cache_pags_activa {
 		cpu.LiberarCachePags()
+		puntero = 0
 	}
 }
 
@@ -246,6 +247,7 @@ func crearCPU(id string, path_config string) *CPU {
 	aux_proc := &Proceso{Pid: 0, Pc: 0}
 	tlb := make([]*EntradaTLB, cant_entradas_tlb)
 	cache := make([]*EntradaCachePag, cant_entradas_cache)
+	puntero = 0
 
 	cpu := &CPU{
 		Id:              id,

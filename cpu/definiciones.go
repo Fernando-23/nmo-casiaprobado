@@ -67,6 +67,9 @@ var (
 	cant_niveles       int
 	cant_entradas_tpag int
 	tam_pag            int
+
+	//puntero para clock
+	puntero int
 )
 
 // Mutexs
