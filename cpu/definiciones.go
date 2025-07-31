@@ -67,19 +67,17 @@ var (
 
 	//No hace falta sincronizar
 	cant_niveles int
-	//cant_entradas_tpag int
-	tam_pag int
-
-	//MIS MEJORES AMIGOS, LOS CHANNELS
-	ch_respuesta_interrupt chan int
-	ch_tipo_instruccion    chan string
+	tam_pag      int
 )
 
 // Mutexs
-// a fer le gustan las bariavlhez glovaldez
 var (
-	ch_esperar_datos                 chan struct{}
 	mutex_hayQueActualizarContexto   sync.Mutex
 	mutex_tenemosInterrupt           sync.Mutex
 	mutex_tengoQueActualizarEnKernel sync.Mutex
+)
+
+// //MIS MEJORES AMIGOS, LOS CHANNELS
+var (
+	ch_esperar_datos chan struct{}
 )

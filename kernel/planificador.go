@@ -110,7 +110,7 @@ func (k *Kernel) SoyPrimeroEnREADYyNadaEnSuspREADY(pid_a_consultar int) (bool, *
 
 	mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
 	//------------hasta esta altura, ya se que no hay nadie en SUSP_READY
-	slog.Debug("Debug - (SoyPrimeroEnREADYyNadaEnSuspREADY) - bien ahi loco, no habia nadie n SuspREADY, voy a chequear si soy el unico en READY")
+	slog.Debug("Debug - (SoyPrimeroEnREADYyNadaEnSuspREADY) - bien ahi loco, no habia nadie n SuspREADY, voy a chequear si soy el unico en READY", "pid_proc_candidato", pid_a_consultar)
 	mutex_ProcesoPorEstado[EstadoReady].Lock()
 	defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
 	proc_candidato_a_execute := k.PrimerElementoSinSacar(EstadoReady)
@@ -244,6 +244,7 @@ func (k *Kernel) IntentarEnviarProcesosAReady() {
 	estados := []int{EstadoReadySuspended, EstadoNew}
 
 	for _, estado := range estados {
+
 		mutex_ProcesoPorEstado[estado].Lock()
 
 		k.PlanificarLargoPorLista(estado)
@@ -449,24 +450,29 @@ func (k *Kernel) IntentarEnviarProcesoAExecutePorPCB(proc_a_dispatch *PCB) {
 				mutex_CPUsConectadas.Unlock()
 				return
 			}
+
 			slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorPCB) - En ChequearDesalojo, se retorno true y hay que desalojar")
-			//como ya hicimos todos los chequeos, si o si desalojamos
-			k.RealizarDesalojo(cpu_desalojo, proc_a_dispatch.Pid)
+			//como ya hicimos todos los chequeos, enviamos aviso de desalojo
+			if !k.RealizarDesalojo(cpu_desalojo, proc_a_dispatch.Pid) {
+				slog.Error("Error - (IntentarEnviarProcesoAExecutePorPCB) - Despues de todos los chequeos, cumpliendo con la condicion de desalojo, no pude desalojar")
+				mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+				mutex_CPUsConectadas.Unlock()
+				return
+			}
+
+			slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorPCB) - RealizarDesalojo fue exitoso (SUPUESTAMENTE), pucha la vida es linda che")
 			mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 			mutex_CPUsConectadas.Unlock()
 			return
+
 		default:
 			slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorPCB) - No hay CPUs libres")
 			mutex_CPUsConectadas.Unlock()
 			return
 		}
 	}
-	slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorPCB) - Encontre una cpu libre", "id_cpu", cpu_seleccionada.ID)
 	//caso lindo, hay cpu libre
-	mutex_CPUsConectadasPorId[cpu_seleccionada.ID].Lock()
-	mutex_CPUsConectadas.Unlock()
-
-	defer mutex_CPUsConectadasPorId[cpu_seleccionada.ID].Unlock()
+	slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorPCB) - Encontre una cpu libre", "id_cpu", cpu_seleccionada.ID)
 
 	pid_dispatch := proc_a_dispatch.Pid
 	pc_dispatch := proc_a_dispatch.Pc
@@ -487,19 +493,17 @@ func (k *Kernel) IntentarEnviarProcesoAExecutePorPCB(proc_a_dispatch *PCB) {
 	}
 
 	actualizarCPU(cpu_seleccionada, pid_dispatch, pc_dispatch, false)
-
+	mutex_CPUsConectadas.Unlock()
 	//movemos a la lista correspondiente
 
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 	k.AgregarAEstado(EstadoExecute, proceso_enviado_a_exec, false)
+	//k.actualizarEstimacionSJF(proc_a_dispatch, EstadoExecute)
 	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 	slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorPCB) - Proceso enviado a EXECUTE", "pid", pid_dispatch, "cpu_id", id_cpu)
 }
 
-// NO me asegura que este la CPU este libre, no tiene sentido pero soluciona tema deadlock
 func (k *Kernel) IntentarEnviarProcesoAExecutePorCPU(cpu_a_dispatch *CPU) {
-	mutex_ProcesoPorEstado[EstadoReady].Lock()
-	defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
 
 	slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorCPU) - Entre IntentarEnviarProcesoAExecutePorCPU con la CPU",
 		"id_cpu", cpu_a_dispatch.ID)
@@ -507,6 +511,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecutePorCPU(cpu_a_dispatch *CPU) {
 	// chequeamos si no hay nadie en READY asi no laburamos al dope
 	if !k.TieneProcesos(EstadoReady) {
 		slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorCPU) - No hay procesos en READY")
+		mutex_ProcesoPorEstado[EstadoReady].Unlock()
 		return
 	}
 
@@ -515,6 +520,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecutePorCPU(cpu_a_dispatch *CPU) {
 	primer_elemento_READY := k.ProcesoPorEstado[EstadoReady][0]
 	// le hago un pop de ready
 	proc := k.QuitarYObtenerPCB(EstadoReady, primer_elemento_READY.Pid, false)
+	mutex_ProcesoPorEstado[EstadoReady].Unlock()
 
 	if proc == nil {
 		slog.Warn("Cuidadito - (IntentarEnviarProcesoAExecutePorCPU) - No esta en READY", "pid", primer_elemento_READY.Pid)
@@ -535,13 +541,12 @@ func (k *Kernel) IntentarEnviarProcesoAExecutePorCPU(cpu_a_dispatch *CPU) {
 }
 
 func (k *Kernel) GestionDeAvisoDeCPULibre(id int) {
-
+	mutex_ProcesoPorEstado[EstadoReady].Lock()
+	//el unlock del READY esta dentro de IntentarEnviarProcesoAExecutePorCPU
 	mutex_CPUsConectadas.Lock()
 	cpu := k.CPUsConectadas[id]
-	mutex_CPUsConectadasPorId[cpu.ID].Lock()
-	mutex_CPUsConectadas.Unlock()
 
 	k.IntentarEnviarProcesoAExecutePorCPU(cpu)
-	mutex_CPUsConectadasPorId[cpu.ID].Unlock()
+	mutex_CPUsConectadas.Unlock()
 
 }

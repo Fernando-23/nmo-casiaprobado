@@ -68,6 +68,7 @@ func main() {
 	//inicializo flags pq despues me olvido
 	hay_que_actualizar_contexto = false
 	tenemos_interrupt = false
+	var requiere_realmente_desalojo string
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/cpu/dispatch", cpu.EsperarDatosKernel)
@@ -77,11 +78,11 @@ func main() {
 	go http.ListenAndServe(socket_cpu, mux)
 	// Ciclo de instruccion
 	ch_esperar_datos = make(chan struct{})
-	ch_respuesta_interrupt = make(chan int, 6)
 
 	for {
 		slog.Debug("Debug - (CicloInstruccion) - Esperando datos de kernel",
 			"cpu", id_cpu)
+
 		<-ch_esperar_datos
 
 		for !hay_que_actualizar_contexto { //consulta el valor en un tiempo t no necesito sincronizar
@@ -104,7 +105,10 @@ func main() {
 			slog.Debug("Debug - (CicloInstruccion) - Instruccion a ejecutar",
 				"instruccion", instruccion)
 
-			cpu.Execute(cod_op, operacion, instruccion)
+			requiere_realmente_desalojo = cpu.Execute(cod_op, operacion, instruccion)
+
+			slog.Debug("Debug - (main) - Saliendo de execute, obtuve esto",
+				"instruccion", cod_op, "requiere_desalojo", requiere_realmente_desalojo)
 		}
 
 		slog.Debug("Debug - (CicloInstruccion) - Se va a cambiar el contexto")
@@ -112,7 +116,7 @@ func main() {
 
 		CambiarValorActualizarContexto(false)
 
-		cpu.ChequearSiTengoQueActualizarEnKernel()
+		cpu.ChequearSiTengoQueActualizarEnKernel(requiere_realmente_desalojo)
 
 		utils.LoggerConFormato("## PID: %d - Finaliza la ejecucion", cpu.Proc_ejecutando.Pid)
 	}

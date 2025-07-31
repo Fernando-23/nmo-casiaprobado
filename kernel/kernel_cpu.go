@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
@@ -67,18 +66,19 @@ func (k *Kernel) registrarNuevaCPU(mensajeCPU string) bool {
 	fmt.Printf("Se conecto una nueva CPU con ID %d en %s\n", nueva_ID_CPU, url)
 	mutex_CPUsConectadas.Unlock()
 
-	mutex_CPUsConectadasPorId[nueva_ID_CPU] = sync.Mutex{}
+	//mutex_CPUsConectadasPorId[nueva_ID_CPU] = sync.Mutex{}
 
 	return true
 }
 
 func crearCPU(id int, url string) *CPU {
 	nueva_cpu := &CPU{
-		ID:         id,
-		Url:        url,
-		Pid:        -1,
-		Pc:         0,
-		Esta_libre: true,
+		ID:                   id,
+		Url:                  url,
+		Pid:                  -1,
+		Pc:                   0,
+		Esta_libre:           true,
+		EstaSiendoDesalojada: false,
 	}
 	return nueva_cpu
 
@@ -143,62 +143,22 @@ func (k *Kernel) liberarCPU(idCPU int) {
 }
 
 // actualizar el pcb en execute Y liberarCPU
-func (k *Kernel) RenovacionDeCPU(idCPU, pc int) bool {
-	mutex_CPUsConectadasPorId[idCPU].Lock()
+func (k *Kernel) RenovacionDeCPU(idCPU int) bool {
+	mutex_CPUsConectadas.Lock()
 
 	cpu, ok := k.CPUsConectadas[idCPU]
 
 	if !ok {
 		slog.Error("Error - (RenovacionDeCPU) - No se encontró CPU al liberar", "idCPU", idCPU)
-		mutex_CPUsConectadasPorId[idCPU].Unlock()
+		mutex_CPUsConectadas.Unlock()
 		return false
 	}
 
-	mutex_ProcesoPorEstado[EstadoExecute].Lock()
-
-	proceso_ejecutando := k.BuscarPorPidSinLock(EstadoExecute, cpu.Pid)
-
-	if proceso_ejecutando == nil {
-
-		mutex_expulsadosPorRoja.Lock()
-		if !k.buscarEnExpulsados(cpu.Pid) {
-			slog.Error("Error -(RenovacionDeCPU) - No se encontró el proceso en ejecucion para esa CPU",
-				"idCPU", idCPU,
-				"pid", cpu.Pid,
-			)
-			mutex_expulsadosPorRoja.Unlock()
-			mutex_ProcesoPorEstado[EstadoExecute].Unlock()
-			mutex_CPUsConectadasPorId[idCPU].Unlock()
-			return false
-		}
-		mutex_expulsadosPorRoja.Unlock()
-		slog.Debug("Debug - (RenovacionDeCPU) - PC actualizado",
-			"id_cpu", idCPU, "pid", cpu.Pid, "pc", pc)
-
-		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
-		//liberas la cpu como todo un campeon
-		actualizarCPU(cpu, -1, 0, true)
-
-		mutex_CPUsConectadasPorId[idCPU].Unlock()
-
-		ch_avisoCPULibre <- cpu.ID
-
-		return true
-	}
-
-	//actualizas el enorme y extenso contexto de 1 valor al pcb
-	proceso_ejecutando.Pc = pc
-
-	slog.Debug("Debug - (RenovacionDeCPU) - PC actualizado",
-		"id_cpu", idCPU, "pid", cpu.Pid, "pc", pc)
-
-	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 	//liberas la cpu como todo un campeon
 	actualizarCPU(cpu, -1, 0, true)
+	ch_avisoCPULibre <- idCPU
 
-	mutex_CPUsConectadasPorId[idCPU].Unlock()
-
-	ch_avisoCPULibre <- cpu.ID
+	mutex_CPUsConectadas.Unlock()
 
 	return true
 }
