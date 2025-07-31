@@ -35,7 +35,7 @@ func (k *Kernel) ChequearDesalojo(proceso_suplente *PCB) *CPU {
 		pcb_aux = k.BuscarPorPidSinLock(EstadoExecute, cpu.Pid)
 
 		// calculamos
-		nuevo_estimado_actual_en_exec = float64(pcb_aux.SJF.Estimado_actual) - float64(duracionEnEstado(pcb_aux)) //a chequear
+		nuevo_estimado_actual_en_exec = float64(pcb_aux.SJF.Real_anterior) - float64(duracionEnEstado(pcb_aux)) //a chequear
 
 		slog.Debug("Debug - (ChequearDesalojo) ",
 			"estimacion actual proceso suplente", proceso_suplente.SJF.Estimado_actual, "nuevo estimado actual del titular", nuevo_estimado_actual_en_exec)
@@ -97,7 +97,7 @@ func (k *Kernel) RealizarDesalojo(cpu_a_detonar *CPU, pid_a_entrar int) bool {
 }
 
 func (k *Kernel) EnviarInterrupt(cpu_a_detonar *CPU) {
-	utils.FormatearUrlYEnviar(cpu_a_detonar.Url, "/interrupt", false, "cortala pipo")
+	utils.FormatearUrlYEnviar(cpu_a_detonar.Url, "/interrupt", true, "cortala pipo")
 }
 
 // LA FUNCION QUE SIGUE EL LEGADO DE CAMBIOS EN EL PLANTEL

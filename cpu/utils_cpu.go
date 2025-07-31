@@ -97,7 +97,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 
 		CambiarValorActualizarContexto(true)
 
-		CambiarValorTengoQueActualizarEnKernel(true)
+		CambiarValorParaAvisarQueEstoyLibre(true)
 		tipo_instruccion = "NO_REQUIERO_DESALOJO"
 
 	case "INIT_PROC":
@@ -109,7 +109,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		//deberia por default estar los 2 en false, peeeero, para asegurarnos, que los setee igual
 		CambiarValorActualizarContexto(false)
 
-		CambiarValorTengoQueActualizarEnKernel(false)
+		CambiarValorParaAvisarQueEstoyLibre(false)
 		tipo_instruccion = "REQUIERO_DESALOJO"
 
 	case "DUMP_MEMORY":
@@ -120,7 +120,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 
 		CambiarValorActualizarContexto(true)
 
-		CambiarValorTengoQueActualizarEnKernel(true)
+		CambiarValorParaAvisarQueEstoyLibre(true)
 		tipo_instruccion = "NO_REQUIERO_DESALOJO"
 	case "EXIT":
 		// ID_CPU PID PC EXIT
@@ -130,7 +130,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 
 		CambiarValorActualizarContexto(true)
 
-		CambiarValorTengoQueActualizarEnKernel(true)
+		CambiarValorParaAvisarQueEstoyLibre(true)
 		tipo_instruccion = "NO_REQUIERO_DESALOJO"
 
 	default:
@@ -165,14 +165,16 @@ func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cpu *CPU) CheckInterrupt() {
-
+	slog.Debug("Debug - (CheckInterrupt) - Entre recien a CheckInterrupt")
 	mutex_tenemosInterrupt.Lock()
 	if tenemos_interrupt {
-		mutex_tenemosInterrupt.Unlock()
+
 		slog.Debug("Debug - (CheckInterrupt) - En CheckInterrupt, detecte una interrupcion")
 		CambiarValorActualizarContexto(true)
 
-		CambiarValorTengoQueActualizarEnKernel(false)
+		CambiarValorParaAvisarQueEstoyLibre(false)
+		tenemos_interrupt = true
+		mutex_tenemosInterrupt.Unlock()
 		return
 	}
 	mutex_tenemosInterrupt.Unlock()
@@ -184,9 +186,9 @@ func CambiarValorActualizarContexto(nuevo_valor bool) {
 	mutex_hayQueActualizarContexto.Unlock()
 }
 
-func CambiarValorTengoQueActualizarEnKernel(nuevo_valor bool) {
+func CambiarValorParaAvisarQueEstoyLibre(nuevo_valor bool) {
 	mutex_tengoQueActualizarEnKernel.Lock()
-	tengo_que_actualizar_en_kernel = true
+	tengo_que_actualizar_en_kernel = nuevo_valor
 	mutex_tengoQueActualizarEnKernel.Unlock()
 }
 

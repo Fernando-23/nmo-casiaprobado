@@ -86,6 +86,7 @@ func main() {
 		<-ch_esperar_datos
 
 		for !hay_que_actualizar_contexto { //consulta el valor en un tiempo t no necesito sincronizar
+
 			instruccion = cpu.Fetch()
 
 			if instruccion == "TODO MAL" {

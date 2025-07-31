@@ -6,8 +6,8 @@
     "entries_per_page": 4,
     "number_of_levels": 2,
     "memory_delay": 500,
-    "swapfile_path": "/home/utnso/swapfile.bin",
+    "swapfile_path": "/home/fernando-aquino/Desktop/tp-operativos/tp-2025-1c-Nombre-muy-original/swapfile.bin",
     "swap_delay": 15000,
     "log_level": "DEBUG",
-    "dump_path": "/home/utnso/dump_files/"
+    "dump_path": "/home/fernando-aquino/Desktop/tp-operativos/tp-2025-1c-Nombre-muy-original"
 }

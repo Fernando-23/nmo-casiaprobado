@@ -182,8 +182,8 @@ func (k *Kernel) GestionarIO(nombreIO string, pid, duracion, idCPU int) {
 		return
 	}
 
-	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, false)
 	k.actualizarEstimacionSJF(pcb, duracionEnEstado(pcb))
+	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, false)
 
 	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 	mutex_ProcesoPorEstado[EstadoBlock].Unlock()
@@ -230,12 +230,13 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 	pcb := k.BuscarPorPidSinLock(EstadoExecute, pid)
+	k.actualizarEstimacionSJF(pcb, duracionEnEstado(pcb))
 	if !k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, true) {
 		slog.Error("GestionarDUMP_MEMORY: no se pudo mover a BLOCK",
 			"pid", pid)
 		return
 	}
-	k.actualizarEstimacionSJF(pcb, duracionEnEstado(pcb))
+
 	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 	go func(pid int) {
 
