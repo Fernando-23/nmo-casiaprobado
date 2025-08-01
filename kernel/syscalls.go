@@ -285,9 +285,5 @@ func (k *Kernel) GestionarEXIT(pid int, idCPU int) {
 		return
 	}
 
-	mutex_expulsadosPorRoja.Lock()
-	k.ExpulsadosPorRoja = append(k.ExpulsadosPorRoja, pid)
-	mutex_expulsadosPorRoja.Unlock()
-
 	go k.EliminarProceso(pcb, true)
 }

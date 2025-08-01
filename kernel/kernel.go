@@ -17,10 +17,10 @@ func main() {
 	fmt.Println("Iniciando Kernel...")
 	//cliente.ConfigurarLogger("kernel")
 	kernel := &Kernel{
-		CPUsConectadas:    make(map[int]*CPU),
-		Configuracion:     new(ConfigKernel),
-		DispositivosIO:    make(map[string]*InstanciasPorDispositivo),
-		ExpulsadosPorRoja: []int{},
+		CPUsConectadas: make(map[int]*CPU),
+		Configuracion:  new(ConfigKernel),
+		DispositivosIO: make(map[string]*InstanciasPorDispositivo),
+
 		EsperandoDesalojo: []*InstanciaEsperandoDesalojo{},
 	}
 

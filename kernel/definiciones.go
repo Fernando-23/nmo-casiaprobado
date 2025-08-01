@@ -82,7 +82,7 @@ type Kernel struct {
 	CPUsConectadas   map[int]*CPU
 	DispositivosIO   map[string]*InstanciasPorDispositivo
 	//Listas aux
-	ExpulsadosPorRoja []int
+
 	EsperandoDesalojo []*InstanciaEsperandoDesalojo
 	Configuracion     *ConfigKernel
 	SiguientePID      int
@@ -95,11 +95,9 @@ var (
 	mutex_SiguientePid              sync.Mutex
 	mutex_CPUsConectadas            sync.Mutex
 	mutex_ProcesoPorEstado          [cantEstados]sync.Mutex
-	//mutex_CPUsConectadasPorId       [6]sync.Mutex
-	mutex_DispositivosIO    sync.Mutex
-	mutex_expulsadosPorRoja sync.Mutex
-	mutex_esperandoDesalojo sync.Mutex
-	url_memo                string
+	mutex_DispositivosIO            sync.Mutex
+	mutex_esperandoDesalojo         sync.Mutex
+	url_memo                        string
 )
 
 // =====================================

@@ -9,5 +9,5 @@
     "swapfile_path": "/home/utnso/Desktop/tp-2025-1c-Nombre-muy-original/swapfile.bin",
     "swap_delay": 5000,
     "log_level": "INFO",
-    "dump_path": "/home/utnso/dumpfiles"
+    "dump_path": "/home/utnso/Desktop/dumpfiles"
 }
