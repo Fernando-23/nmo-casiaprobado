@@ -159,6 +159,7 @@ func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
 	mensajeKernel := string(body_Bytes)
 
 	slog.Debug("Debug - (RecibirInterrupt) - Llego interrupción desde kernel", "mensaje", mensajeKernel)
+	utils.LoggerConFormato("## Llega interrupción al puerto Interrupt")
 	mutex_tenemosInterrupt.Lock()
 	tenemos_interrupt = true
 	mutex_tenemosInterrupt.Unlock()
