@@ -18,7 +18,7 @@ func (k *Kernel) hayQuePlanificarAccesoAReady(estadoOrigen int, pid int) bool {
 		return true
 	}
 
-	if algoritmoPlani == "PCMP" && k.esProcesoMasChico(pid, estadoOrigen) {
+	if algoritmoPlani == "PMCP" && k.esProcesoMasChico(pid, estadoOrigen) {
 		return true
 	}
 
@@ -184,7 +184,7 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 		return
 	}
 
-	if k.Configuracion.Ready_ingress_algorithm == "PCMP" {
+	if k.Configuracion.Ready_ingress_algorithm == "PMCP" {
 		sort.Sort(PorTamanio(k.ProcesoPorEstado[estadoOrigen]))
 	}
 
