@@ -26,12 +26,12 @@ func (k *Kernel) ActualizarPCEnExec(pid, pc int) {
 	}
 
 	procesoEjecutando.Pc = pc
-
+	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 	slog.Debug("Debug - (ActualizarPCEnExec) - PC actualizado",
 		"pid", pid,
 		"pc", pc,
 	)
-	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+
 }
 
 func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
@@ -231,7 +231,7 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 	pcb := k.BuscarPorPidSinLock(EstadoExecute, pid)
 	k.actualizarEstimacionSJF(pcb, duracionEnEstado(pcb))
-	if !k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, true) {
+	if !k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, false) {
 		slog.Error("GestionarDUMP_MEMORY: no se pudo mover a BLOCK",
 			"pid", pid)
 		return
