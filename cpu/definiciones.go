@@ -66,8 +66,12 @@ var (
 	cache_pags_activa              bool
 
 	//No hace falta sincronizar
-	cant_niveles int
-	tam_pag      int
+	cant_niveles       int
+	cant_entradas_tpag int
+	tam_pag            int
+
+	//puntero para clock
+	puntero int
 )
 
 // Mutexs

@@ -279,30 +279,57 @@ func (cpu *CPU) AplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int,
 
 	switch algoritmo {
 	case "CLOCK":
-		for i := 0; i < cant_entradas_cache; i++ {
-			if cpu.Cache_pags[i].bit_uso == 0 {
-				if cpu.Cache_pags[i].bit_modificado == 1 {
-					utils.FormatearUrlYEnviar(cpu.Url_memoria, "/WRITE", true, "%d %d %d %s", cpu.Proc_ejecutando.Pid, cpu.Cache_pags[i].frame, cpu.Cache_pags[i].offset, cpu.Cache_pags[i].contenido)
-				}
+		// for i := puntero; i < cant_entradas_cache; i++ {
+		// 	if cpu.Cache_pags[i].bit_uso == 0 {
+		// 		cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
+		// 		slog.Debug("Debug - (AplicarAlgoritmoCachePags) - Realice el reemplazo en la 1ra pasada de CLOCK comun")
+		// 		puntero = i + 1
+		// 		return
+		// 	}
+		// 	cpu.Cache_pags[i].bit_uso = 0
+		// }
+		slog.Debug("Mi puntero antes de pasar por clock", "puntero", puntero)
+		if cpu.PasadaClock(puntero, cant_entradas_cache, 1, nro_pagina, frame, offset, contenido, accion) {
 
-				cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
-				slog.Debug("Debug - (AplicarAlgoritmoCachePags) - Realice el reemplazo en la 1ra pasada de CLOCK comun")
-				return
-			}
-			cpu.Cache_pags[i].bit_uso = 0
+			return
 		}
 
-		for i := 0; i < cpu.Config_CPU.Cant_entradas_cache; i++ {
-			if cpu.Cache_pags[i].bit_uso == 0 {
+		// for i := 0; i < puntero; i++ {
+		// 	if cpu.Cache_pags[i].bit_uso == 0 {
+		// 		cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
+		// 		slog.Debug("Debug - (AplicarAlgoritmoCachePags) - Realice el reemplazo en la 1ra pasada de CLOCK comun")
+		// 		puntero = i + 1
+		// 		return
+		// 	}
+		// 	cpu.Cache_pags[i].bit_uso = 0
 
-				if cpu.Cache_pags[i].bit_modificado == 1 {
-					utils.FormatearUrlYEnviar(cpu.Url_memoria, "/WRITE", true, "%d %d %d %s", cpu.Proc_ejecutando.Pid, cpu.Cache_pags[i].frame, cpu.Cache_pags[i].offset, cpu.Cache_pags[i].contenido)
-				}
+		// }
+		if cpu.PasadaClock(0, puntero, 1, nro_pagina, frame, offset, contenido, accion) {
+			return
+		}
 
-				cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
-				slog.Debug("Debug - (AplicarAlgoritmoCachePags) - Realice el reemplazo en la 2da pasada de CLOCK comun")
-				return
-			}
+		// for i := puntero; i < cant_entradas_cache; i++ {
+		// 	if cpu.Cache_pags[i].bit_uso == 0 {
+		// 		cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
+		// 		slog.Debug("Debug - (AplicarAlgoritmoCachePags) - Realice el reemplazo en la 2da pasada de CLOCK comun")
+		// 		puntero = i + 1
+		// 		return
+		// 	}
+		// }
+
+		if cpu.PasadaClock(puntero, cant_entradas_cache, 0, nro_pagina, frame, offset, contenido, accion) {
+			return
+		}
+		// for i := 0; i < puntero; i++ {
+		// 	if cpu.Cache_pags[i].bit_uso == 0 {
+		// 		cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
+		// 		slog.Debug("Debug - (AplicarAlgoritmoCachePags) - Realice el reemplazo en la 2da pasada de CLOCK comun")
+		// 		puntero = i + 1
+		// 		return
+		// 	}
+		// }
+		if cpu.PasadaClock(0, puntero, 0, nro_pagina, frame, offset, contenido, accion) {
+			return
 		}
 
 	case "CLOCK-M":
@@ -316,10 +343,10 @@ func (cpu *CPU) AplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int,
 		// 		return
 		// 	}
 		// }
-
+		slog.Info("Mi puntero antes de pasar por clock-M", "puntero", puntero)
 		aux_modif, encontre = cpu.CicloCLockM(0, 0, 0, nro_pagina, frame, offset, contenido, accion)
 		if encontre {
-			slog.Debug("Debug - (AplicarAlgoritmoCachePags) - Realice el reemplazo en la 3ra pasada", "pag_reemplazada", aux_modif.pagina)
+			slog.Debug("Debug - (AplicarAlgoritmoCachePags) - Realice el reemplazo en la 1ra pasada", "pag_reemplazada", aux_modif.pagina)
 			return
 		}
 		// 2) Segunda pasada
@@ -370,9 +397,35 @@ func (cpu *CPU) AplicarAlgoritmoCachePags(nro_pagina int, frame int, offset int,
 	}
 }
 
+func (cpu *CPU) PasadaClock(inicio int, fin int, sector_extra int, nro_pagina int, frame int, offset int, contenido string, accion string) bool {
+	for i := inicio; i < fin; i++ {
+		if cpu.Cache_pags[i].bit_uso == 0 {
+			if cpu.Cache_pags[i].bit_modificado == 1 {
+				utils.FormatearUrlYEnviar(cpu.Url_memoria, "/WRITE", true, "%d %d %d %s", cpu.Proc_ejecutando.Pid, cpu.Cache_pags[i].frame, cpu.Cache_pags[i].offset, cpu.Cache_pags[i].contenido)
+			}
+			cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
+			slog.Debug("Debug - (PasadaClock) - Realice el reemplazo en CLOCK comun")
+			puntero = i + 1
+			if puntero == cpu.Config_CPU.Cant_entradas_cache { //si llega al limite, reinicia
+				puntero = 0
+			}
+			slog.Debug("Mi puntero cuando actualizo entrada cache de pag", "puntero", puntero)
+			return true
+		}
+
+		if sector_extra == 1 {
+			cpu.Cache_pags[i].bit_uso = 0
+		}
+
+	}
+	return false
+}
+
 func (cpu *CPU) CicloCLockM(sector_extra int, valor_uso int, valor_modificado int, nro_pagina int, frame int, offset int, contenido string, accion string) (*EntradaCachePag, bool) {
 	cant_entradas_cache := cpu.Config_CPU.Cant_entradas_cache
-	for i := range cant_entradas_cache {
+
+	//desde el puntero hasta el FIIIN
+	for i := puntero; i < cant_entradas_cache; i++ {
 		if cpu.Cache_pags[i].bit_uso == valor_uso && cpu.Cache_pags[i].bit_modificado == valor_modificado {
 			aux_modif := &EntradaCachePag{
 				pagina:         cpu.Cache_pags[i].pagina,
@@ -384,6 +437,11 @@ func (cpu *CPU) CicloCLockM(sector_extra int, valor_uso int, valor_modificado in
 			}
 
 			cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
+			puntero = i + 1
+			if puntero == cant_entradas_cache { //si llega al limite, reinicia
+				puntero = 0
+			}
+			slog.Info("Mi puntero cuando actualizo entrada cache de pag", "puntero", puntero)
 			return aux_modif, true
 		}
 		if sector_extra == 1 {
@@ -391,6 +449,33 @@ func (cpu *CPU) CicloCLockM(sector_extra int, valor_uso int, valor_modificado in
 		}
 
 	}
+
+	//desde el inicio hasta el puntero
+	for i := 0; i < puntero; i++ {
+		if cpu.Cache_pags[i].bit_uso == valor_uso && cpu.Cache_pags[i].bit_modificado == valor_modificado {
+			aux_modif := &EntradaCachePag{
+				pagina:         cpu.Cache_pags[i].pagina,
+				frame:          cpu.Cache_pags[i].frame,
+				offset:         cpu.Cache_pags[i].offset,
+				contenido:      cpu.Cache_pags[i].contenido,
+				bit_uso:        cpu.Cache_pags[i].bit_uso,
+				bit_modificado: cpu.Cache_pags[i].bit_modificado,
+			}
+
+			cpu.ActualizarEntradaCache(i, nro_pagina, frame, offset, contenido, accion)
+			puntero = i + 1
+			if puntero == cant_entradas_cache { //si llega al limite, reinicia
+				puntero = 0
+			}
+			slog.Info("Mi puntero cuando actualizo entrada cache de pag", "puntero", puntero)
+			return aux_modif, true
+		}
+		if sector_extra == 1 {
+			cpu.Cache_pags[i].bit_uso = 0
+		}
+
+	}
+
 	return nil, false
 }
 
