@@ -11,36 +11,27 @@ import (
 	utils "github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
 
-func (k *Kernel) ActualizarPC(idCPU int, pc int) {
-
-	cpu, ok := k.CPUsConectadas[idCPU]
-	if !ok {
-		slog.Error("Error -(ActualizarPc) - No se encontró la CPU", "idCPU", idCPU)
-		return
-	}
-
-	cpu.Pc = pc
+func (k *Kernel) ActualizarPCEnExec(pid, pc int) {
 
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
-	defer mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 
-	procesoEjecutando := k.BuscarPorPidSinLock(EstadoExecute, cpu.Pid)
+	procesoEjecutando := k.BuscarPorPidSinLock(EstadoExecute, pid)
 
 	if procesoEjecutando == nil {
-		slog.Error("Error -(ActualizarPc) - No se encontró el proceso en ejecucion para esa CPU",
-			"idCPU", idCPU,
-			"pid", cpu.Pid,
+		slog.Error("Error -(ActualizarPCEnExec) - No se encontró el proceso en ejecucion para esa CPU",
+			"pid", pid,
 		)
+		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 		return
 	}
 
 	procesoEjecutando.Pc = pc
 
-	slog.Debug("PC actualizado",
-		"id_cpu", idCPU,
-		"pid", cpu.Pid,
+	slog.Debug("Debug - (ActualizarPCEnExec) - PC actualizado",
+		"pid", pid,
 		"pc", pc,
 	)
+	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 }
 
 func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
@@ -71,80 +62,73 @@ func (k *Kernel) llegaSyscallCPU(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("SEGUI"))
 	} else {
 
-		slog.Debug("intentando enviar proceso a execute", "mensaje", mensaje)
+		//slog.Debug("intentando enviar proceso a execute", "mensaje", mensaje)
 
-		//k.IntentarEnviarProcesoAExecute()
 		w.Write([]byte("REPLANIFICAR"))
 	}
 
 }
 
 func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
-	//mutex_syscall.Lock()
+
 	syscall := strings.Split(respuesta, " ")
-	//mutex_syscall.Unlock()
+
 	if len(syscall) < 3 {
 		return false, fmt.Errorf("error - syscall incompleta: %v", respuesta)
 	}
 
-	idCPU, err := strconv.Atoi(syscall[IdCPU])
+	idCPU, err := strconv.Atoi(syscall[0])
 
 	if err != nil {
-		return false, fmt.Errorf("error - ID de CPU inválido: %s", syscall[IdCPU])
+		return false, fmt.Errorf("error - ID de CPU inválido: %s", syscall[0])
 	}
 
-	pc, err := strconv.Atoi(syscall[PC])
+	pid, err := strconv.Atoi(syscall[1])
 
 	if err != nil {
-		return false, fmt.Errorf("error - PC inválido: %s", syscall[PC])
+		return false, fmt.Errorf("error - PID de CPU inválido: %s", syscall[1])
 	}
 
-	mutex_CPUsConectadas.Lock()
-	cpu_ejecutando, existe := k.CPUsConectadas[idCPU]
+	pc, err := strconv.Atoi(syscall[2])
 
-	if !existe {
-		mutex_CPUsConectadas.Unlock()
-		return false, fmt.Errorf("error - CPU no registrada: %d", idCPU)
+	if err != nil {
+		return false, fmt.Errorf("error - PC inválido: %s", syscall[2])
 	}
-	k.ActualizarPC(idCPU, pc)
 
-	pid := cpu_ejecutando.Pid
-
-	mutex_CPUsConectadas.Unlock()
-	cod_op := syscall[CodOp]
+	cod_op := syscall[3]
 
 	utils.LoggerConFormato("## (%d) - Solicitó syscall: %s", pid, cod_op)
+
 	switch cod_op {
 	case "IO":
-		// 2 20 IO AURICULARES 9000
-		if len(syscall) < 5 {
+		// IDCPU PID PC IO DISCO 9000
+		if len(syscall) < 6 {
 			return false, fmt.Errorf("error - syscall IO mal formada")
 		}
 
-		nombre := syscall[3]
-		tiempo, err := strconv.Atoi(syscall[4])
+		nombre := syscall[4]
+		tiempo, err := strconv.Atoi(syscall[5])
 		if err != nil {
-			return false, fmt.Errorf("error - syscall IO - tiempo inválido: %s", syscall[4])
+			return false, fmt.Errorf("error - syscall IO - tiempo inválido: %s", syscall[5])
 		}
-		k.GestionarIO(nombre, pid, tiempo, idCPU)
-		k.liberarCPU(idCPU)
 
-		slog.Debug("Debug - (GestionarSyscall) - Se libero la cpu por Syscall IO",
-			"id_cpu", idCPU)
+		k.ActualizarPCEnExec(pid, pc)
+
+		k.GestionarIO(nombre, pid, tiempo, idCPU)
 
 		return false, nil // la CPU debe replanificar
 
 	case "INIT_PROC":
-		// 2 20 INIT_PROC proceso1 256
-		if len(syscall) < 5 {
+		// IDCPU PID PC INIT_PROC proceso1 256
+		if len(syscall) < 6 {
 			return false, fmt.Errorf("error - syscall INIT_PROC mal formada")
 		}
 
-		nombre_arch := syscall[3]
-		tamanio, err := strconv.Atoi(syscall[4])
+		nombre_arch := syscall[4]
+		tamanio, err := strconv.Atoi(syscall[5])
 
 		if err != nil {
-			return false, fmt.Errorf("error - syscall IO - tamaño inválido: %s", syscall[4])
+			return false, fmt.Errorf("error - syscall INIT_PROC - tamaño inválido: %s", syscall[5])
 		}
 
 		k.GestionarINIT_PROC(nombre_arch, tamanio)
@@ -152,21 +136,17 @@ func (k *Kernel) GestionarSyscalls(respuesta string) (bool, error) {
 		return true, nil // la CPU debe seguir con el proceso
 
 	case "DUMP_MEMORY":
-		// 2 30 DUMP_MEMORY
+		// IDCPU PID PC DUMP_MEMORY
+		k.ActualizarPCEnExec(pid, pc)
 		k.GestionarDUMP_MEMORY(pid, idCPU)
-		k.liberarCPU(idCPU)
 
-		slog.Debug("Debug - (GestionarSyscall) - Se libero la cpu por Syscall DUMP_MEMORY",
-			"id_cpu", idCPU)
 		return false, nil // la CPU debe replanificar
 
 	case "EXIT":
-		// 2 30 EXIT
+		// IDCPU PID PC EXIT
 		k.GestionarEXIT(pid, idCPU)
-		k.liberarCPU(idCPU)
+		//k.liberarCPU(idCPU)
 
-		slog.Debug("Debug - (GestionarSyscall) - Se libero la cpu por Syscall EXIT",
-			"id_cpu", idCPU)
 		return false, nil // la CPU debe replanificar
 
 	default:
@@ -202,6 +182,7 @@ func (k *Kernel) GestionarIO(nombreIO string, pid, duracion, idCPU int) {
 		return
 	}
 
+	k.actualizarEstimacionSJF(pcb, duracionEnEstado(pcb))
 	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, false)
 
 	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
@@ -247,12 +228,16 @@ func (k *Kernel) GestionarINIT_PROC(nombre_arch string, tamanio int) {
 
 func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 
+	mutex_ProcesoPorEstado[EstadoExecute].Lock()
+	pcb := k.BuscarPorPidSinLock(EstadoExecute, pid)
+	k.actualizarEstimacionSJF(pcb, duracionEnEstado(pcb))
 	if !k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, true) {
 		slog.Error("GestionarDUMP_MEMORY: no se pudo mover a BLOCK",
 			"pid", pid)
 		return
 	}
 
+	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 	go func(pid int) {
 
 		defer func() {
@@ -288,17 +273,21 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 
 func (k *Kernel) GestionarEXIT(pid int, idCPU int) {
 	//saco de execute el proceso que esta ejecutando y lo obtengo
-	pcb := k.QuitarYObtenerPCB(EstadoExecute, pid, true)
+	mutex_ProcesoPorEstado[EstadoExecute].Lock()
+	pcb := k.QuitarYObtenerPCB(EstadoExecute, pid, false)
+	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 	if pcb == nil {
 		slog.Error("Error - (GestionarEXIT) - No se encontró el pid asociado a la cpu en Execute",
 			"pid", pid,
 			"cpu", idCPU,
 		)
+
 		return
 	}
-	//envio solicitud para eliminar proceso
-	//y hace un par de cosas
-	//intenta enviarAReady y tmb a Execute
-	//por el flag en true
+
+	mutex_expulsadosPorRoja.Lock()
+	k.ExpulsadosPorRoja = append(k.ExpulsadosPorRoja, pid)
+	mutex_expulsadosPorRoja.Unlock()
+
 	go k.EliminarProceso(pcb, true)
 }

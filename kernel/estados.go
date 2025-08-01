@@ -144,17 +144,20 @@ func (k *Kernel) BuscarPorPidSinLock(estado int, pid int) *PCB {
 	return nil
 }
 
-func duracionEnEstado(pPcb *PCB) time.Duration {
-	return time.Since(pPcb.HoraIngresoAEstado)
+func duracionEnEstado(pcb *PCB) int64 {
+	//slog.Debug("Debug - (duracionEnEstado) - Duracion en estado", "duracion", pcb.HoraIngresoAEstado)
+	duracion_a_devolver := time.Since(pcb.HoraIngresoAEstado).Milliseconds()
+	//slog.Debug("Debug - (duracionEnEstado) - Duracion en estado PROCESADA", "duracion", duracion_a_devolver)
+	return duracion_a_devolver
 }
 
 // potencial a sincronizar
-func actualizarMetricasEstado(pPcb *PCB, posEstado int) {
-	pPcb.Me[posEstado]++ //ver si puede quedar mas lindo
+func actualizarMetricasEstado(pcb *PCB, posEstado int) {
+	pcb.Me[posEstado]++ //ver si puede quedar mas lindo
 	//---------------------update, quedo mas lindo
 
 }
 
-func actualizarMetricasTiempo(pPcb *PCB, posEstado int) {
-	pPcb.Mt[posEstado] += duracionEnEstado(pPcb)
+func actualizarMetricasTiempo(pcb *PCB, posEstado int) {
+	pcb.Mt[posEstado] += duracionEnEstado(pcb)
 }

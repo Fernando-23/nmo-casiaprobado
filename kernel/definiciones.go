@@ -23,13 +23,12 @@ const cantEstados int = 6 //exit es un instante
 type PCB struct {
 	Pid                int
 	Pc                 int
-	Me                 [cantEstados]int           //Metricas de Estado
-	Mt                 [cantEstados]time.Duration //Metricas de Tiempo
-	Tamanio            int                        //revisar a futuro
+	Me                 [cantEstados]int   //Metricas de Estado
+	Mt                 [cantEstados]int64 //Metricas de Tiempo
+	Tamanio            int                //revisar a futuro
 	Arch_pseudo        string
 	HoraIngresoAEstado time.Time //revisar a futuro
 	SJF                *SJF      //Estimaciones para planificacion SJF
-	Reservado          string
 }
 
 type SJF struct {
@@ -39,17 +38,12 @@ type SJF struct {
 }
 
 type CPU struct {
-	ID            int
-	Url           string
-	Pid           int // Es -1 si no hay nadie
-	Pc            int
-	ADesalojarPor int
-	Esta_libre    bool
-}
-
-type ProcesoEsperandoIO struct {
-	Pid      int
-	TiempoIO int
+	ID                   int
+	Url                  string
+	Pid                  int // Es -1 si no hay nadie
+	Pc                   int
+	EstaSiendoDesalojada bool // no veo la hora de quitar esta linea tbh || update: al final, liam siempre tiene razon
+	Esta_libre           bool
 }
 
 type InstanciasPorDispositivo struct {
@@ -68,31 +62,60 @@ type DispositivoIOAux struct {
 	Duracion    int
 }
 
+// =====================================
+// =========== Structs auxs ===========
+type ProcesoEsperandoIO struct {
+	Pid      int
+	TiempoIO int
+}
+
+type InstanciaEsperandoDesalojo struct {
+	id_cpu             int
+	proceso_titular    *PCB
+	proceso_desalojado *PCB
+}
+
+// =====================================
+// ======== EL MISMISIMO KERNEL ========
 type Kernel struct {
 	ProcesoPorEstado map[int][]*PCB
 	CPUsConectadas   map[int]*CPU
 	DispositivosIO   map[string]*InstanciasPorDispositivo
-	Configuracion    *ConfigKernel
-	SiguientePID     int
+	//Listas aux
+	ExpulsadosPorRoja []int
+	EsperandoDesalojo []*InstanciaEsperandoDesalojo
+	Configuracion     *ConfigKernel
+	SiguientePID      int
 }
 
+// =====================================
+// ============= Mutexes ===============
 var (
 	mutex_peticionHayEspacioMemoria sync.Mutex
 	mutex_SiguientePid              sync.Mutex
 	mutex_CPUsConectadas            sync.Mutex
 	mutex_ProcesoPorEstado          [cantEstados]sync.Mutex
-	mutex_CPUsConectadasPorId       [6]sync.Mutex
-	mutex_DispositivosIO            sync.Mutex
-	url_memo                        string
-	ch_avisoCPULibre                chan int
-	ch_conexionIOenMarcha           chan DispositivoIOAux
+	//mutex_CPUsConectadasPorId       [6]sync.Mutex
+	mutex_DispositivosIO    sync.Mutex
+	mutex_expulsadosPorRoja sync.Mutex
+	mutex_esperandoDesalojo sync.Mutex
+	url_memo                string
 )
 
-// PROCESO MAS CHICO PRIMERO
+// =====================================
+// ============= Channels ==============
+var (
+	ch_avisoCPULibre      chan int
+	ch_conexionIOenMarcha chan DispositivoIOAux
+)
 
+// =====================================
+// =============== SORTS ===============
+
+// PROCESO MAS CHICO PRIMERO
 type PorTamanio []*PCB
 
-// Metodos para usar sort(ordenamiento ascendente por tamanio)
+// methods para usar sort(ordenamiento ascendente por tamanio)
 func (pcb PorTamanio) Swap(i, j int) { pcb[i], pcb[j] = pcb[j], pcb[i] }
 
 func (pcb PorTamanio) Len() int { return len(pcb) }
@@ -102,7 +125,7 @@ func (pcb PorTamanio) Less(i, j int) bool { return pcb[i].Tamanio < pcb[j].Taman
 // SJF
 type PorSJF []*PCB
 
-// Metodos para usar sort(ordenamiento ascendente por SJF)
+// methods para usar sort(ordenamiento ascendente por SJF)
 func (pcb PorSJF) Swap(i, j int) { pcb[i], pcb[j] = pcb[j], pcb[i] }
 
 func (pcb PorSJF) Len() int { return len(pcb) }
@@ -110,15 +133,6 @@ func (pcb PorSJF) Len() int { return len(pcb) }
 func (pcb PorSJF) Less(i, j int) bool {
 	return int(pcb[i].SJF.Estimado_anterior) < int(pcb[j].SJF.Estimado_anterior)
 }
-
-// var estados = []string{"NEW", "READY", "EXECUTE", "BLOCK", "BLOCK-SUSPENDED", "BLOCK-READY", "EXIT"}
-//var config_kernel *ConfigKernel
-
-/*type solicitudIniciarProceso struct {
-	Pid           int    `json:"pid"`
-	ArchivoPseudo string `json:"archivoPseudo"`
-	Tamanio       int    `json:"tamanio"`
-}*/
 
 const (
 	EstadoNew = iota
@@ -138,3 +152,12 @@ const (
 const RESPUESTA_OK = "OK"
 
 var estados_proceso = []string{"NEW", "READY", "EXECUTE", "BLOCKED", "SUSPENDED_BLOCKED", "SUSPENDED_READY"}
+
+// var estados = []string{"NEW", "READY", "EXECUTE", "BLOCK", "BLOCK-SUSPENDED", "BLOCK-READY", "EXIT"}
+//var config_kernel *ConfigKernel
+
+/*type solicitudIniciarProceso struct {
+	Pid           int    `json:"pid"`
+	ArchivoPseudo string `json:"archivoPseudo"`
+	Tamanio       int    `json:"tamanio"`
+}*/

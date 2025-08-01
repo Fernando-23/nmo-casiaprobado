@@ -17,9 +17,11 @@ func main() {
 	fmt.Println("Iniciando Kernel...")
 	//cliente.ConfigurarLogger("kernel")
 	kernel := &Kernel{
-		CPUsConectadas: make(map[int]*CPU),
-		Configuracion:  new(ConfigKernel),
-		DispositivosIO: make(map[string]*InstanciasPorDispositivo),
+		CPUsConectadas:    make(map[int]*CPU),
+		Configuracion:     new(ConfigKernel),
+		DispositivosIO:    make(map[string]*InstanciasPorDispositivo),
+		ExpulsadosPorRoja: []int{},
+		EsperandoDesalojo: []*InstanciaEsperandoDesalojo{},
 	}
 
 	if len(os.Args) < 4 { // ruta archivo-pseudo tamanio
@@ -53,12 +55,13 @@ func main() {
 	//Iniciar servidor
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/kernel/registrar_cpu", kernel.LlegaNuevaCPU) //SINCRO HECHA
-	mux.HandleFunc("/kernel/interrupido", kernel.llegaFinInterrupcion)
+	mux.HandleFunc("/kernel/registrar_cpu", kernel.LlegaNuevaCPU)
+	mux.HandleFunc("/kernel/liberar_cpu", kernel.RecibirAvisoLiberarCPU)
 	mux.HandleFunc("/kernel/syscall", kernel.llegaSyscallCPU)
-	mux.HandleFunc("/kernel/registrar_io", kernel.llegaNuevaIO)         // SINCRO HECHA
-	mux.HandleFunc("/kernel/desconectar_io", kernel.llegaDesconexionIO) // revisado y corregido 20/6
-	mux.HandleFunc("/kernel/fin_io", kernel.llegaFinIO)                 // revisado y corregido 20/6
+	mux.HandleFunc("/kernel/fin_interrupt", kernel.LlegaFinInterrupt)
+	mux.HandleFunc("/kernel/registrar_io", kernel.llegaNuevaIO)
+	mux.HandleFunc("/kernel/desconectar_io", kernel.llegaDesconexionIO)
+	mux.HandleFunc("/kernel/fin_io", kernel.llegaFinIO)
 	mux.HandleFunc("/mensaje", servidor.RecibirMensaje)
 
 	url_socket := fmt.Sprintf(":%d", kernel.Configuracion.Puerto_Kernel)
@@ -98,7 +101,6 @@ func main() {
 		return
 	}
 
-	//time.Sleep(2 * time.Second)
 	go func() {
 
 		for {

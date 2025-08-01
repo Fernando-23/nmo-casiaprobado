@@ -1,8 +1,10 @@
 package main
 
 import (
+	"io"
 	"log/slog"
-	"time"
+	"net/http"
+	"strconv"
 
 	"github.com/sisoputnfrba/tp-2025-1c-Nombre-muy-original/utils"
 )
@@ -23,7 +25,6 @@ func (k *Kernel) CrearPCB(tamanio int, arch_pseudo string) *PCB {
 		Tamanio:     tamanio,
 		Arch_pseudo: arch_pseudo,
 		Pc:          0,
-		Reservado:   "NO",
 	}
 
 	if k.Configuracion.Algoritmo_Plani == "SJF" || k.Configuracion.Algoritmo_Plani == "SRT" {
@@ -44,16 +45,28 @@ func (k *Kernel) CrearSJF(pcb *PCB) {
 	pcb.SJF = sjf
 }
 
-func (k *Kernel) actualizarEstimacionSJF(pcb *PCB, tiempoEnExecute time.Duration) {
+func (k *Kernel) actualizarEstimacionSJF(pcb *PCB, tiempoEnExecute int64) {
+
 	if pcb == nil || pcb.SJF == nil {
+		slog.Debug("Debug - (actualizarEstimacionSJF) - PCB o SJF nil en actualizarEstimacionSJF")
 		return
 	}
-	real_anterior := float64(tiempoEnExecute.Milliseconds())
+
+	pcb.SJF.Real_anterior = float64(tiempoEnExecute)
 	alpha := k.Configuracion.Alfa
 	sjf := pcb.SJF
-	aux := sjf.Estimado_actual
-	sjf.Estimado_actual = (alpha * real_anterior) + ((1 - alpha) * sjf.Estimado_anterior)
-	sjf.Estimado_anterior = aux
+	aux_estimacion_actual := sjf.Estimado_actual
+
+	sjf.Estimado_actual = (alpha * sjf.Real_anterior) + ((1 - alpha) * aux_estimacion_actual)
+
+	sjf.Estimado_anterior = aux_estimacion_actual
+
+	slog.Debug("Debug - (actualizarEstimacionSJF) - Actualizando SJF",
+		"pid", pcb.Pid,
+		"real", pcb.SJF.Real_anterior,
+		"estimado_anterior", sjf.Estimado_anterior,
+		"nuevo_estimado", sjf.Estimado_actual,
+	)
 }
 
 func (k *Kernel) CalcularEstSJF_sinModifPCB(estimado_anterior, real_anterior float64) float64 {
@@ -79,26 +92,18 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB, liberaMemoria bool) {
 
 	for estado := range cantEstados {
 		utils.LoggerConFormato(
-			"%s (%d) (%s),",
+			"%s (%d) (%d),",
 			estados_proceso[estado],
 			procesoAEliminar.Me[estado],
-			procesoAEliminar.Mt[estado].String(),
+			procesoAEliminar.Mt[estado],
 		)
 
 	}
 
 	if liberaMemoria {
-		slog.Debug("Debug - (EliminarProceso) - Libere memoria, voy a proceder a hacer mis cositas")
+		slog.Debug("Debug - (EliminarProceso) - Libere memoria, voy a entrar a IntentarEnviarProcesosAReady()")
 		k.IntentarEnviarProcesosAReady()
 	}
-}
-
-func ReservarSRT(pcb *PCB, reservado string) {
-	pcb.Reservado = reservado
-}
-
-func EstaReservado(pcb *PCB) bool {
-	return pcb.Reservado != "NO"
 }
 
 func (k *Kernel) esProcesoMasChico(pid int, estadoOrigen int) bool {
@@ -110,4 +115,30 @@ func (k *Kernel) esProcesoMasChico(pid int, estadoOrigen int) bool {
 		return true
 	}
 	return false
+}
+
+func (k *Kernel) RecibirAvisoLiberarCPU(w http.ResponseWriter, r *http.Request) {
+
+	body_Bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("Error - (RecibirAvisoLiberarCPU) - Leyendo la solicitud", "error", err)
+		http.Error(w, "Error leyendo el body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	mensajeCPU := string(body_Bytes)
+
+	id_cpu, _ := strconv.Atoi(mensajeCPU) // IDCPU
+
+	exito := k.RenovacionDeCPU(id_cpu)
+
+	if !exito {
+		slog.Error("Error - (RecibirAvisoLiberarCPU) - Error en RenovacionDeCPU", "id recibido", id_cpu)
+		return
+	}
+
+	slog.Debug("Debug - (RecibirAvisoLiberarCPU) - Libere correctamente la CPU",
+		"id cpu", id_cpu)
+
 }

@@ -29,20 +29,21 @@ func (cpu *CPU) Decode(instruccion string) (string, []string) {
 	return cod_op, operacion
 }
 
-func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa string) {
+func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa string) string {
 
 	utils.LoggerConFormato("## PID: %d - Ejecutando: %s", cpu.Proc_ejecutando.Pid, instruccion_completa)
+	var tipo_instruccion string
 	switch cod_op {
 
 	case "NOOP":
 		//consume el tiempo de ciclo de instruccion
-
+		tipo_instruccion = "REQUIERO_DESALOJO"
 	case "WRITE":
 		dir_logica, err := strconv.Atoi(operacion[0])
 
 		if err != nil {
-			slog.Error("Error - (Execute) - Pansando a int la direnccion logica")
-			return
+			slog.Error("Error - (Execute) - Pasando a int la direccion logica")
+			return ""
 		}
 		datos := operacion[1]
 
@@ -54,20 +55,18 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 			dir_fisica.offset,
 			datos,
 		)
+		tipo_instruccion = "REQUIERO_DESALOJO"
 
 	case "READ":
 		dir_logica, err1 := strconv.Atoi(operacion[0])
 		tamanio, err2 := strconv.Atoi(operacion[1])
 
 		if err1 != nil || err2 != nil {
-			slog.Error("Error - (Execute) - Pasando a int la direnccion logica o tamanio")
-			return
+			slog.Error("Error - (Execute) - Pasando a int la direccion logica o tamanio")
+			return ""
 		}
 
-		//Gestionar mejor el error :p
 		valor_leido, dir_fisica := cpu.RequestREAD(dir_logica, tamanio)
-		//si el valor leido es un aviso de direccionamiento invalido
-		//habilitar un hay_interrupcion
 
 		utils.LoggerConFormato("PID: %d - Acción: LEER - Dirección Física: [ %d |  %d  ] - Valor: %s",
 			cpu.Proc_ejecutando.Pid,
@@ -75,50 +74,64 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 			dir_fisica.offset,
 			valor_leido,
 		)
-
+		tipo_instruccion = "REQUIERO_DESALOJO"
 	case "GOTO":
 
 		nuevo_pc, err := strconv.Atoi(operacion[0])
 
 		if err != nil {
 			slog.Error("Error - (Execute) - Pansando a int PC")
-			return
+			return ""
 		}
 
 		cpu.Proc_ejecutando.Pc = nuevo_pc
+		tipo_instruccion = "REQUIERO_DESALOJO"
 
 	// Syscalls
 	case "IO":
-		// ID_CPU PC IO TECLADO 20000
+		// ID_CPU PID PC IO TECLADO 20000
 
 		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1 //le mando a kernel la siguiente instruccion
-		mensaje_io := fmt.Sprintf("%s %d IO %s %s", cpu.Id, pc_a_actualizar, operacion[0], operacion[1])
+		mensaje_io := fmt.Sprintf("%s %d %d IO %s %s", cpu.Id, cpu.Proc_ejecutando.Pid, pc_a_actualizar, operacion[0], operacion[1])
 		cpu.EnviarSyscall("IO", mensaje_io)
 
-		HabilitarInterrupt(true)
+		CambiarValorActualizarContexto(true)
+
+		CambiarValorParaAvisarQueEstoyLibre(true)
+		tipo_instruccion = "NO_REQUIERO_DESALOJO"
 
 	case "INIT_PROC":
-		// ID_CPU PC INIT_PROC proceso1 256
+		// ID_CPU PID INIT_PROC proceso1 256
 		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
-		mensaje_init_proc := fmt.Sprintf("%s %d INIT_PROC %s %s", cpu.Id, pc_a_actualizar, operacion[0], operacion[1])
+		mensaje_init_proc := fmt.Sprintf("%s %d %d INIT_PROC %s %s", cpu.Id, cpu.Proc_ejecutando.Pid, pc_a_actualizar, operacion[0], operacion[1])
 		cpu.EnviarSyscall("INIT_PROC", mensaje_init_proc)
 
-		HabilitarInterrupt(false)
+		//deberia por default estar los 2 en false, peeeero, para asegurarnos, que los setee igual
+		CambiarValorActualizarContexto(false)
+
+		CambiarValorParaAvisarQueEstoyLibre(false)
+		tipo_instruccion = "REQUIERO_DESALOJO"
 
 	case "DUMP_MEMORY":
-		// ID_CPU PC DUMP_MEMORY
+		// ID_CPU PID PC DUMP_MEMORY
 		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
-		mensaje_dump := fmt.Sprintf("%s %d DUMP_MEMORY", cpu.Id, pc_a_actualizar)
+		mensaje_dump := fmt.Sprintf("%s %d  %d DUMP_MEMORY", cpu.Id, cpu.Proc_ejecutando.Pid, pc_a_actualizar)
 		cpu.EnviarSyscall("DUMP_MEMORY", mensaje_dump)
-		HabilitarInterrupt(true)
 
+		CambiarValorActualizarContexto(true)
+
+		CambiarValorParaAvisarQueEstoyLibre(true)
+		tipo_instruccion = "NO_REQUIERO_DESALOJO"
 	case "EXIT":
-		// ID_CPU PC DUMP_MEMORY
+		// ID_CPU PID PC EXIT
 		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
-		mensaje_exit := fmt.Sprintf("%s %d EXIT", cpu.Id, pc_a_actualizar)
+		mensaje_exit := fmt.Sprintf("%s %d %d EXIT", cpu.Id, cpu.Proc_ejecutando.Pid, pc_a_actualizar)
 		cpu.EnviarSyscall("EXIT", mensaje_exit)
 
-		HabilitarInterrupt(true)
+		CambiarValorActualizarContexto(true)
+
+		CambiarValorParaAvisarQueEstoyLibre(true)
+		tipo_instruccion = "NO_REQUIERO_DESALOJO"
 
 	default:
 		slog.Error("Error - (Execute) - ingrese una instruccion valida")
@@ -129,7 +142,8 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 		cpu.Proc_ejecutando.Pc++
 	}
 
-	//checkInterrupt()
+	cpu.CheckInterrupt()
+	return tipo_instruccion
 }
 
 func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
@@ -144,15 +158,80 @@ func (cpu *CPU) RecibirInterrupt(w http.ResponseWriter, r *http.Request) {
 
 	mensajeKernel := string(body_Bytes)
 
-	slog.Debug("Llego interrrupción desde kernel", "mensaje", mensajeKernel)
+	slog.Debug("Debug - (RecibirInterrupt) - Llego interrupción desde kernel", "mensaje", mensajeKernel)
+	mutex_tenemosInterrupt.Lock()
+	tenemos_interrupt = true
+	mutex_tenemosInterrupt.Unlock()
+}
 
-	if mensajeKernel == "OK" {
-		HabilitarInterrupt(true)
-		//esto va a ser un w.Write()
-		//utils.FormatearUrlYEnviar(cpu.Url_kernel, "/interrumpido", false, "%s %d %d", cpu.Id, cpu.Proc_ejecutando.Pid, cpu.Proc_ejecutando.Pc)
+func (cpu *CPU) CheckInterrupt() {
+	slog.Debug("Debug - (CheckInterrupt) - Entre recien a CheckInterrupt")
+	mutex_tenemosInterrupt.Lock()
+	if tenemos_interrupt {
+
+		slog.Debug("Debug - (CheckInterrupt) - En CheckInterrupt, detecte una interrupcion")
+		CambiarValorActualizarContexto(true)
+
+		CambiarValorParaAvisarQueEstoyLibre(false)
+		tenemos_interrupt = true
+		mutex_tenemosInterrupt.Unlock()
 		return
 	}
+	mutex_tenemosInterrupt.Unlock()
 }
+
+func CambiarValorActualizarContexto(nuevo_valor bool) {
+	mutex_hayQueActualizarContexto.Lock()
+	hay_que_actualizar_contexto = nuevo_valor
+	mutex_hayQueActualizarContexto.Unlock()
+}
+
+func CambiarValorParaAvisarQueEstoyLibre(nuevo_valor bool) {
+	mutex_tengoQueActualizarEnKernel.Lock()
+	tengo_que_actualizar_en_kernel = nuevo_valor
+	mutex_tengoQueActualizarEnKernel.Unlock()
+}
+
+func (cpu *CPU) ChequearSiTengoQueActualizarEnKernel(requiere_realmente_desalojo string) {
+
+	mutex_tengoQueActualizarEnKernel.Lock()
+	if tengo_que_actualizar_en_kernel {
+		mutex_tengoQueActualizarEnKernel.Unlock()
+
+		cpu.Liberarme()
+
+		slog.Debug("Debug - (ChequearSiTengoQueActualizarEnKernel) - No hubo interrupcion, mando senial para liberarme")
+		return
+	}
+	mutex_tengoQueActualizarEnKernel.Unlock()
+
+	mutex_tenemosInterrupt.Lock()
+	if tenemos_interrupt {
+		slog.Debug("Debug - (ChequearSiTengoQueActualizarEnKernel) - Hubo una interrupcion")
+		//ya que tengo tomado el mutex, lo seteo en false para la proxima vuelta
+		tenemos_interrupt = false
+		mutex_tenemosInterrupt.Unlock()
+
+		cpu.EnviarFinInterrupcion(requiere_realmente_desalojo)
+		return
+	}
+	slog.Debug("Debug - (ChequearSiTengoQueActualizarEnKernel) - No hubo interrupcion y encima no envie la senial para liberarme...")
+	slog.Debug("...Fer, fijate bien que macana te mandaste con los flags o.0")
+	mutex_tenemosInterrupt.Unlock()
+}
+
+func (cpu *CPU) Liberarme() {
+	utils.FormatearUrlYEnviar(cpu.Url_kernel, "/liberar_cpu", false, "%s", cpu.Id)
+}
+
+func (cpu *CPU) EnviarFinInterrupcion(requiere_realmente_desalojo string) {
+	utils.FormatearUrlYEnviar(cpu.Url_kernel, "/fin_interrupt", false, "%s %d %s", cpu.Id, cpu.Proc_ejecutando.Pc, requiere_realmente_desalojo)
+}
+
+// =====================================================
+// =========== TEMA LIMPIEZA Y CHEQUEOS DE =============
+// ==================== CACHES =========================
+// =====================================================
 
 func (cpu *CPU) ChequarTLBActiva() {
 	tlb_activa = false
@@ -221,14 +300,6 @@ func (cpu *CPU) LiberarCaches() {
 	}
 }
 
-func HabilitarInterrupt(valor_vg bool) {
-	mutex_hay_interrupcion.Lock()
-	hay_interrupcion = valor_vg
-	mutex_hay_interrupcion.Unlock()
-}
-
-// var hola int = 0
-
 func crearCPU(id string, path_config string) *CPU {
 
 	p_config := new(ConfigCPU)
@@ -265,7 +336,3 @@ func crearCPU(id string, path_config string) *CPU {
 
 	return cpu
 }
-
-// func (cpu *CPU) MostrarEstadoTLB(){
-// 	slog.Debug("Debug - (MostrarEstadoTLB) - Estado de la TLB:")
-// }
