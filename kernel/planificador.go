@@ -72,7 +72,7 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, bool) { //el primero es si 
 		if entro {
 			slog.Debug("Cuidadito - (UnicoEnNewYNadaEnSuspReady) - Mande de NEW a READY",
 				"pid", pid)
-			puedo_ejecutar, _ := k.SoyPrimeroEnREADYyNadaEnSuspREADY(pid)
+			puedo_ejecutar, _ := k.SoyPrimeroEnREADY(pid)
 
 			if puedo_ejecutar {
 				slog.Debug("Debug - (UnicoEnNewYNadaEnSuspReady) - Encima puedo intentar ejecutar. Pucha que la vida es linda!")
@@ -96,36 +96,23 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, bool) { //el primero es si 
 	return false, false
 }
 
-func (k *Kernel) SoyPrimeroEnREADYyNadaEnSuspREADY(pid_a_consultar int) (bool, *PCB) { //el primero es si es unico y el segundo si pudo pasar a ready
+func (k *Kernel) SoyPrimeroEnREADY(pid_a_consultar int) (bool, *PCB) { //el primero es si es unico y el segundo si pudo pasar a ready
 
-	mutex_ProcesoPorEstado[EstadoReadySuspended].Lock()
-	lista_susp_ready := k.ProcesoPorEstado[EstadoReadySuspended]
-
-	if len(lista_susp_ready) != 0 {
-
-		mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
-		slog.Debug("Debug - (SoyPrimeroEnREADYyNadaEnSuspREADY) - Uh loco, habia alguien en SuspREADY")
-		return false, nil
-	}
-
-	mutex_ProcesoPorEstado[EstadoReadySuspended].Unlock()
-	//------------hasta esta altura, ya se que no hay nadie en SUSP_READY
-	slog.Debug("Debug - (SoyPrimeroEnREADYyNadaEnSuspREADY) - bien ahi loco, no habia nadie n SuspREADY, voy a chequear si soy el unico en READY", "pid_proc_candidato", pid_a_consultar)
 	mutex_ProcesoPorEstado[EstadoReady].Lock()
 	defer mutex_ProcesoPorEstado[EstadoReady].Unlock()
+
 	proc_candidato_a_execute := k.PrimerElementoSinSacar(EstadoReady)
 
-	if proc_candidato_a_execute == nil {
-		slog.Error("Error - (SoyPrimeroEnREADYyNadaEnSuspREADY) - No hay procesos en READY") //CHE ESTO LLEGA A PASAR Y ME MATO
-		return false, nil
-	}
-
-	//Soy unico en READY y no hay nadie en SUSP_READY, ni ordeno (si es que se necesitara) y retorno
 	if len(k.ProcesoPorEstado[EstadoReady]) == 1 && proc_candidato_a_execute.Pid == pid_a_consultar {
-		slog.Debug("Debug - (SoyPrimeroEnREADYyNadaEnSuspREADY) - Único proceso de READY y no hay procesos en SUSP READY",
+		slog.Debug("Debug - (SoyPrimeroEnREADY) - Único proceso de READY y soy yo papa",
 			"pid", proc_candidato_a_execute.Pid,
 		)
 		return true, proc_candidato_a_execute
+	}
+
+	if proc_candidato_a_execute == nil {
+		slog.Error("Error - (SoyPrimeroEnREADY) - No hay procesos en READY") //CHE ESTO LLEGA A PASAR Y ME MATO
+		return false, nil
 	}
 
 	//Hay mas de 1 proceso en READY, ordeno si es que se necesitara
@@ -136,7 +123,7 @@ func (k *Kernel) SoyPrimeroEnREADYyNadaEnSuspREADY(pid_a_consultar int) (bool, *
 		return true, k.ProcesoPorEstado[EstadoReady][0]
 	}
 
-	slog.Debug("Debug - (SoyPrimeroEnREADYyNadaEnSuspREADY) - No es unico proceso en READY o hay procesos en susp ready",
+	slog.Debug("Debug - (SoyPrimeroEnREADY) - No es unico proceso en READY",
 		"pid", proc_candidato_a_execute.Pid,
 	)
 
@@ -224,7 +211,7 @@ func (k *Kernel) IntentarEnviarProcesoAReady(estadoOrigen int, pidQuiereEntrar i
 		slog.Debug("Cuidadito - (IntentarEnviarProcesoAReady) - Mande de NEW a READY",
 			"pid", pid)
 
-		puedo_ejecutar, _ := k.SoyPrimeroEnREADYyNadaEnSuspREADY(pid)
+		puedo_ejecutar, _ := k.SoyPrimeroEnREADY(pid)
 
 		if puedo_ejecutar {
 			mutex_ProcesoPorEstado[EstadoReady].Lock()
@@ -275,7 +262,7 @@ func (k *Kernel) IntentarEnviarProcesosAReady() {
 			slog.Debug("Cuidadito - (IntentarEnviarProcesosAReady) - Mande de NEW a READY",
 				"pid", pid)
 
-			puedo_ejecutar, _ := k.SoyPrimeroEnREADYyNadaEnSuspREADY(pid)
+			puedo_ejecutar, _ := k.SoyPrimeroEnREADY(pid)
 			if puedo_ejecutar {
 				mutex_ProcesoPorEstado[EstadoReady].Lock()
 				k.IntentarEnviarProcesoAExecutePorPCB(proc)
@@ -313,6 +300,7 @@ func (k *Kernel) gestionarAccesoAReady(pid int, tamanio int, arch_pseudo string,
 	}
 
 	if err != nil {
+
 		return false, fmt.Errorf("error: %w - Pid: %d - Estado: %s - (gestionarAccesoAReady) - Peticion espacio en memoria",
 			err, pid, estados_proceso[estadoOrigen])
 	}

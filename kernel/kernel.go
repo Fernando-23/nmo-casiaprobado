@@ -89,18 +89,6 @@ func main() {
 	slog.Info("Comenzando la planificación", "evento", "ENTER presionado por el usuario")
 	slog.Info("Estado actual del planificador largo plazo", "estado", "RUNNING")
 
-	pcb := kernel.IniciarProceso(tamanio, archivoPseudo)
-	pid := pcb.Pid
-	kernel.AgregarAEstado(EstadoNew, pcb, true)
-	utils.LoggerConFormato("## (%d) Se crea el proceso - Estado: NEW", pid)
-
-	unElemento, estaEnReady := kernel.UnicoEnNewYNadaEnSuspReady()
-
-	if !estaEnReady || !unElemento {
-		slog.Error("Condición inválida al iniciar planificación", "motivo", "primer proceso y no es único del sistema")
-		return
-	}
-
 	go func() {
 
 		for {
@@ -125,6 +113,18 @@ func main() {
 			enviarProcesoAIOsinIOSTRUCT(io.Url, io.PidOcupante, io.Duracion)
 		}
 	}()
+
+	pcb := kernel.IniciarProceso(tamanio, archivoPseudo)
+	pid := pcb.Pid
+	kernel.AgregarAEstado(EstadoNew, pcb, true)
+	utils.LoggerConFormato("## (%d) Se crea el proceso - Estado: NEW", pid)
+
+	unElemento, estaEnReady := kernel.UnicoEnNewYNadaEnSuspReady()
+
+	if !estaEnReady || !unElemento {
+		slog.Error("Condición inválida al iniciar planificación", "motivo", "primer proceso y no es único del sistema")
+		return
+	}
 
 	select {}
 }

@@ -234,7 +234,7 @@ func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
 		utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY", pid)
 		//===============================================================
 
-		puedo_volver_a_execute, pcb := k.SoyPrimeroEnREADYyNadaEnSuspREADY(pid)
+		puedo_volver_a_execute, pcb := k.SoyPrimeroEnREADY(pid)
 		if puedo_volver_a_execute {
 			mutex_ProcesoPorEstado[EstadoReady].Lock()
 			k.IntentarEnviarProcesoAExecutePorPCB(pcb)

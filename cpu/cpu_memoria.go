@@ -207,7 +207,7 @@ func (cpu *CPU) AplicarAlgoritmoTLB(pagina_nueva, frame_nuevo int) error {
 	case "LRU":
 		aux := cpu.Tlb[0]
 		aux_entrada := 0
-		aux_timestamp_lru := aux.tiempo_vida.Sub(noticiero_metereologico)
+		aux_timestamp_lru := aux.last_recently_used.Sub(noticiero_metereologico)
 
 		for i := 1; i < cpu.Config_CPU.Cant_entradas_TLB; i++ {
 			comparador_timestamp := cpu.Tlb[i].last_recently_used.Sub(noticiero_metereologico)

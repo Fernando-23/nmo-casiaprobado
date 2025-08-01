@@ -259,7 +259,7 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 
 		utils.LoggerConFormato("## (%d) - DumpMemory finalizado correctamente", pid)
 		slog.Debug("Debug - (GestionarDUMP_MEMORY) - A esta altura, se supone que envie a READY al proceso que hizo el Dump")
-		puedo_ejecutar, pcb_candidato := k.SoyPrimeroEnREADYyNadaEnSuspREADY(pid)
+		puedo_ejecutar, pcb_candidato := k.SoyPrimeroEnREADY(pid)
 
 		if puedo_ejecutar {
 			mutex_ProcesoPorEstado[EstadoReady].Lock()
