@@ -115,7 +115,7 @@ func (cpu *CPU) Execute(cod_op string, operacion []string, instruccion_completa 
 	case "DUMP_MEMORY":
 		// ID_CPU PID PC DUMP_MEMORY
 		pc_a_actualizar := cpu.Proc_ejecutando.Pc + 1
-		mensaje_dump := fmt.Sprintf("%s %d  %d DUMP_MEMORY", cpu.Id, cpu.Proc_ejecutando.Pid, pc_a_actualizar)
+		mensaje_dump := fmt.Sprintf("%s %d %d DUMP_MEMORY", cpu.Id, cpu.Proc_ejecutando.Pid, pc_a_actualizar)
 		cpu.EnviarSyscall("DUMP_MEMORY", mensaje_dump)
 
 		CambiarValorActualizarContexto(true)
