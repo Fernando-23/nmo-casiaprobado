@@ -251,22 +251,27 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 			return
 		}
 
-		if !k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, true) {
+		mutex_ProcesoPorEstado[EstadoReady].Lock()
+		mutex_ProcesoPorEstado[EstadoBlock].Lock()
+		if !k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, false) {
+			mutex_ProcesoPorEstado[EstadoBlock].Unlock()
+			mutex_ProcesoPorEstado[EstadoReady].Unlock()
 			slog.Error("Error - (GestionarDUMP_MEMORY) - No se encontó el proceso",
+
 				"pid", pid)
 			return
 		}
+		mutex_ProcesoPorEstado[EstadoBlock].Unlock()
 
 		utils.LoggerConFormato("## (%d) - DumpMemory finalizado correctamente", pid)
 		slog.Debug("Debug - (GestionarDUMP_MEMORY) - A esta altura, se supone que envie a READY al proceso que hizo el Dump")
-		puedo_ejecutar, pcb_candidato := k.SoyPrimeroEnREADY(pid)
+		puedo_ejecutar, pcb_candidato := k.SoyPrimeroEnREADYSinLock(pid)
 
 		if puedo_ejecutar {
-			mutex_ProcesoPorEstado[EstadoReady].Lock()
 			k.IntentarEnviarProcesoAExecutePorPCB(pcb_candidato)
-			mutex_ProcesoPorEstado[EstadoReady].Unlock()
-		}
 
+		}
+		mutex_ProcesoPorEstado[EstadoReady].Unlock()
 	}(pid)
 
 }

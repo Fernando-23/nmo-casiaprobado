@@ -72,6 +72,7 @@ func (k *Kernel) UnicoEnNewYNadaEnSuspReady() (bool, bool) { //el primero es si 
 		if entro {
 			slog.Debug("Cuidadito - (UnicoEnNewYNadaEnSuspReady) - Mande de NEW a READY",
 				"pid", pid)
+
 			puedo_ejecutar, _ := k.SoyPrimeroEnREADY(pid)
 
 			if puedo_ejecutar {
@@ -486,7 +487,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecutePorPCB(proc_a_dispatch *PCB) {
 
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 	k.AgregarAEstado(EstadoExecute, proceso_enviado_a_exec, false)
-	//k.actualizarEstimacionSJF(proc_a_dispatch, EstadoExecute)
+
 	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 	slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorPCB) - Proceso enviado a EXECUTE", "pid", pid_dispatch, "cpu_id", id_cpu)
 }
