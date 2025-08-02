@@ -170,23 +170,24 @@ func (k *Kernel) GestionarIO(nombreIO string, pid, duracion, idCPU int) {
 		return
 	}
 
-	mutex_ProcesoPorEstado[EstadoBlock].Lock()
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
+	mutex_ProcesoPorEstado[EstadoBlock].Lock()
 
 	pcb := k.BuscarPorPidSinLock(EstadoExecute, pid)
 	if pcb == nil {
 		slog.Error("Error - (GestionarIO) - No se encontró el PCB del proceso en EXECUTE",
 			"pid", pid)
-		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 		mutex_ProcesoPorEstado[EstadoBlock].Unlock()
+		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
+
 		return
 	}
 
 	k.actualizarEstimacionSJF(pcb, duracionEnEstado(pcb))
 	k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, false)
 
-	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 	mutex_ProcesoPorEstado[EstadoBlock].Unlock()
+	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 
 	go k.temporizadorSuspension(pid)
 
@@ -231,12 +232,16 @@ func (k *Kernel) GestionarDUMP_MEMORY(pid int, idCpu int) {
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 	pcb := k.BuscarPorPidSinLock(EstadoExecute, pid)
 	k.actualizarEstimacionSJF(pcb, duracionEnEstado(pcb))
+	mutex_ProcesoPorEstado[EstadoBlock].Lock()
 	if !k.MoverDeEstadoPorPid(EstadoExecute, EstadoBlock, pid, false) {
 		slog.Error("GestionarDUMP_MEMORY: no se pudo mover a BLOCK",
 			"pid", pid)
+		mutex_ProcesoPorEstado[EstadoBlock].Unlock()
+		mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 		return
 	}
 
+	mutex_ProcesoPorEstado[EstadoBlock].Unlock()
 	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 	go func(pid int) {
 
