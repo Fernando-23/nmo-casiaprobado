@@ -538,3 +538,34 @@ func (k *Kernel) GestionDeAvisoDeCPULibre(id int) {
 	mutex_CPUsConectadas.Unlock()
 
 }
+
+func (k *Kernel) SoyPrimeroEnREADYSinLock(pid_a_consultar int) (bool, *PCB) { //el primero es si es unico y el segundo si pudo pasar a ready
+
+	proc_candidato_a_execute := k.PrimerElementoSinSacar(EstadoReady)
+
+	if len(k.ProcesoPorEstado[EstadoReady]) == 1 && proc_candidato_a_execute.Pid == pid_a_consultar {
+		slog.Debug("Debug - (SoyPrimeroEnREADY) - Único proceso de READY y soy yo papa",
+			"pid", proc_candidato_a_execute.Pid,
+		)
+		return true, proc_candidato_a_execute
+	}
+
+	if proc_candidato_a_execute == nil {
+		slog.Error("Error - (SoyPrimeroEnREADY) - No hay procesos en READY") //CHE ESTO LLEGA A PASAR Y ME MATO
+		return false, nil
+	}
+
+	//Hay mas de 1 proceso en READY, ordeno si es que se necesitara
+	k.SoloOrdenarPorAlgoritmoREADY()
+
+	//Chequeo si soy el primero, si soy el jefe jefaso
+	if pid_a_consultar == k.ProcesoPorEstado[EstadoReady][0].Pid {
+		return true, k.ProcesoPorEstado[EstadoReady][0]
+	}
+
+	slog.Debug("Debug - (SoyPrimeroEnREADY) - No es unico proceso en READY",
+		"pid", proc_candidato_a_execute.Pid,
+	)
+
+	return false, nil
+}

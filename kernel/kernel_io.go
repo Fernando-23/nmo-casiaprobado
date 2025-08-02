@@ -226,7 +226,11 @@ func (k *Kernel) llegaFinIO(w http.ResponseWriter, r *http.Request) {
 }
 
 func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
-	if k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, true) {
+
+	mutex_ProcesoPorEstado[EstadoReady].Lock()
+	mutex_ProcesoPorEstado[EstadoBlock].Lock()
+	if k.MoverDeEstadoPorPid(EstadoBlock, EstadoReady, pid, false) {
+
 		slog.Debug("Debug - (liberarInstanciaIO) - Pude mover de BLOCK a READY",
 			"pid", pid)
 
@@ -234,14 +238,22 @@ func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
 		utils.LoggerConFormato("## (%d) finalizo IO y pasa a READY", pid)
 		//===============================================================
 
-		puedo_volver_a_execute, pcb := k.SoyPrimeroEnREADY(pid)
+		puedo_volver_a_execute, pcb := k.SoyPrimeroEnREADYSinLock(pid)
 		if puedo_volver_a_execute {
-			mutex_ProcesoPorEstado[EstadoReady].Lock()
 			k.IntentarEnviarProcesoAExecutePorPCB(pcb)
-			mutex_ProcesoPorEstado[EstadoReady].Unlock()
 		}
+		mutex_ProcesoPorEstado[EstadoBlock].Unlock()
+		mutex_ProcesoPorEstado[EstadoReady].Unlock()
+		if err := k.ActualizarIO(nombre, pid); err != nil {
+			slog.Error("Error - (liberarInstanciaIO) - Falló actualización de IO", "error", err)
+		}
+		return
+	}
+	mutex_ProcesoPorEstado[EstadoBlock].Unlock()
+	mutex_ProcesoPorEstado[EstadoReady].Unlock()
 
-	} else if k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid, true) {
+	if k.MoverDeEstadoPorPid(EstadoBlockSuspended, EstadoReadySuspended, pid, true) {
+
 		slog.Debug("Debug - (liberarInstanciaIO) - Pude mover de BLOCK_SUSP a READY_SUSPENDED",
 			"pid", pid)
 
@@ -250,14 +262,14 @@ func (k *Kernel) liberarInstanciaIO(pid int, nombre string) {
 		//=========================================================
 		k.IntentarEnviarProcesoAReady(EstadoReadySuspended, pid)
 
+		if err := k.ActualizarIO(nombre, pid); err != nil {
+			slog.Error("Error - (liberarInstanciaIO) - Falló actualización de IO", "error", err)
+		}
+
 	} else {
 		slog.Error("Error - (liberarInstanciaIO) - Pid no estaba en BLOCK ni BLOCK_SUSP",
 			"pid_io", pid)
 		return
-	}
-
-	if err := k.ActualizarIO(nombre, pid); err != nil {
-		slog.Error("Error - (liberarInstanciaIO) - Falló actualización de IO", "error", err)
 	}
 
 }
