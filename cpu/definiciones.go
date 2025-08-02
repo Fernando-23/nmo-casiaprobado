@@ -29,7 +29,8 @@ type EntradaTLB struct {
 	pagina             int
 	frame              int
 	last_recently_used time.Time
-	tiempo_vida        time.Time
+
+	tiempo_vida time.Time
 }
 
 type EntradaCachePag struct {

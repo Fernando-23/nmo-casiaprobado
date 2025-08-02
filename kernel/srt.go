@@ -157,7 +157,7 @@ func (k *Kernel) LlegaFinInterrupt(w http.ResponseWriter, r *http.Request) {
 			handleDispatch(k.EsperandoDesalojo[i].proceso_titular.Pid, k.EsperandoDesalojo[i].proceso_titular.Pc, cpu_a_despachar.Url)
 			actualizarCPU(cpu_a_despachar, k.EsperandoDesalojo[i].proceso_titular.Pid, k.EsperandoDesalojo[i].proceso_titular.Pc, false)
 			cpu_a_despachar.EstaSiendoDesalojada = false
-
+			utils.LoggerConFormato("## (%d) Pasa del estado READY al estado EXECUTE", k.EsperandoDesalojo[i].proceso_titular.Pid)
 			//quito la instancia de esperandoDesalojo
 			k.EsperandoDesalojo = append(k.EsperandoDesalojo[:i], k.EsperandoDesalojo[i+1:]...)
 			utils.LoggerConFormato("## (%d) - Desalojado por algoritmo SJF/SRT", pid_desalojado_para_log)

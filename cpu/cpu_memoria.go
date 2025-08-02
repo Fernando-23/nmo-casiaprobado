@@ -131,9 +131,7 @@ func (cpu *CPU) BuscarEnTLB(nro_pagina int) int {
 		if cpu.Tlb[i].pagina == nro_pagina {
 			// Caso TLB HIT
 			utils.LoggerConFormato("PID: %d - TLB HIT - Pagina: %d", cpu.Proc_ejecutando.Pid, nro_pagina)
-			if cpu.Config_CPU.Alg_repl_TLB == "LRU" {
-				cpu.Tlb[i].last_recently_used = time.Now()
-			}
+			cpu.Tlb[i].last_recently_used = time.Now()
 
 			return cpu.Tlb[i].frame
 		}
@@ -145,6 +143,8 @@ func (cpu *CPU) BuscarEnTLB(nro_pagina int) int {
 
 	if hayEspacioEnTLB {
 		cpu.CambiarEstadoMarco(nro_pagina, frame, entrada)
+		cpu.Tlb[entrada].tiempo_vida = time.Now()
+		cpu.Tlb[entrada].last_recently_used = time.Now()
 		return frame
 	}
 
@@ -188,10 +188,10 @@ func (cpu *CPU) AplicarAlgoritmoTLB(pagina_nueva, frame_nuevo int) error {
 	case "FIFO":
 		aux := cpu.Tlb[0]
 		aux_entrada := 0
-		aux_timestamp_tiempo_vida := aux.tiempo_vida.Sub(noticiero_metereologico)
+		aux_timestamp_tiempo_vida := time.Since(aux.tiempo_vida)
 
 		for i := 1; i < cpu.Config_CPU.Cant_entradas_TLB; i++ {
-			comparador_timestamp := cpu.Tlb[i].tiempo_vida.Sub(noticiero_metereologico)
+			comparador_timestamp := time.Since(cpu.Tlb[i].tiempo_vida)
 			if aux_timestamp_tiempo_vida < comparador_timestamp {
 				aux = cpu.Tlb[i]
 				aux_entrada = i
@@ -201,16 +201,16 @@ func (cpu *CPU) AplicarAlgoritmoTLB(pagina_nueva, frame_nuevo int) error {
 
 		cpu.CambiarEstadoMarco(pagina_nueva, frame_nuevo, aux_entrada)
 
-		aux.tiempo_vida = time.Now()
+		cpu.Tlb[aux_entrada].tiempo_vida = time.Now()
 		return nil
 
 	case "LRU":
 		aux := cpu.Tlb[0]
 		aux_entrada := 0
-		aux_timestamp_lru := aux.last_recently_used.Sub(noticiero_metereologico)
+		aux_timestamp_lru := time.Since(aux.last_recently_used)
 
 		for i := 1; i < cpu.Config_CPU.Cant_entradas_TLB; i++ {
-			comparador_timestamp := cpu.Tlb[i].last_recently_used.Sub(noticiero_metereologico)
+			comparador_timestamp := time.Since(cpu.Tlb[i].last_recently_used)
 			if aux_timestamp_lru < comparador_timestamp {
 				aux = cpu.Tlb[i]
 				aux_entrada = i
@@ -219,7 +219,7 @@ func (cpu *CPU) AplicarAlgoritmoTLB(pagina_nueva, frame_nuevo int) error {
 		}
 
 		cpu.CambiarEstadoMarco(pagina_nueva, frame_nuevo, aux_entrada)
-		aux.last_recently_used = time.Now()
+		cpu.Tlb[aux_entrada].last_recently_used = time.Now()
 
 		return nil
 	default:
@@ -230,6 +230,7 @@ func (cpu *CPU) AplicarAlgoritmoTLB(pagina_nueva, frame_nuevo int) error {
 func (cpu *CPU) CambiarEstadoMarco(nro_pagina int, frame int, entrada_tlb int) {
 	cpu.Tlb[entrada_tlb].pagina = nro_pagina
 	cpu.Tlb[entrada_tlb].frame = frame
+
 	slog.Debug("Debug - (CambiarEstadoMarco) - Se realizo un cambio de marco en la TLB correctamente")
 }
 

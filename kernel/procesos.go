@@ -92,7 +92,7 @@ func (k *Kernel) EliminarProceso(procesoAEliminar *PCB, liberaMemoria bool) {
 
 	for estado := range cantEstados {
 		utils.LoggerConFormato(
-			"%s (%d) (%d),",
+			"%s (%d) (%d)ms,",
 			estados_proceso[estado],
 			procesoAEliminar.Me[estado],
 			procesoAEliminar.Mt[estado],

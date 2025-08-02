@@ -333,7 +333,7 @@ func (k *Kernel) gestionarAccesoAReady(pid int, tamanio int, arch_pseudo string,
 
 		k.AgregarAEstado(EstadoReady, procVerificadoAReady, false)
 
-		utils.LoggerConFormato("(%d) Pasa del estado <%s> al estado <%s>", pid, estados_proceso[estadoOrigen], estados_proceso[EstadoReady])
+		utils.LoggerConFormato("(%d) Pasa del estado %s al estado %s", pid, estados_proceso[estadoOrigen], estados_proceso[EstadoReady])
 
 		return true, nil
 	}
@@ -487,7 +487,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecutePorPCB(proc_a_dispatch *PCB) {
 
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 	k.AgregarAEstado(EstadoExecute, proceso_enviado_a_exec, false)
-
+	utils.LoggerConFormato("## (%d) Pasa del estado READY al estado EXECUTE", proceso_enviado_a_exec.Pid)
 	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 	slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorPCB) - Proceso enviado a EXECUTE", "pid", pid_dispatch, "cpu_id", id_cpu)
 }
@@ -524,6 +524,7 @@ func (k *Kernel) IntentarEnviarProcesoAExecutePorCPU(cpu_a_dispatch *CPU) {
 	// lo mandamos a execute
 	mutex_ProcesoPorEstado[EstadoExecute].Lock()
 	k.AgregarAEstado(EstadoExecute, proc, false)
+	utils.LoggerConFormato("## (%d) Pasa del estado READY al estado EXECUTE", proc.Pid)
 	mutex_ProcesoPorEstado[EstadoExecute].Unlock()
 
 	slog.Debug("Debug - (IntentarEnviarProcesoAExecutePorCPU)- Proceso enviado a EXECUTE", "pid", proc.Pid, "cpu_id", cpu_a_dispatch.ID)
